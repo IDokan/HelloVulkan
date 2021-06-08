@@ -1,0 +1,42 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Notes">
+      <UniqueIdentifier>{ec2d6a0c-7365-45bb-8bf9-9f0138c036be}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Engines">
+      <UniqueIdentifier>{619ccf50-a88b-4e23-a798-a642d41efe9a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Math">
+      <UniqueIdentifier>{2d731554-0c9e-402d-a7a4-708a135d0a63}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="Chp1.OverviewOfVulkan.txt">
+      <Filter>Notes</Filter>
+    </Text>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="main.cpp" />
+    <ClCompile Include="Engines\Engine.cpp">
+      <Filter>Engines</Filter>
+    </ClCompile>
+    <ClCompile Include="Engines\Window.cpp">
+      <Filter>Engines</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="GLMath.h">
+      <Filter>Math</Filter>
+    </ClInclude>
+    <ClInclude Include="Engines\Engine.h">
+      <Filter>Engines</Filter>
+    </ClInclude>
+    <ClInclude Include="Engines\Timer.h">
+      <Filter>Engines</Filter>
+    </ClInclude>
+    <ClInclude Include="Engines\Window.h">
+      <Filter>Engines</Filter>
+    </ClInclude>
+  </ItemGroup>
+</Project>

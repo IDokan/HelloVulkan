@@ -20,44 +20,13 @@ Creation Date: 06.08.2021
 
 int main()
 {
-	glfwInit();
-
-	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-	GLFWwindow* window = glfwCreateWindow(800, 600, "Vulkan Window", nullptr, nullptr);
-
-	uint32_t extensionCount = 0;
-	vkEnumerateInstanceExtensionProperties(nullptr, &extensionCount, nullptr);
-
-	std::cout << extensionCount << " extensions supported\n";
-
-	glm::mat4 matrix;
-	glm::vec4 vec;
-	auto test = matrix * vec;
-
-	while (!glfwWindowShouldClose(window))
-	{
-		glfwPollEvents();
-	}
-
-	glfwDestroyWindow(window);
-	glfwTerminate();
-
-
 	Engine engine;
 
 	engine.Init();
 
 	while (engine.IsUpdate())
 	{
-		Timer* timer = Timer::GetTimer();
-		float dt = static_cast<float>(timer->GetDeltaTime());
-		int frame = timer->GetFPSFrame();
-		if (frame >= 0)
-		{
-			// Print frame
-		}
-		Timer::GetTimer()->Reset();
-		engine.Update(dt);
+		engine.Update();
 	}
 
 	engine.Clean();

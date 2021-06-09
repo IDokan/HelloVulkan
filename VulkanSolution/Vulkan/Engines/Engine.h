@@ -19,13 +19,12 @@ public:
 	~Engine();
 
 	void Init();
-	void Update(float dt);
+	void Update();
 	void Clean();
 
 	bool IsUpdate();
 
 private:
 	bool isUpdate;
-
 	Window* window;
 };

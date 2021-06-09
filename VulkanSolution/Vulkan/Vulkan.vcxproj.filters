@@ -12,11 +12,6 @@
     </Filter>
   </ItemGroup>
   <ItemGroup>
-    <Text Include="Chp1.OverviewOfVulkan.txt">
-      <Filter>Notes</Filter>
-    </Text>
-  </ItemGroup>
-  <ItemGroup>
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Engines\Engine.cpp">
       <Filter>Engines</Filter>
@@ -38,5 +33,10 @@
     <ClInclude Include="Engines\Window.h">
       <Filter>Engines</Filter>
     </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="Notes\Chp1.OverviewOfVulkan.txt">
+      <Filter>Notes</Filter>
+    </Text>
   </ItemGroup>
 </Project>

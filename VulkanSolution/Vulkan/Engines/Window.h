@@ -20,12 +20,13 @@ public:
 		: window(nullptr)
 	{}
 
-	bool CreateWindow(int width, int height, const char* title, GLFWmonitor* monitor, GLFWwindow* share);
+	bool CreateWindow(const int& width, const int& height, const char* title, GLFWmonitor* monitor, GLFWwindow* share);
 	bool ShouldWindowClose();
 	void PollWindowEvents();
 
 	void ShutWindowDown();
 
+	void SetWindowTitle(const std::string& newTitle);
 
 private:
 	GLFWwindow* window;

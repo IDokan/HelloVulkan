@@ -10,10 +10,10 @@ Creation Date: 06.08.2021
 ******************************************************************************/
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
-
+#include <string>
 #include "Window.h"
 
-bool Window::CreateWindow(int width, int height, const char* title, GLFWmonitor* monitor, GLFWwindow* share)
+bool Window::CreateWindow(const int& width, const int& height, const char* title, GLFWmonitor* monitor, GLFWwindow* share)
 {
 	if (window != nullptr)
 	{
@@ -55,4 +55,9 @@ void Window::ShutWindowDown()
 	glfwDestroyWindow(window);
 	glfwTerminate();
 	window = nullptr;
+}
+
+void Window::SetWindowTitle(const std::string& newTitle)
+{
+	glfwSetWindowTitle(window, newTitle.c_str());
 }

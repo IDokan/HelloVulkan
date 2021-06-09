@@ -1,0 +1,118 @@
+1. What is Vulkan
+Vulkan is very verbose and somewhat fragile. For example, OpenGL does a lot of tasks instead of developer's state. However, Vulkan need to do state tracking, synchronization, and memory management by myself.
+
+verbose -> I need to do an awful lot of work
+fragile -> incorrect usage of the API might lead to graphical corruption or even program crash where I would have received a helpful error message.
+What I can get -> more control over the device, a clean threading model, much higher performance.
+
+2. Instances, Devices, and Queues
+
+Application	- Instances	- Physical Devices	- Logical Devices	- Queues
+					|					|								|							- ...
+					|					|								|							- Queues
+					|					|								|
+					|					|								- Logical Devices	- ...
+					|					|
+					|					- Physical Devices	- ...
+					|
+					|													- ....
+					|
+					- Instances	......
+
+Instance is a software consturct that logically separates the state of my application from other applications or libraries running within the context of my application
+
+A physical device represents a single piece of hardware or a collection of hardware that is interconnected.
+
+A logical device is created by the instance. It is a software construct around a physical device and represents a reservation of resources associated with a particular physical device.
+
+3. The Vulkan Instance
+The first Vulkan function I got is vkCreateInstance.
+A declaration of this function is represented bellow
+```
+VkResult vkCreateInstance
+(
+	const VkInstanceCreateInfo* pCreateInfo, 
+	const VkAllocationCallbacks* pAllocator, 
+	VkInstance* pInstance
+);
+```
+The book said this is general type of Vulkan function. pCreateInfo is a pointer to an instance of the VkInstanceCreateInfo structure that contains the parameters describing the new Vulkan instance.
+
+```
+typedef struct VkInstanceCreateInfo {
+	VkStructureType					sType;
+	const void*							pNext;
+	VkInstanceCreateFlags		flags;
+	const VkApplicationInfo*		pAllicationInfo;
+	uint32_t								enabledLayerCount;
+	const char* const*				ppEnabledLayerNames;
+	uint32_t								enabledExtensionCount;
+	const char* const*				ppEnabledExtensionNames;
+} VkInstanceCreateInfo;
+```
+The first member variable 'sType' is used to pass parameters to the API.
+Each structures and extensions has an assigned structure tag. Thanks to this tag, Vulkan is able to determine the type of the structure for validation purposes and for use in extensions.
+
+The second member variable 'pNext' allows a linked list of structures to be passed to the function.
+
+When we create a core instance, we are going to pass VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO in the sType field and simply set pnextT to nullptr;
+
+The flags field of VkInstanceCreateInfo is reserved for future used and should be set to zero.
+pApplicationInfo is an optional pointer to another structure describing my application. You can set this to nullptr, but a well-behaved application should fill this in with something useful. 
+
+pApplicationInfo points to an instance of the VkApplicationInfo structure, the definition is described in bellow.
+
+```
+typedef struct VkApplicationInfo {
+	VkStructureType sType;
+	const void* pNext;
+	const char* pApplicationName;
+	uint32_t applicationVersion;
+	const char* pEngineName;
+	uint32_t engineVersion;
+	uint32_t apiVersion;
+}
+```
+
+sType should be set to VK-STRUCTURE_TYPE_APPLICATION_INFO, and we can leave pNext as nullptr.
+pApplicationName is a pointer to a null-terminated string containing the name of your application, and applicationVersion is the version of the application.
+applicationVersion allows tools and drivers to make decisions about how to treat your application without needing to guess which application is running. (I did not fully understand this sentence. This sentence is nearby figure2 in chapter1 in the book)
+
+Finally, apiVersion contains the version of the Vulkan API that your application is expecting to run on. This should be set to the absolute minimum version of Vulkan that your application requires to run - not just to the version of the header that you happen to have installed.
+
+let us back to the VkInstanceCreateInfo
+enabledLayerCount & ppEnabledLayerNames fields. These are the count of the number of instance layers that you wish to enable and their names, respectively.
+Layers are used to intercept the VulkanAPI and poride logging. profiling, debugging, or other additional features. If no layers are needed, simply set enabledLayerCount to zero and leave.
+ppEnabledLayerNames as nullptr. 
+Likewise, enabledExtensionCount is the count of the number of extensions you wish to enable, and ppEnableExtensionNames is a list of their names. 
+Again, if we're not using any extensions, we can set these fields to zero and nullptr, respectively.
+
+Finally, returning to the vkCreateInstance() function, the pAllocator parameter is a pointer to a host memory allocator that your application can supply in order to manage the host memory that the Vulkan system uses.
+Setting this to nullptr causes the Vulkan system to use its own internal allocator, which is what we willl do here. Application-managed host memory will be covered in Chapter2, "Memory and Resources."
+
+4. Vulkan Physical Devices.
+Once we have an instance, we can use it to discover Vulkan-compatible devices installed in the system.
+Physical devices are normally parts of the system - a graphics card, accelerator, DSP, or other component.A system has a fixed number of physical devices and a fixed set of capabilities.
+A logical device is a software abstraction of a physical device, configured in a way that is specified by the application. The logical device is the one that your application will spend most of its time dealing with, but before we can create a logical device, we must discover the connected physical devices.
+To do this, we call the vkEnumeratePhysicalDevices() function, the prototype of which is bellow
+
+```
+VkResult vkEnumeratePhysicalDevices
+(
+	VkInstance instance, 
+	uint32_t* pPhysicalDeviceCount, 
+	VkPhysicalDevice* pPhysicalDevices
+);
+```
+
+The first parameter, instance, is the instance we created eariler. 
+Next, the pPhysicalDeviceCount parameter is a pointer to an unsigned integer variable that is both an input and an output.
+	- As an output, Vulkan writes the number of physical devices in the system into it. 
+	- As an input, it should be preinitialized with the maximum number of devices your application can handle. 
+The pPhysicalDevices parameter is a pointer to an array of the number of VkPhysicalDevice handles.
+
+If you just want to know how many devices there are in the system, set pPhysicalDevices to nullptr, and Vulkan will ignore the initial value of pPhysicalDeviceCount. simply overwriting it with the number of supported devices.
+After then call the same function again with dynamically adjust the size of VkPhysicalDevice array.
+
+*** non-Vulkan topic : Originally, array allocation on std::shared_ptr is not available until C++17. However, C++20 is available. Thus, should check using c++ version is the latest version
+

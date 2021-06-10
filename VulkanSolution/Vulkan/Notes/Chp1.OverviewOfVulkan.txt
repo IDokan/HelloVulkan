@@ -116,3 +116,194 @@ After then call the same function again with dynamically adjust the size of VkPh
 
 *** non-Vulkan topic : Originally, array allocation on std::shared_ptr is not available until C++17. However, C++20 is available. Thus, should check using c++ version is the latest version
 
+Now, based on physical device we've gotten, we are going to query this to create logical device.
+
+The first query I'll perform is 
+```
+void vkGetPhysicalDeviceProperties(
+	VkPhysicalDevice physicalDevice,
+	VkPhysicalDeviceProperties* pProperties
+);
+```
+
+First paremter would get physical device what we've gotten by vkEnumeratePhysicalDevice.
+Need to instantiate a type of VkPhysicalDeviceProperties to pass its address to second parameter.
+
+The thing is though, VkPhysicalDeviceProperties structure is huge and contains a large number of fields describing the properties of the physical device.
+
+The definition is
+```
+typedef struct VkPhysicalDeviceProperties
+{
+	uint32_t													apiVersion;
+	uint32_t													driverVersion;
+	uint32_t													vendorID;
+	uint32_t													deviceID;
+	VkPhysicalDeviceType							deviceType;
+	char															deviceName[VK_MAX_PHYSICAL_DEVICE_NAME_SIZE];
+	uint8_5														pipelineCacheUUID[VK_UUID_SIZE];
+	VkPhysicalDeviceLimits							limits;
+	VkPhysicalDeviceSparseProperties		sparseProperties;
+} VkPhysicalDeviceProperties;
+```
+
+The 'apiVersion' field contains the highest version of Vulkan supported by the device.
+The 'driverVersion' field contains the version of the driver used to control the device. This is vendor-specific, so it does not make sense to compare driver sersions across the vendors.
+The 'vendorID' and 'deviceID' fields identify the vendor and the device, and are usually PCI vendor and device identifiers.
+The 'deviceName' field will contain a human-readable string naming the device.
+The pipelineCacheUUID' field is used for pipeline caching, which we will cover in Chapter6, "Shaders and Pipelines."
+The 'VkPhysicalDeviceLimits' and the 'VkPhysicalDeviceSparseProperties' contain the minimum and maximum limits for the physical device  and properties related to sparse textures. However, we are going to discuss deeply and separately in future.
+
+In addtion to core feature, Vulkan has a number of optional features that may be supported by a physical device. but once enabled, that optional feature becomes a first-class citizen of the API just like any core feature.
+To determine which features a physical deevice supports, call vkGetPhysicalDeviceFeatures(),
+
+The prototype of which is
+```
+void vkGetPhysicalDeviceFeatures
+(
+	VkPhysicalDevice					physicalDevice,
+	VkPhysicalDeviceFeatures*	pFeatures
+);
+```
+
+Again, the VkPhysicalDeviceFeatures structure is very large and has a Boolean field for each optional feature supported by Vulkan. Its details might be cover later.
+
+5. Physical Device Memory
+
+Vulkan device is either hardware to the main host processor or software to access memory in specialized ways.
+Device memory in Vulkan refers to memory that is accessible to the device and usable as a backing store for textures and other data.
+Memory is classified into types. They has a set of properties, such as caching flags and coherency behavior between host and device.
+
+To query the configuration of heaps and the memory types supported by the device, call
+```
+void vkGetPhysicalDeviceMemoryProperties(
+	VkPhysicalDevice									physicalDevice,
+	VkPhysicalDeviceMemoryProperties*		pMemoryProperties
+);
+```
+
+The result is stored in VkPhysicalDeviceMemoryProperties structure, the address of which is passed in 'pMemoryProperties'.
+The VkPhysicalDeviceMemoryProperties structrue contains the properties of both the device's heaps and its supported memory types.
+
+The definition of this structure is
+```
+typedef struct VkPhysicalDeviceMemoryProperties
+{
+	uint32_t					memoryTypeCount;
+	VkMemoryType		memoryTypes[VK_MAX_MEMORY_TYPES];
+	uint32_t					memoryHeapCount;
+	VkMemoryHeap		memoryHeaps[VK_MAX_MEMORY_HEAPS];
+} VkPhysicalDeviceMemoryProperties;
+```
+
+The 'memoryCount' field contains number of memory types. The maximum value which is logically correct is VK_MAX_MEMORY_TYPES, which is defined to be 32.
+The 'memoryTypes' array VkMemoryType structures describing each of the memory types.
+
+The definition is
+```
+typedef struc VkMemoryType
+{
+	VkMemoryPropertyFlags		propertyFlags;
+	uint32_t								heapIndex;
+} VKMemoryType
+```
+
+The 'flags' field describes the type of memory and is made up of a combination of the VkMemoryPropertyFlagBits flags. 
+
+The meanings of the flags are as follows
+```
+1. VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT:
+	It means that the memory is local to (that is, physically connected to) the device. 
+	If this bit is not set, then the memory can be assumed to be local to the host.
+
+2. VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT(????? I did not get it fully):
+	It means that memory allocations made with the type can be mapped and read or written by the host. 
+	If this bit is not set then memory of this type cannot be directly accessd by the host and is rather for exclusive use by the device.
+
+3. VK_MEMORY_PROPERTY_HOST_COHERENT_BIT:
+	It means that when this type of memory is concurrently accessed by both the host and device, those accesses will be coherent between the two clients.(?????????? two clients???? who are they??)
+	If this bit is not set then the device or host may not see the results of writes performed by each until caches are explicitly flushed.
+
+4. VK_MEMORY_PEOPERTY_HOST_CACHED_BIT:
+	It means that data in this type of memory is cached by the host.
+	Read accesses to this type of memory are typically faster than they would be if this bit were not set.
+	However, access by the device may have slightly higher latency, especially if the memory is also coherent.
+
+5. VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT:
+	It means that memory allocated with this type does not necessarily consume space from the associated heap immediately and that a driver might defer physical memory allocation until the memory object is used to back a resource.
+```
+
+Each memory type reports the heap from which is consumes space in the 'heapIndex' is an index into the 'memoryHeaps' array.
+Each elements of the 'memoryHeaps' array describes one of the device'smemory heaps.
+
+the definition of this structure is
+```
+typedef struct VkMemoryHeap
+{
+	VkDeviceSize					size;
+	VkMemoryHeapFlags		flags;
+} VkMemoryHeap;
+```
+This is simple structure which contains only the size, in bytes, of the heap and some flags describing the heap.
+However, in Vulkan 1.0, the only defined flag is VK_MEMORY_HEAP_DEIVCE_LOCAL_BIT. (which means that It might be different when Vulkan is updated.)
+If this bit is set, then the heap is local to the device. This corresponds to the similarly named flag describing memory types. 
+
+6. Device Queues
+
+Vulkan devices execute work that is submitted to queues.
+A queue family is a group of queues that have identical capabilities but are able to run in parallel.
+The number of queue families, the capabilities of each family, and the number of queues belonging to each family are all properties of the physical device.
+To query the device for its queue families, call vkGetPhysicalDeviceQueueFamilyProperties().
+
+The prototype of which is
+```
+void vkGetPhysicalDeviceQueueFamilyProperties(
+	VkPhysicalDevice					physicalDevice,
+	uint32_t*									pQueueFamilyPropertyCount,
+	VkQueueFamilyProperties*		pQueueFamilyProperties
+);
+```
+
+It works somewhat like vkEnumeratePhysicalDevices() in that it is expected that you call it twice.
+First call with nullptr, second call with dynamically allocated pointer. Make sure that pQueueFamilyPropertyCount should be valid pointer.
+
+The definition of VkQueueFamily Properties is
+```
+typedef struct VkQueueFamilyProperties
+{
+	VkQueueFlags			queueFlags;
+	uint32_t					queueCount;
+	uint32_t					timestampValidBits;
+	VkExtent3D				minImageTransferGranularity;
+} VkQueueFamilyProperties;
+```
+
+The 'queueFlags' rield describes the overall capabilities of the queue.
+This field is made up of a combination of the VkQueueFlagBits bits, the meanings of which are as follows
+```
+1. VK_QUEUE_GRAPHICS_BIT:
+	If it is set, then queues in this family support graphics operations such as drawing points, lines, and triangles.
+
+2. VK_QUEUE_COMPUTE_BIT:
+	If it is set, then queues in this family support compute operations such as dispatching compute shaders.
+
+3. VK_QUEUE_TRANSFER_BIT:
+	If it is set, then queues in this family support transfer operations such as copying buffer and image contents.
+
+4. VK_QUEUE_SPARTSE_BINDING_BIT:
+	If it is set, then queues in this family support memory binding operations used to update sparse resources. (I did not fully understand this bit)
+```
+
+The 'queueCount' field might be set to 1, or it could be substantially higher if the device supports multiple queues with the same basic functionality.
+
+The 'timeStampValidBits' field indicates how many bits are valid when timestamps are taken from the queue.
+If this value is zero, then the queue does not support timestamps. 
+If it's nonzero, then It's guaranteed to be at least 36 bits. Furthermore, if the 'timestampComputeAndGraphics' field of the device's VkPhysicalDeviceLimits structure is VK_TRUE, then all queues supporting either VK_QUEU_GRAPHICS_BIT or VK_QUEUE_COMPUTE_BIT are guaranteed to support timestamps with at least 36 bits of resolution. (I did not understand though)
+In this case, there;s no need to check each queue individually.
+
+The 'minImageTimestampGranularity' field specifies the units with which the queue supports image transfers (if at all).
+
+Note that it might be the case that a device reports more than one queue family with apparently identical properties. 
+Queues within a family are essentially identical, Queues in different families may have different internal capabilities that cannot be expressed easily in the Vulkan API.
+For this reason, an implementation might choose to report similar queues as members of different families.
+This places additional restrictions on how resources are shared between those queues, which might allow the implementation to accommodate those differences.

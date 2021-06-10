@@ -22,7 +22,11 @@ int main()
 {
 	Engine engine;
 
-	engine.Init();
+	if (engine.Init() == false)
+	{
+		std::cout << "Initialization Failed!" << std::endl;
+		return 0;
+	}
 
 	while (engine.IsUpdate())
 	{

@@ -27,9 +27,13 @@ Engine::~Engine()
 	delete window;
 }
 
-void Engine::Init()
+bool Engine::Init()
 {
 	// Vulkan Init
+	
+
+
+	//A generic application info structure
 	VkApplicationInfo applicationInfo{};
 	applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
 	applicationInfo.pNext = nullptr;
@@ -40,6 +44,7 @@ void Engine::Init()
 	applicationInfo.apiVersion = VK_API_VERSION_1_0;
 	// application.Info.apiVersion = ; it contains the version of Vulkan API that my application is expecting to run on. This should be set to the absolute minimum version
 
+	// Create the instance
 	VkInstanceCreateInfo instanceCreateInfo{};
 	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
 	instanceCreateInfo.pNext = nullptr;
@@ -54,6 +59,7 @@ void Engine::Init()
 		instanceResult != VK_SUCCESS)
 	{
 		std::cout << "Could not create instance" << std::endl;
+		return false;
 	}
 
 	uint32_t numOfPhysicalDevices = 99;
@@ -70,18 +76,46 @@ void Engine::Init()
 	}
 	arrayOfPhysicalDevices = std::make_shared<VkPhysicalDevice[]>(numOfPhysicalDevices);
 
-	if (const VkResult physicalDeviceResult = vkEnumeratePhysicalDevices(instance, & numOfPhysicalDevices, arrayOfPhysicalDevices.get());
+	if (const VkResult physicalDeviceResult = vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, arrayOfPhysicalDevices.get());
 		physicalDeviceResult != VK_SUCCESS)
 	{
 		std::cout << "The second Procedure with physical devices is failed! (Logically, should not be failed)" << std::endl;
+		return false;
 	}
 
 
-	std::cout << "How many physical devices I can control in this device : " << numOfPhysicalDevices << std::endl;
+	//TODO: bellow code does not use second physical device even available. Should change the code.
+	VkPhysicalDeviceProperties property{};
+	vkGetPhysicalDeviceProperties(arrayOfPhysicalDevices[0], &property);
+	VkPhysicalDeviceFeatures features{};
+	vkGetPhysicalDeviceFeatures(arrayOfPhysicalDevices[0], &features);
 
+	VkPhysicalDeviceMemoryProperties memoryProperties;
+	// Get the memory properties of the physical device.
+	vkGetPhysicalDeviceMemoryProperties(arrayOfPhysicalDevices[0], &memoryProperties);
+	memoryProperties.memoryTypes[0].propertyFlags;
+	memoryProperties.memoryHeaps[memoryProperties.memoryTypes[0].heapIndex];
+
+	// First determine the number of queue families supported by the physical device.
+	
+	// Device queues
+	uint32_t numOfQueueFamilyProperty = 99;
+	std::shared_ptr<VkQueueFamilyProperties[]> familyProperties = nullptr;
+	// Bellow code works similar with vkEnumeratePhysicalDevice()
+	vkGetPhysicalDeviceQueueFamilyProperties(arrayOfPhysicalDevices[0], &numOfQueueFamilyProperty, familyProperties.get());
+	// Allocate enough space for the queue property structures.
+	familyProperties = std::make_shared<VkQueueFamilyProperties[]>(numOfQueueFamilyProperty);
+	// Now query the actual properties of the queue families.
+	vkGetPhysicalDeviceQueueFamilyProperties(arrayOfPhysicalDevices[0], &numOfQueueFamilyProperty, familyProperties.get());
+
+	
+
+	std::cout << "Num of queue family property is : " << numOfPhysicalDevices << std::endl;
 
 	window->CreateWindow(800, 600, "Vulkan Window", nullptr, nullptr);
 
+
+	return true;
 }
 
 void Engine::Update()

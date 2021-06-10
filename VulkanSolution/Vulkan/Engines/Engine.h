@@ -18,7 +18,8 @@ public:
 	Engine();
 	~Engine();
 
-	void Init();
+	// return whether initialization is succeed or not.
+	bool Init();
 	void Update();
 	void Clean();
 

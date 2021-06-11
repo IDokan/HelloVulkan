@@ -451,3 +451,91 @@ These include the following:
 
 When you are building a very simple, single-threaded application, the requirement to create pools from which to allocate objects may seem like a lot of unnecessary indirection.
 However, as applications scale in number of threads, these objects are indispensible to achieving high performance.
+
+11. ENHANCING VULKAN
+Layers - which modify or enhance existing behavior
+Extensions - which add new functionality to Vulkan
+
+12. Layers
+Layers are features of Vulkan that allow its behavior to be modified.
+Layers generally intercept all or part of Vulkan and add functionality such as logging, tracing, providing diagnostics, profiling, and so on.
+A layer can be added at the instance level, and possibly every device created by it.
+Alternatively, the layer can be added at the device level, in which case it affects only the device for which it is enabled.
+
+To discover the layers available to an instance on a system, call vkEnuermateInstanceLayerProperties(),
+the prototype of which is
+```
+VkResult vkEnumerateInstanceLayerProperties(
+	uint32_t*						pPropertyCount;
+	VkLayerProperties*		pProperties
+);
+```
+
+If 'pProperties' is nullptr, then 'pPropertyCount' should point to a variable that will be overwritten with the count of the number of layers available to Vulkan.
+If it is not nullptr, then it should point to an array of VkLayerProperties structures that will be filled with information about the layers registered with the system.
+
+Each element of the pProperties array is an instance of the VkLayerProperties structure,
+the definition of which is
+```
+typedef struct VkLayerProperties
+{
+	char				layerName[VK_MAX_EXTENSION_NAME_SIZE];
+	uint32_t		specVersion;
+	uint32_t		implementationVersion;
+	char				description[VK_MAX_DESCRIPTION_SIZE];
+} VkLayerProperties;
+```
+
+Each layer has a formal name that is stored in the 'layerName' member of the VkLayerProperties structure.
+As the specification for each layer might be improved, clarified, or appended to over time, the version of the layer implementation is reported in 'specVersion'
+The 'implementationVersion' field stored how many implementations improved as specifications are improved over time.
+The purpose of 'description' field is for logging or display in a user interface, and it is for informational purposes only.
+
+When we want to inject layers to device level, call vkEnumerateDeviceLayerProperties(),
+the prototype of which is
+```
+VkResult vkEnumerateDeviceLayerProperties(
+	VkPhysicalDevice			physicalDevice,
+	uint32_t*							pPropertyCount,
+	VkLayerProperties*			pProperties
+);
+```
+
+The way how to use it is technically same as instance level.
+
+To enable a layer at the instance level, include its name in the 'ppEnabledLayerNames' field of the VkInstanceCreateInfo structure used to create the instance.
+Likewise, to enable a layer when creating a logical device corresponding to a physical device in the system, include the layer name in the 'ppEnabledLayerNames' member of the VkDeviceCreateInfo used to create the device.
+
+Several layers are included in the official SDK, most of which are related to debugging, parameter validation, and loggig.
+These include the following:
+```
+1. VK_LAYER_LUNARG_api_dump
+	It prints Vulkan calls and their parameters and values to the console.
+
+2. VK_LAYER_LUNARG_core_validation
+	It performs validation on parameters and state used in descriptor sets, pipeline state, and dynamic state; validates the interfaces between SPIR_V modules and the graphics pipeline; and tracks and validates usage of GPU memory used to back objects.
+
+3. VK_LAYER_LUNARG_device_limits
+	It ensures that values passed to Vulkan commands as arguments or data structure members fall within the device's supported feature set limits.
+
+4. VK_LAYER_LUNARG_image
+	It validates that image usage is consistent with supported formats.
+
+5. VK_LAYER_LUNARG_object_tracker
+	It performs tracking on Vulkan objects, attemting to catch leaks, use-after-free errors, ans other invalid object usage.
+
+6. VK_LAYER_LUNARG_parameter_validation
+	It confirms that all parameter values psassed to Vulkan functions are valid.
+
+7. VK_LAYER_LUNARG_swapchain
+	It performs validation on functionality provided by the WSI(Window System Integration) extensions described in Chapter 5, "Presentation"
+
+8. VK_LAYER_GOOGLE_threading
+	It ensures valid usage of Vulkan commands with respect to threading, ensuring that no two threads access the same object at the same time when they should not.
+
+9. VK_LAYER_GOOGLE_unique_objects
+	It ensures that every object will have a unique handle for easier tracking by the application, avoiding cases where an implementation might de-duplicate handles that represent objects with the same parameters.
+```
+
+In addition to this, a large number of separate layers are grouped into a larger, single layer called VK_LAYER_LUNARG_standard_validation, making it easy to turn on.
+The book's application framework enables this layer when built in debug mode, leaving all layers disabled when built in release mode.

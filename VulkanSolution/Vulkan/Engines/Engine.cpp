@@ -143,7 +143,31 @@ bool Engine::Init()
 		return false;
 	}
 
-	std::cout << "Num of queue family property is : " << numOfPhysicalDevices << std::endl;
+	// Get Layer
+	uint32_t layerCount = 0;
+	std::shared_ptr<VkLayerProperties[]> layers = nullptr;
+	// Query the instance layers
+	if (VkResult layerResult = vkEnumerateInstanceLayerProperties(&layerCount, layers.get());
+		layerResult != VK_SUCCESS)
+	{
+		std::cout << "First Layer : Layer enumeration is failed! when pointer to array is nullptr" << std::endl;
+		return false;
+	}
+	if (layerCount != 0)
+	{
+		layers = std::make_shared<VkLayerProperties[]>(layerCount);
+		if (VkResult layerResult = vkEnumerateInstanceLayerProperties(&layerCount, layers.get());
+			layerResult != VK_SUCCESS)
+		{
+			std::cout << "Second Layer : Layer enumeration is failed! when pointer to array is not nullptr" << std::endl;
+			return false;
+		}
+	}
+	else
+	{
+		std::cout << "WARNING:: available layer is zero!" << std::endl;
+	}
+
 
 	window->CreateWindow(800, 600, "Vulkan Window", nullptr, nullptr);
 

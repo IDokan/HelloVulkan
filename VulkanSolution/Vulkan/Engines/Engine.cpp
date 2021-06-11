@@ -87,8 +87,6 @@ bool Engine::Init()
 	//TODO: bellow code does not use second physical device even available. Should change the code.
 	VkPhysicalDeviceProperties property{};
 	vkGetPhysicalDeviceProperties(arrayOfPhysicalDevices[0], &property);
-	VkPhysicalDeviceFeatures features{};
-	vkGetPhysicalDeviceFeatures(arrayOfPhysicalDevices[0], &features);
 
 	VkPhysicalDeviceMemoryProperties memoryProperties;
 	// Get the memory properties of the physical device.
@@ -108,7 +106,42 @@ bool Engine::Init()
 	// Now query the actual properties of the queue families.
 	vkGetPhysicalDeviceQueueFamilyProperties(arrayOfPhysicalDevices[0], &numOfQueueFamilyProperty, familyProperties.get());
 
-	
+	// Create Logical Device
+	VkDeviceQueueCreateInfo logicalDeviceQueueCreateInfo{};
+	logicalDeviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	logicalDeviceQueueCreateInfo.pNext = nullptr;
+	logicalDeviceQueueCreateInfo.flags = 0;
+	logicalDeviceQueueCreateInfo.queueFamilyIndex = 0;
+	logicalDeviceQueueCreateInfo.queueCount = 1;
+	logicalDeviceQueueCreateInfo.pQueuePriorities = nullptr;
+
+	VkPhysicalDeviceFeatures supportedFeatures{};
+	vkGetPhysicalDeviceFeatures(arrayOfPhysicalDevices[0], &supportedFeatures);
+	VkPhysicalDeviceFeatures requiredFeatures{};
+	requiredFeatures.multiDrawIndirect = supportedFeatures.multiDrawIndirect;
+	requiredFeatures.tessellationShader = VK_TRUE;
+	requiredFeatures.geometryShader = VK_TRUE;
+
+	VkDeviceCreateInfo logicalDeviceCreateInfo{};
+	logicalDeviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	logicalDeviceCreateInfo.pNext = 0;
+	logicalDeviceCreateInfo.flags = 0;
+	logicalDeviceCreateInfo.queueCreateInfoCount = 1;
+	logicalDeviceCreateInfo.pQueueCreateInfos = &logicalDeviceQueueCreateInfo;
+	// We are going to cover layer and extension later in this chapter.
+	logicalDeviceCreateInfo.enabledLayerCount = 0;
+	logicalDeviceCreateInfo.ppEnabledLayerNames = nullptr;
+	logicalDeviceCreateInfo.enabledExtensionCount = 0;
+	logicalDeviceCreateInfo.ppEnabledExtensionNames = nullptr;
+	logicalDeviceCreateInfo.pEnabledFeatures = &requiredFeatures;
+
+	VkDevice logicalDevice{};
+	if (VkResult logicalDeviceCreation = vkCreateDevice(arrayOfPhysicalDevices[0], &logicalDeviceCreateInfo, useInternalAllocator, &logicalDevice);
+		logicalDeviceCreation != VK_SUCCESS)
+	{
+		std::cout << "Vulkan logical device creation is failed!" << std::endl;
+		return false;
+	}
 
 	std::cout << "Num of queue family property is : " << numOfPhysicalDevices << std::endl;
 

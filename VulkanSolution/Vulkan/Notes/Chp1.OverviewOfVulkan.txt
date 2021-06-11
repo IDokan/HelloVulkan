@@ -234,7 +234,7 @@ The meanings of the flags are as follows
 ```
 
 Each memory type reports the heap from which is consumes space in the 'heapIndex' is an index into the 'memoryHeaps' array.
-Each elements of the 'memoryHeaps' array describes one of the device'smemory heaps.
+Each elements of the 'memoryHeaps' array describes one of the device's memory heaps.
 
 the definition of this structure is
 ```
@@ -290,7 +290,7 @@ This field is made up of a combination of the VkQueueFlagBits bits, the meanings
 3. VK_QUEUE_TRANSFER_BIT:
 	If it is set, then queues in this family support transfer operations such as copying buffer and image contents.
 
-4. VK_QUEUE_SPARTSE_BINDING_BIT:
+4. VK_QUEUE_SPARSE_BINDING_BIT:
 	If it is set, then queues in this family support memory binding operations used to update sparse resources. (I did not fully understand this bit)
 ```
 
@@ -299,7 +299,7 @@ The 'queueCount' field might be set to 1, or it could be substantially higher if
 The 'timeStampValidBits' field indicates how many bits are valid when timestamps are taken from the queue.
 If this value is zero, then the queue does not support timestamps. 
 If it's nonzero, then It's guaranteed to be at least 36 bits. Furthermore, if the 'timestampComputeAndGraphics' field of the device's VkPhysicalDeviceLimits structure is VK_TRUE, then all queues supporting either VK_QUEU_GRAPHICS_BIT or VK_QUEUE_COMPUTE_BIT are guaranteed to support timestamps with at least 36 bits of resolution. (I did not understand though)
-In this case, there;s no need to check each queue individually.
+In this case, there's no need to check each queue individually.
 
 The 'minImageTimestampGranularity' field specifies the units with which the queue supports image transfers (if at all).
 
@@ -307,3 +307,147 @@ Note that it might be the case that a device reports more than one queue family 
 Queues within a family are essentially identical, Queues in different families may have different internal capabilities that cannot be expressed easily in the Vulkan API.
 For this reason, an implementation might choose to report similar queues as members of different families.
 This places additional restrictions on how resources are shared between those queues, which might allow the implementation to accommodate those differences.
+
+7. Creating a Logical Device
+
+The logical device represents the device in an initialized state.
+During creation of the logical device, you get to opt in to optional features, turn on extensions you need, and so on.
+Creating the logical device is performed by calling vkCreateDevice(),
+
+the prototype of which is
+```
+VkResult vkCreateDevice(
+	VkPhysicalDevice						physicalDevice,
+	const VkDeviceCreateInfo*			pCreateInfo,
+	const VkAllocationCallbacks*		pAllocator,
+	VkDevice*									pDevice
+);
+```
+
+The information about the new logical device is passed in an instance of the VkDeviceCreateInfo structure.
+
+The definition of which is
+```
+typedef struct VkDeviceCreateInfo
+{
+	VkStructureType									sType;
+	const void*											pNext;
+	VkDeviceCreateFlags							flags;
+	uint32_t												queueCreateInfoCount;
+	const VkDeviceQueueCreateInfo*		pQueueCreateInfos;
+	uint32_t												enabledLayerCount;
+	const char* const*								ppEnabledLayerNames;
+	uint32_t												enabledExtensionCount;
+	const char* const*								ppEnabledExtensionNames;
+	const VkPhysicalDeviceFeatures*		pEnabledFeatures;
+} VkDeviceCreateInfo;
+```
+
+The 'sType' field of the VkDeviceCreateInfo structure should be set to VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO.
+As usual unless you are using extensions, 'pNext' should be set to nullptr.
+In the current version of Vulkan, no bits are defined for the 'flags' field of the structure, so set this to zero too.
+
+'pQueueCreateInfos' is a pointer to an array of one or more VkDeviceQueueCreateInfo structures, each of which allows the specification of one or more queues.
+The number of structures in the array is given in 'queueCreateInfoCount'
+
+The definition of VkDeviceQueueCreateInfo is
+```
+typedef struct VkDeviceQueueCreateInfo
+{
+	VkStructureType							sType;
+	const void*									pNext;
+	VkDeviceQueueCreateFlags		flags;
+	uint32_t										queueFamilyIndex;
+	uint32_t										queueCount;
+	const float*									pQueuePriorities;
+} VkDeviceQueueCreateInfo;
+```
+
+The 'sType'f field for VkDeviceQueueCreateInfo is VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO.
+There are currently no flags defined for use in the 'flags' field, so it should be set to zero.
+
+The 'queueFamilyIndex' field specifies the family of the queues you want to create. (????????) 
+This is an index into the array of queue families returned from vkGetPhysicalDeviceQueueFamilyProperties().
+To create queues in this family, set 'queueCount' to the number of queues you want to use.
+Of course, the device must support at least this many queues in the family you choose.
+
+The 'pQueuePriorities' field is an optional pointer to an array of floating pointer values representing the relative priority of work submitted to each of the queues.
+These numbers are normalized numbers in the range of 0.0 to 1.0.
+Queues with higher priority may be allocated more processing resources or scheduled more aggressively than queues with lower priority.
+Setting 'pQueuePriorities' to nullptr has the effect of leaving the queues at the same, default priority.
+
+(????????????????????????)
+The requested queues are sorted in order of priority and then assigned device-dependent relative priorities
+The number of descrete priorities that a queue may take on is a device-specific parameter.
+You can determine this by checking the 'discreteQueuePriorities' field of the 'VkPhysicalDeviceLimits' structure returned from a call ot vkGetPhysicalDeviceProperties().
+For example, if a device supports only low- and high-priority workloads, this field will be 2. 
+All devices support at least two discrete priority levels.
+Regardless of the value of 'discreteQueuePriorities', the relative priorities of the queue are still expressed as floating-point values.
+
+Returning to the 'VkDeviceCreateInfo' structure, the 'enabledLayerCount', 'EnabledLayerNames',  'enabledExtensionCount', and 'ppEnabledExtensionNames' fields are for enabling layers and extensions.
+We will cover both of these topics later in this chapter. For now, we'll set both 'enabledLayerCount' and 'enabledExtensionCount' to zero and both 'ppEnabledLayerNames' and 'ppEnablesExtensionNames' to nullptr.
+
+The final field, 'pEnabledFeatures', is a pointer to an instance of the VkPhysicalDeviceFeatures structure.
+If you do not want to do, you can simply set this to nullptr.
+However, Vulkan in this form is relatively limited, and much of its interesting functionality will be disabled.
+In order to use, simeply pass a 'VkPhysicalDeviceFeatures' structure which I've gotten in vkGetPhysicalDeviceFeatures().
+
+Simply enabling every supported feature, however, may come with some performance impact. 
+For some features, a Vulkan implementation may need to allocate extra memory,track additional state, configure hardware slightly differently, or perform some other operation that otherwise costs your application.
+It's not a good idea to enable features that won't be used.
+In an optimized application, you should query the supported features from the device; then, from the supported features, enable the specific features that your application requires.
+
+8. Object Types and Function Conventions
+Vulkan can categorize all objects into two types: dispatchable objects and nondispatchable objects.
+They are not relevant to applications and affects only how the API is structured and how system-level components such as the Vulkan loader and layers interoperate with those objects.
+
+Dispatchable objects are objects that internally contain a dispatch table.
+This is the table of functions used by various components to determine which parts of code to execute when your application makes calls to Vulkan.
+These types of objects are generally heavier-weight constructs and currently consist of the instance, physical device, logical device, command buffer, and queue.
+All other objects are considered nondispatchable.
+
+The first argument to any Vulkan function is always a dispatchable object.
+The only exceptions to this rule are the functions related to creating and initializing the instance.
+
+9. Managing Memory
+Vulkan provides two types of memory: 'host' memory & 'device' memory.
+Objects created by the Vulkan API need some of host memory. This is where the Vulkan implementation will store the state of the object and any data it needs to implement the Vulkan API.
+Resource objects such as buffers and images require some amount of device memory. This is the memory where the data stored in the resource is kept.
+
+You are able to manage host memory for the Vulkan implementation and device memory.
+To do this, I will need to create a device memory management subsystem.
+
+'You', the application developer, know exactly how your application will behave.
+You can partition resources into long-lived and transient groups.
+You can bucket resources that will be used together into a small number of pooled allocations.
+You are in the best position to decide the allocation strategies used by your application.
+
+It is important to keep the number of allocation objects to a minimum because each "live" memory allocation places some cost on the system.
+
+10. Multithreading in Vulkan.
+
+Vulkan generally assumes that the application will ensure that no two threads are mutating the same object at the same time.
+This is known as 'external synchronization'.
+The vast majority of Vulkan commands in the performance-critical portions of Vulkan (such as building command buffers) provide no synchronization at all.
+
+The Vulkan includes a number of higher-level features that are designed specifically to allow threads to perform work without blocking one another, which means we do not need to do mutex or use other synchronization primitives internally to protect data structures.
+These include the following:
+```
+1.	Host memory allocations can be handled through a host memory allocation structure passed to object creation functions.
+	By using an allocator per thread, the data structures in that allocator do not need to be protected. Host memory allocators are covered in Chapter 2, "Memory and Resources."
+
+2.	Command buffers are allocated from pools, and access to the pool is externally synchronized.
+	If an appliocation uses a separate command pool per thread, command buffers can be allocated from those pools without block against one another.
+	Command buffers and pools are covered in Chapter 3, "Queues and Commands."
+
+3.	Descriptors are allocated in sets from descriptor pools.
+	Descriptors are the representation of resources as used by shaders running on the device.
+	They are covered in detail in Chapter 6, "Shaders and Pipelines."
+	If a separate pool is used for each thread, then descriptor sets can be allocated from those pools without the threads blocking one another.
+
+4.	Second-level command buffers allow the contents of a large renderpass (which must be contained in a single command buffer) to be generated in parallel and then grouped as they're called from the primary command buffer.
+	Secondary command buffers are covered in detail in Chapter 13, "Multipass Rendering."
+```
+
+When you are building a very simple, single-threaded application, the requirement to create pools from which to allocate objects may seem like a lot of unnecessary indirection.
+However, as applications scale in number of threads, these objects are indispensible to achieving high performance.

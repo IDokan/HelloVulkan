@@ -57,6 +57,11 @@ void Window::PollWindowEvents()
 	glfwPollEvents();
 }
 
+void Window::CloseWindow()
+{
+	CallbackFuncs::WindowClose(window);
+}
+
 void Window::ShutWindowDown()
 {
 	if (window == nullptr)

@@ -23,6 +23,7 @@ public:
 	bool CreateWindow(const int& width, const int& height, const char* title, GLFWmonitor* monitor, GLFWwindow* share);
 	bool ShouldWindowClose();
 	void PollWindowEvents();
+	void CloseWindow();
 
 	void ShutWindowDown();
 

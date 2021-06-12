@@ -9,6 +9,7 @@ Creation Date: 06.12.2021
 	Source file for my vulkan.
 ******************************************************************************/
 #include <iostream>
+#include <fstream>
 #include <vector>
 #include "Graphics/MyVulkan.h"
 #include "Vulkan/vulkan.h"
@@ -23,6 +24,8 @@ namespace MyVulkan
 
 void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
+	std::ofstream resultFile;
+
 	//A generic application info structure
 	VkApplicationInfo applicationInfo{};
 	applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
@@ -58,13 +61,23 @@ void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, reinterpret_cast<VkPhysicalDevice*>(getHowMany)), "The first Procedure with physical devices is failed! (Originally, it might be failed)");
 	arrayOfPhysicalDevices.resize(numOfPhysicalDevices);
 	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, arrayOfPhysicalDevices.data()), "The second Procedure with physical devices is failed! (Logically, should not be failed)");
-
+	
 	// Create logical devices per physical device
 	for (const VkPhysicalDevice& physicalDevice : arrayOfPhysicalDevices)
 	{
 		/*!!!!!!!! Skip memory stuff at this moment*/
-		//VkPhysicalDeviceProperties property{};
-		//vkGetPhysicalDeviceProperties(physicalDevice, &property);
+		VkPhysicalDeviceProperties physicalProperty{};
+		vkGetPhysicalDeviceProperties(physicalDevice, &physicalProperty);
+#ifdef PRINT_RESULT
+		/// PRINT
+		resultFile.open("Result of " + std::string(physicalProperty.deviceName) + ".txt");																   /// PRINT
+		resultFile << "apiVersion: " << physicalProperty.apiVersion << std::endl;																   /// PRINT
+		resultFile << "driverVersion: " << physicalProperty.driverVersion << std::endl;															 /// PRINT
+		resultFile << "vendorID: " << physicalProperty.vendorID << std::endl;																		/// PRINT
+		resultFile << "deviceID: " << physicalProperty.deviceID << std::endl;																		 /// PRINT
+		resultFile << "deviceType: " << physicalProperty.deviceType << std::endl;																 /// PRINT
+		resultFile << "deviceName: " << physicalProperty.deviceName << std::endl << std::endl << std::endl;					   /// PRINT
+#endif
 
 		//VkPhysicalDeviceMemoryProperties memoryProperties;
 		//// Get the memory properties of the physical device.
@@ -94,6 +107,15 @@ void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &numOfQueueFamilyProperty, familyProperties.data());
 
 
+#ifdef PRINT_RESULT
+		resultFile << "Queue Family Count: " << numOfQueueFamilyProperty << std::endl;																							 /// PRINT
+		resultFile << "queueFlags: " << familyProperties.front().queueFlags << std::endl;																							   /// PRINT
+		resultFile << "queueCount: " << familyProperties.front().queueCount << std::endl;																							  /// PRINT
+		resultFile << "timestampValidBits: " << familyProperties.front().timestampValidBits << std::endl;																		/// PRINT
+		resultFile << "minImageTransferGranularity.width: " << familyProperties.front().minImageTransferGranularity.width << std::endl;					   /// PRINT
+		resultFile << "minImageTransferGranularity.height: " << familyProperties.front().minImageTransferGranularity.height << std::endl;				  /// PRINT
+		resultFile << "minImageTransferGranularity.depth: " << familyProperties.front().minImageTransferGranularity.depth << std::endl << std::endl << std::endl;					  /// PRINT
+#endif
 
 		// Create Logical Device
 		VkDeviceQueueCreateInfo logicalDeviceQueueCreateInfo{};
@@ -110,12 +132,23 @@ void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 		std::vector<const char*> layerNames;
 		// Query the instance layers
 		VulkanHelper::VkCheck(vkEnumerateInstanceLayerProperties(&layerCount, reinterpret_cast<VkLayerProperties*>(getHowMany)), "First Layer : Layer enumeration is failed! when pointer to array is nullptr");
+
+#ifdef PRINT_RESULT
+		resultFile << "layerCount: " << layerCount << std::endl << std::endl;		/// PRINT
+#endif
 		if (layerCount != 0)
 		{
 			layers.resize(layerCount);
 			VulkanHelper::VkCheck(vkEnumerateInstanceLayerProperties(&layerCount, layers.data()), "Second Layer : Layer enumeration is failed! when pointer to array is not nullptr");
-			for (VkLayerProperties layer : layers)
+			for (const VkLayerProperties& layer : layers)
 			{
+
+#ifdef PRINT_RESULT
+				resultFile << "layerName: " << layer.layerName << std::endl;		/// PRINT
+				resultFile << "specVersion: " << layer.specVersion << std::endl;		/// PRINT
+				resultFile << "implementationVersion: " << layer.implementationVersion << std::endl;		/// PRINT
+				resultFile << "description: " << layer.description << std::endl << std::endl;		/// PRINT
+#endif
 				layerNames.push_back(layer.layerName);
 			}
 		}
@@ -124,26 +157,35 @@ void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 			std::cout << "WARNING:: available layer is zero!" << std::endl;
 		}
 
+		resultFile << std::endl << std::endl;
 		
 		// Get Extensions
 		/*!!!!!!!!!!!!!!!!!!!!!!!!!!!! However, since extension need cost, for now do not use extension. Let us prefer vanilla mode*/
-		//uint32_t instanceExtensionCount = 0;
-		//std::vector<VkExtensionProperties> instanceExtensions;
-		//std::vector<const char*> extensionNames;
-		//VulkanHelper::VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, reinterpret_cast<VkExtensionProperties*>(getHowMany)), "Error during get instance extesions!");
-		//if (instanceExtensionCount > 0)
-		//{
-		//	instanceExtensions.resize(instanceExtensionCount);
-		//	VulkanHelper::VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, instanceExtensions.data()), "Error during get instance extesions!");
-		//	for (VkExtensionProperties extension : instanceExtensions)
-		//	{
-		//		extensionNames.push_back(extension.extensionName);
-		//	}
-		//}
-		//else
-		//{
-		//	std::cout << "Supported extensions are zero" << std::endl;
-		//}
+		uint32_t instanceExtensionCount = 0;
+		std::vector<VkExtensionProperties> instanceExtensions;
+		std::vector<const char*> extensionNames;
+		VulkanHelper::VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, reinterpret_cast<VkExtensionProperties*>(getHowMany)), "Error during get instance extesions!");
+
+#ifdef PRINT_RESULT
+		resultFile << "extensionCount: " << instanceExtensionCount << std::endl << std::endl;		/// PRINT
+#endif
+		if (instanceExtensionCount > 0)
+		{
+			instanceExtensions.resize(instanceExtensionCount);
+			VulkanHelper::VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, instanceExtensions.data()), "Error during get instance extesions!");
+			for (VkExtensionProperties extension : instanceExtensions)
+			{
+#ifdef PRINT_RESULT
+				resultFile << "extensionName: " << extension.extensionName << std::endl;		/// PRINT
+				resultFile << "specVersion: " << extension.specVersion << std::endl << std::endl;		/// PRINT
+#endif
+				extensionNames.push_back(extension.extensionName);
+			}
+		}
+		else
+		{
+			std::cout << "Supported extensions are zero" << std::endl;
+		}
 
 		VkPhysicalDeviceFeatures supportedFeatures{};
 		vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
@@ -170,6 +212,10 @@ void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 		VkDevice logicalDevice{};
 		VulkanHelper::VkCheck(vkCreateDevice(physicalDevice, &logicalDeviceCreateInfo, useInternalAllocator, &logicalDevice), "Vulkan logical device creation is failed!");
 		logicalDevices.push_back(logicalDevice);
+
+#ifdef PRINT_RESULT
+		resultFile.close();
+#endif
 	}
 }
 

@@ -10,6 +10,12 @@
     <Filter Include="Math">
       <UniqueIdentifier>{2d731554-0c9e-402d-a7a4-708a135d0a63}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Helper">
+      <UniqueIdentifier>{d415fa01-ec44-4290-a3d3-d330a2478d7a}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Graphics">
+      <UniqueIdentifier>{4aaebbe1-2487-41a0-9413-01c092854c95}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
@@ -18,6 +24,9 @@
     </ClCompile>
     <ClCompile Include="Engines\Window.cpp">
       <Filter>Engines</Filter>
+    </ClCompile>
+    <ClCompile Include="Graphics\MyVulkan.cpp">
+      <Filter>Graphics</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -32,6 +41,12 @@
     </ClInclude>
     <ClInclude Include="Engines\Window.h">
       <Filter>Engines</Filter>
+    </ClInclude>
+    <ClInclude Include="Helper\VulkanHelper.h">
+      <Filter>Helper</Filter>
+    </ClInclude>
+    <ClInclude Include="Graphics\MyVulkan.h">
+      <Filter>Graphics</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

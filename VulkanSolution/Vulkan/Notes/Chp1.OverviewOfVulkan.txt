@@ -539,3 +539,173 @@ These include the following:
 
 In addition to this, a large number of separate layers are grouped into a larger, single layer called VK_LAYER_LUNARG_standard_validation, making it easy to turn on.
 The book's application framework enables this layer when built in debug mode, leaving all layers disabled when built in release mode.
+
+13. Extensions
+Extensions are not without cost. 
+Some may require implementations to track additional state, make additional checks during command buffer build, or come with some performance penalty even when the extension is not in direct use.
+Therefore, extensions must be explicitly enabled by an application before they can be used. 
+
+Extensions are divided into two categories: instance extensions & device extensions.
+Instance extensions - It is one that generally enhances the entire Vulkan system on a flatform.
+	This type of extension is either supplied via a device-independent layer or is simply an extension that is exposed by every device on the system and promoted into an instance.
+Device extensions - It is extensions that extend the capabilities of one or more devices in the system but are not necessarily available on every device.
+
+Each extension can define new functions, new types, structures, enumerations, and so on..
+Once enabled, an extension can be considered part of the API that is available to the application.
+Instance extensions must be enabled when the Vulkan instance is created.
+Device extensions must be enabled when the device is created.
+	-> These leaves us with a chicken-and-egg situation: How do we know which extensions are supported before initializing a Vulkan instance?
+
+Querying the supported instance extensions is one of the few pieces of Vulkan functionality that may be used before a Vulkan instance is created.
+Thie is performed using the vkEnumerateInstanceExtensionproperties() function,
+the prototype of which is
+```
+VkResult vkEnumerateInstanceExtensionProperties(
+	const char*							pLayerName;
+	uint32_t*								pPropertyCount,
+	VkExtensionProperties*		pProperties
+);
+```
+'pLayerName' contains the name of a layer that might provide extensions.
+'pPropertyCount' is a pointer to a variable containingthe count of the number of instance extensions to query Vulkan about.
+'pProperties' is a pointer to an array of VkExtensionProperties structures that will be filled with information about the supported extensions.
+It works technically identically with vkEnumeratePhysicalDevices(), vkGetPhysicalDeviceQueueFamilyProperties(), and vkEnumerateDeviceLayerProperties().
+
+To correctly query all of the supported instance extensions, call the function twice.
+
+After querying has completed successfully, a variable which passed into pProperties will contain a list of the extensions supported by the instance.
+The type of the information is VkExtensionProperties.
+The definition of which is
+```
+typedef struct VkExtensionProperties
+{
+	char				extensionName[VK_MAX_EXTENSION_NAME_SIZE];
+	uint32_t		specVersion;
+} VkExtensionProperties;
+```
+
+Extensions may add functionality over time as new recisions of the extension are produced.
+The 'specVersion' field allows updates to extensions without the need to create an entirely new extension in order to add minor functionality.
+
+As you saw eariler, the VkInstanceCreateInfo structure has a member called 'ppEnabledExtensionNames', which is a pointer to an array of strings naming the extensions to enable.
+If the Vulkan system on a platform supports an extension, that extension will be included in the array returned from vkEnumerateInstanceExtensionProperties(),
+and its name can be passed to vkCreateInstance() via the 'ppEnabledExtensionNames' field of the VkInstanceCreateInfo structure.
+
+--- device extension
+Querying the support for device extensions is a similar process. To do this, call vkEnumerateDeviceExtensionProperties(),
+whose prototype is
+```
+VkResult vkEnumerateDeviceExtensionProperties(
+	VkPhysicalDevice				physicalDevice;
+	const char*							pLayerName,
+	uint32_t*								pPropertyCount,
+	VkExtensionProperties*		pProperties
+);
+```
+
+The only difference with querying instance extension is 'physicalDevice' parameter which is the handle to the device whose extensions to query.
+They are technically same even VkExtensionProperties structure is.
+
+When you are creating the physical device, the 'ppEnabledExtensionNames' field of the VkDeviceCreateInfo structure may contain a pointer to one of the strings returned from vkEnumerateDeviceExtensionProperties().
+
+Some extensions provide new functionality in the form of additional entry points that you can call.
+These are exposed as function pointers, the values of which you must query either from the instance or from the device after enabling the extension.
+Instance functions are functions that are valid for the entire instance.
+If an extension extends instance-level functionality, you should use an instance-level function pointer to access the new features. (???????????)
+
+To retrieve an instance-level function pointer, call vkGetInstanceProcAddr(),
+the prototype of which is
+```
+PFN_vkVoidFunction vkGetInstanceProcAddr(
+	VkInstance		instance,
+	const char*		pName
+);
+```
+
+The 'instance' parameter is the handle to the instance for which to retrieve a new function pointer.
+The 'pName' parameter will take the name of the function.
+If the function name is recognized and the extension is enabled, the return value from vkGetInstanceProcAddr() is a function pointer that you can call from your application.
+
+The 'PFN-vkVoidFunction' is a type definition for a pointer to a function of the following declaration
+```
+VKAPI_ATTR void VKAPI_CALL vkVoidFunction(void);
+```
+
+There are no functions in Vulkan that have this particular signature, and it is unlikely that an extension would introduce such a function.
+In all likelihood, you will need to cast the resulting function pointer to a pointer of the appropriate signature before you can call it. (??????????)
+
+Instance-level function pointers are valid for any object owned by the instance, assuming the device that created the object(or the device itself, if the function dispatches on the device) supports the extension and the extension is enabled for that device.
+Because each device might be implemented inside a different Vulkan driver, instance function pointers must dispatch though a layer of indirection to land in the correct module.
+Managing this indirection may incur some overhead; to avoid this, you can get a device-specific function pointer that goes directly to the appropriate driver.
+
+To get a device-level function pointer, call vkGetDeviceProcAddr(),
+the prototype of which is
+```
+PFN_vkVoidFunction vkGetDeviceProcAddr(
+VkDevice				device,
+const char*			pName
+);
+```
+
+The device with which the function pointer will be used is passed in 'device'.
+Again, the name of the function you are querying is passed as a nul-terminated UTF-8 string in 'pName'.
+The resulting function pointer is valid only with the device specified in 'device'.
+'device' must refer to a device that supports the extension that provides the new function and for which the extension has been enabled.
+
+The function pointer produced byvkGetDeviceProcAddr() is specific to 'device'.
+Even if the same physical device is used to create two or more logical devices with the exact same parameters, you must use the resulting function pointer only with the devices from which they are queried. (Do it with only the device you queried)
+
+14. Shutting Down Cleanly
+Before your program exits, you should clean up after yourself.
+
+When cleaning up, it is generally good  practive to do the following;
+```
+1. Complete or otherwise terminate all work that your application is doing both on the host and the device, in all threads related to Vulkan.
+2. Destroy objects in the reverse order from the order in which they were created.
+```
+
+The logical device is likely to be the last object that you created during initialization of your application.
+Before destroying the device, you should ensure that it is not executing any work on behalf of your application. 
+To do this, call vkDeviceWaitIdle(), 
+the prototype of which is
+```
+VkResult vkDeviceWaitIdle(
+	VkDevice			device
+);
+```
+
+When vkDeviceWaitIdle() returns, all work submitted to the device on bahalf of your application is guaranteed to have completed.
+
+Once you have ensured that the device is idle, you can safely destroy it.
+Todo this, call vkDestroyDevice(), 
+the prototype of which is
+```
+void vkDestroyDevice(
+	VkDevice											device,
+	const VkAllocationCallbacks*			pAllocator
+);
+```
+
+The handle to the device to destroy is passed in the 'device' parameter, access to which must be externally synchronized.
+Note that access to a device does not need to be externally synchronized with respect to any other command.
+The application should ensure, however, that a device is not destroyed while any other command accessing it is still executing in another thread.
+
+'pAllocator' should point to an allocation structure that is compatible with the one used to create the device. 
+Once the device object has been destroyed, no more commands can be submitted to it.
+Further, it is no longer possible to use the device handle as an argument to any function, including other object-destruction functions that take a device handle as their first argument.
+This is another reason why you should destroy objects in reverse order from the order in which they were created.
+
+Once all devices associated with a Vulkan instance have been destoryed, it is safe to destroy the instance. 
+This is accomplished by calling the vkDestroyInstance() function, whose prototype is
+```
+void vkDestroyInstance(
+	VkInstance										instance,
+	const VkAllocationCallbacks*			pAllocator
+);
+```
+
+'pAllocator' should be the 'pAllocator' when used the instance was allocated.
+If the 'pAllocator' parameter to vkCreateInstance() was nullptr, then the 'pAllcator' parameter to vkDestroyInstance() should be too.
+
+Note that it's not necessary to destroy the physical device which returned from a call to vkEnumeratePhysicalDevices().
+Simply, when the instance is destroyed, that instance's resources associated with each physical device are freed as well.

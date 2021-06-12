@@ -157,6 +157,10 @@
   <ItemGroup>
     <ClCompile Include="Engines\Engine.cpp" />
     <ClCompile Include="Engines\Window.cpp" />
+    <ClCompile Include="Graphics\MyVulkan.cpp">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+    </ClCompile>
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -169,6 +173,11 @@
     </ClInclude>
     <ClInclude Include="Engines\Window.h" />
     <ClInclude Include="GLMath.h" />
+    <ClInclude Include="Graphics\MyVulkan.h">
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
+      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
+    </ClInclude>
+    <ClInclude Include="Helper\VulkanHelper.h" />
   </ItemGroup>
   <ItemGroup>
     <Text Include="Notes\Chp1.OverviewOfVulkan.txt" />

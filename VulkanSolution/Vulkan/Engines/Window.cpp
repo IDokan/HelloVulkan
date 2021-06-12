@@ -13,6 +13,14 @@ Creation Date: 06.08.2021
 #include <string>
 #include "Window.h"
 
+namespace CallbackFuncs
+{
+	void WindowClose(GLFWwindow* window)
+	{
+		glfwSetWindowShouldClose(window, GLFW_TRUE);
+	}
+}
+
 bool Window::CreateWindow(const int& width, const int& height, const char* title, GLFWmonitor* monitor, GLFWwindow* share)
 {
 	if (window != nullptr)
@@ -28,6 +36,9 @@ bool Window::CreateWindow(const int& width, const int& height, const char* title
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
 	window = glfwCreateWindow(width, height, title, monitor, share);
+
+	glfwSetWindowCloseCallback(window, CallbackFuncs::WindowClose);
+
 	return true;
 }
 

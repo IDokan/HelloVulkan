@@ -16,4 +16,6 @@ namespace MyVulkan
 	// Use VK_MAKE_VERSION(major, minor, patch) for second parameter 'appVersion'
 	void InitVulkan(const char* appName, uint32_t appVersion);
 	void CleanVulkan();
+
+	void CreateBuffers();
 }

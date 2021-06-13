@@ -1,0 +1,488 @@
+All resources upon which Vulkan operates must be backed by device memory, and it is the application's responsibility to manage this memory.
+Further, memory is used to store data structures on the host.
+
+1. Host Memory Management
+Whenever Vulkan creates new objects, it might need memory to store data related to the,.
+For this, it uses 'host memory', which is regular memory accessible to the CPU that might be returned from a call to malloc or new, for example.
+Vulkan expects allocations to be aligned correctly for some high-performance CPU instructions.
+
+Because of these requirements, Vulkan implementations will use advanced allocators to satisfy them but sometimes it also provides the opportunity for us to replace the allocators by ourselves.
+
+Can you remember 'pAllocator' parameter in vkCreateInstance() function?
+
+```
+VkResult vkCreateInstance(
+	const VkIsntanceCreateInfo*			pCreateInfo,
+	const VkAllocationCallbacks*			pAllocator,
+	VkInstance*										pInstance
+);
+```
+The 'pAllocator' parameter is a pointer to a VkAllocationCallbacks structure which what we've been setting to nullptr.
+The VkAllocationCallbacks structure encapsulates a custom memory allocator that we can provide.
+The definition of the structure is
+```
+typedef struct VkAllocationCallbacks
+{
+	void*														pUserData;
+	PFN_vkAllocationFunction						pfnAllocation;
+	PFN_vkReallocationFunction					pfnReallocation;
+	PFN_vkFreeFunction								pfnFree;
+	PFN_vkInternalAllocationNotification		pfnInternalAllocation;
+	PFN_vkInternalFreeNotification				pfnInternalFree;
+} VkAllocationCallback;
+```
+
+The 'pUserData' is for your application's use.
+It can point anywhere; Vulkan will not dereference it.
+You can put anything in there, so long as it fits into a pointer-size blob.
+The only thing that Vulkan will do with 'pUserData' is pass it back to the callback functions to which the remaining members of VkAllocationCallbacks point.
+
+'pfnAllocation', 'pfnReallocation', and 'pfnFree' are used for normal, object-level memory management.
+They are defined as pointer to functions that match the following declarations.
+```
+void* VKAPI_CALL Allocation(
+	void*										pUserData,
+	size_t										size,
+	size_t										alignment,
+	VkSystemAllocationScope		allocationScope
+);
+
+void* VKAPI_CALL Reallocation(
+	void*										pUserData,
+	void*										pOriginal,
+	size_t										size,
+	size_t										alignment,
+	VkSystemAllocationScope		allocationScope
+);
+
+void VKAPI_CALL Free(
+	void*										pUserData,
+	void*										pMemory
+);
+```
+
+If your application uses data structures to manage memory, this is a good place to put their addresses, put the class's this pointer in 'pUserData'.
+
+The 'Allocation' function is responsible for making new allocations.
+The 'size' parameter give the size of the allocation, in bytes.
+The 'alignment' parameter gives the required alighment of the allocation, also in bytes.
+This is an often-overlooked parameter.
+It is very tempting to simply hook this function up to a naive allocator such as malloc.
+If you do this, you will find that it works for a while but that certain functiosn might mysteriously crash later.
+If you provide your own allocator, it must honor the 'alignment' parameter.
+
+The final parameter, 'allocationScope', tells your application what the scope, or life-time, of the allocation is going to be.
+It is one of the VkSystemAllocationScope values, which have the following meanings:
+```
+1. VK_SYSTEM_ALLOCATION_SCOPE_COMMAND
+	It means that the allocation will be live only for the duration of the command that provoked the allocation.
+	Vulkan will likely use this for very short-lived temporary allocations, as it works on a single command.
+
+2. VK_SYSTEM_ALLOCATION_SCOPE_OBJECT
+	It means that the allocation is directly associated with a particular Vulkan object. 
+	This allocation will live at least until the object is destroyed. 
+	This type of allocation will only ever be made as part of executing a creation command (one beginning with vkCreate).
+
+3. VK_SYSTEM_ALLOCATION_SCOPE_CACHE
+	It means that the allocation is associated with some form of internal cache or a VkPipelineCache object. (I did not get it perfectly though...)
+
+4. VK_SYSTEM_ALLOCATION_SCOPE_DEVICE
+	It means that the allocation is scoped to the device.
+	This allocation is made when the Vulkan implementation needs memory associated with the device that is not tied to a single object.
+	For example, if the implementation allocates objects in blocks, this type of allocation might be made in response to a request to create a new object, 
+		but becasue many objects might live in the same block, the allocation cannot be tied directly to any specific object.
+	(I did not fully understand, does it technically same with VK_SYSTEM_ALLOCATION_SCOPE_OBJECT but not tied in a specific object??? What does block means precisely?)
+
+5. VK_SYSTEM_ALLOCATION_SCOPE_INSTANCE
+	It means that the allocation is scoped to the instance, This is similar to VK_SYSTEM_ALLOCATION_SCOPE_DEVICE.
+	This type of allocation is typically made by layers or during early parts of Vulkan startup, such as by vkCreateInstance() and vkEnumeratePhysicalDevices().
+	(The part which I does not make sence is allocation is happend in vkEnumeratePhysicalDevices()??? We did not free physcal devices)
+```
+
+The 'pfnInternalAllocation' and 'pfInternalFree' function pointers point to alternate allocator functions that are used when Vulkan makes memory allocations using its own allocators.(??? What?)
+These callbacks have the same signitures as 'pfnAllocation' and 'pfnFree', except that 'pfnInternalAllocation' does not return a vlaue and 'pfnInternalFree' should not actually free the memory.
+These functions are used only for notification so that your application can keep track of how much memory Vulkan is using. 
+The prototypes of these functions should be
+```
+void VKAPI_CALL InternalAllocationNotofication(
+	void*										pUserData,
+	size_t										size,
+	VkInternalAllocationType			allocationType,
+	VkSystemAllocationScope		allocationScope
+);
+
+void VKAPI_CALL InternalFreeNotification(
+	void*										pUserData,
+	size_t										size,
+	VkInternalAllocationType			allocationType,
+	VkSystemAllocationScope		allocationScope
+);
+```
+
+There's not much you can do with the information provided through 'pfnInternalAllocation' and 'pfnInternalFree' besides log it and keep track of the total memory usage made by the application.
+Specifying these function pointers is optional, but if you supply one, you must supply both.
+If you do not want to use them, set them both to nullptr.
+
+Bellow codes show an example of how to declare a C++ class that can be used as an allocator that maps the Vulkan allocation callback functions.
+Because the callback functions used by Vulkan are naked C function pointers, the callback functions themselves are declared as static member functions of the class,  whereas the actual implementations of those functions are declared as regular nonstatic member functions.
+
+```
+class allocator
+{
+public:
+	// Operator that allows an instance of this class to be used as a
+	// VkAllocationCallbacks structure
+	inline operator VkAllocationCallbacks() const
+	{
+		VkAllocationCallbacks result;
+
+
+		result.pUserData = (void*)this;
+		result.pfnAllocation = &Allocation;
+		result.pfnReallocation = &Reallocation;
+		result.pfnFree = &Free;
+		result.pfnInternalAllocation = nullptr;
+		result.pfnInternalFree = nullptr;
+
+		return result;
+	}
+
+private:
+	// Declare the allocator callbacks as static member functions.
+	static void* VKAPI_CALL Allocation(void* pUserData, size_t size, size_t alignment, VkSystemAllocationScope allocationScope);
+	static void* VKAPI_CALL Reaclloation(void* pUserData, void* pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope);
+	static void VKAPI_CALL Free(void* pUserData, void* pMemory);
+
+	// Now declare the nonstatic member functions that will actually perform
+	// the allocations
+	void* Allocation(size_t size, size_t alignment, VkSystemAllocationScope allocationScope);
+	void* Reallocation(void* pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope);
+	void Free(void* pMemory);
+};
+```
+
+An example implementation of this class is shown in below codes.
+It maps the Vulkan allocation functions to the POSIX aligned_malloc functions. 
+Note that this allocator is almost certainly not better than what most Vulkan implementations use internally and serves only as an example of how to hook the callback functions up to your own code.
+
+```
+void* allocator::Allocation(size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
+{
+	return aligned_mallloc(size, alignment);
+}
+
+void* VKAPI_CALL allocator::Allocation(void* pUserData, size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
+{
+	return static_cast<allocator*>(pUserData)->Allocation(size, alignment, allocationScope);
+}
+
+void* allocator::Reallocation(void* pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
+{
+	return aligned_realloc(pOriginal, size, alignment);
+}
+
+void* VKAPI_CALL allocator::Reallocation(void* pUserData, void* pOriginal, size_t size, size_t alignment, VkSystemAllocationScope allocationScope)
+{
+	return static_cast<allocator*>(pUserData)->Reallocation(pOriginal, size, alignment, allocationScope);
+}
+
+void allocator::Free(void* pMemory)
+{
+	aligned_free(pMemory);
+}
+
+void VKAPI_CALL allocator::Free(void* pUserData, void* pMemory)
+{
+	return static_cast<allocator*>(pUserData, pMemory);
+}
+```
+
+2. Resources
+Vulkan operates on data.
+Data is stored in resources, and resources are backed by memory.
+There are two fundamental types of resources in Vulkan:
+1. buffers
+2. Images.
+A buffer is a simple, linear chunk of data that can be used for almost anything - data structures, raw arrays, and even image data, should you choose to use them that way.
+Images, on the other hand, are structured and have type and format information, can be multidimensional, form arrays of their own, and support advanced oeprations for reading and writing data from and to them.
+
+Both types of resources are constructed in two steps: first the resource itself is created, and then the resource needs to be backed by memory.
+The reason for this is to allow the application to manage memory itself.
+For example, an applications that uses a small number of very large resources and keeps them around for a long time might use one strategy in its memory allocator, while another application that continually creates and destroys small resources might implement another.
+
+This section looks at buffer creation first and then moves on to discuss images.
+
+3. Buffers
+Buffers are the simplest type of resource but have a wide variety of uses in Vulkan.
+They are used to store linear structured or unstructured data, which can have a format or be raw bytes in memory.
+The various uses for buffer objects will be discussed as we introduce those topics.
+To create a new buffer object, call vkCreateBuffer(),
+the prototype of which is
+```
+VkResult vkCreateBuffer(
+	VkDevice											device,
+	const VkBufferCreateInfo*				pCreateInfo,
+	const VkAllocationCallbacks*			pAllocator,
+	VkBuffer*											pBuffer
+);
+```
+
+Here, the 'pCreateInfo' parameter is a pointer to an instance of the VkBufferCreateInfo structure, the definition of which is
+
+```
+typedef struct VkBufferCreateInfo
+{
+	VkStructureType				sType;
+	const void*						pNext;
+	VkBufferCreateFlags		flags;
+	VkDeviceSize					size;
+	VkBufferUsageFlags		flags;
+	VkSharingMode				sharingMode;
+	uint32_t							queueFamilyIndexCount;
+	const uint32_t*					pQueueFamilyIndices;
+} VkBufferCreateInfo;
+```
+
+The 'sType' for VkBufferCreateInfo should be set to VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+and the 'pNext' member should be set to nullptr unless you're using an extension.
+The 'flags' field of the structure gives Vulkan some information about the properties of the new buffer.
+In the current version of Vulkan, the only bits defined for use in the 'flags' field are related to 'sparse buffers', which we will cover later in this chapter.
+For now, 'flags' can be set to zero.
+
+The 'size' field of VkBufferCreateInfo specifies the size of the buffer, in bytes.
+The 'usage' field tells Vulkan how you're going to use the buffer and is a bitfield made up of a combination of members of the VkBufferUsageFlagBits enumaration.
+On some architectures, the intended usage of the buffer can have an effect on how it's created.
+The currently defined bits along with the sections where we'll discuss them are as follows:
+```
+1.	VK_BUFFER_USAGE_TRANSFER_SRC_BIT &
+	VK_BUFFER_USAGE_TRANSFER_DST_BIT
+	They mean that the buffer can be used to back a uniform or storage texel buffer, respectively.
+	Texel buffers are formatted arrays of texels that can be used as the source or destination (in the case of storage buffers) of reads and writes by shaders running on the device.
+	Texel buffers are covered in Chapter 6, "Shaders and Pipelines"
+
+2. VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT &
+	VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT
+	They mean that the buffer can be used to back a uniform or storage texel buffer, respectively.
+	Texel buffers are formatted arrays of texels that can be used as the source or destination (in the case of storage buffers) of reads and writes by shaders running on the device.
+	Texel buffers are covered in Chapter 6, "Shaders and Pipelines".
+
+3. VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT &
+	VK_BUFFER_USAGE_STORAGE_BUFFER_BIT
+	They mean that the buffer can be used to back uniform or storage buffers, respectively.
+	As opposed to texel buffers, regular uniform and storage buffers have no format associated with them and can therefore be used to store arbitrary data and data structures.
+	They are covered in Chpater 6, "Shaders and Pipelines".
+
+4. VK_BUFFER_USAGE_INDEX_BUFFER_BIT &
+	VK_BUFFER_USAGE_VERTEX_BUFFER_BIT
+	They mean that the buffer can be used to store index or vertex data, respectively, used in drawing commands.
+	You'll learn more about drawing commands, including indexed drawing commands, in Chpater 8, "Drawing".
+
+5. VK_BUFFER_USAGE_INDIRECT_BUFFER_BIT
+	It means that the buffer can be used to store parameters used in indirect dispatch and drawing commands, which are commands that take their parameters directly from buffers rather than from your program.
+	These are covered in Chapter 6, "Shaders and Pipelines," and Chapter 8, "Drawing".
+```
+
+The 'sharingMode' field of VkBufferCreateInfo indicates how the buffer will be used on the multiple command queues supported by the device.
+Because Vulkan can execute many operations in parallel, some implementations need to know whether the buffer will essentially be used by a single command at a time or potentially by many.
+```
+Setting 'sharingMode' to VK_SHARING_MODE_EXCLUSIVE:
+	It says that the buffer will only be used on a single queue.
+	
+Setting sharingMode to VK_SHARING_MODE_CONCURRENT: 
+	It indicates that you plan to use the buffer on multiple queues at the same time.
+	Using this mode might result in lower performance on some systems, so unless you need this, set sharingMode to 'VK_SHARING_MODE_EXCLUSIVE'.
+```
+
+If you do set 'sharingMode' to VK_SHARING_MODE_CONCURRENT, you need to tell Vulkan which queues you're going to use the buffer on.
+This is done using the 'pQueueFamilyIndices' member of VkBufferCreateInfo, which is a pointer to an array of queue families that the resource will be used on.
+'queueFamilyIndexCount' contains the length of this array-the number of queue families that the buffer will be used with.
+When 'sharingMode' is set to VK_SHARING_MODE_EXCLUSIVE, 'queueFamilyCount' and 'pQueueFamilies' are both ignored.
+
+The bellow codes demonstrate how to create a buffer object that is 1MiB in size, usable as the source or destination of transfer operations, and used on only one queue family at a time.
+
+```
+static const VkBufferCreateInfo bufferCreateInfo = 
+{
+	VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,
+	nullptr,
+	0,
+	1024 * 1024,
+	VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+	VK_SHARING_MODE_EXCLUSIVE,
+	0,
+	nullptr
+}
+
+VkBuffer buffer = VK_NULL_HANDLE;
+vkCreateBuffer(device, &bufferCreateInfo, &buffer);
+```
+
+After the code has run, a new VkBuffer handle is created and placed in the 'buffer' variable. 
+The buffer is not yet fully usable because it first needs to be backed with memory.
+This operation is covered in "Device Memory Management" later in this chapter.
+
+4. Formats and Support
+While buffers are relatively simple resources and do not have any notion of the format of the data they contain, images and buffer view(which we will introduce shortly) do include information about their content
+Part of that information describes the format of the data in the resourc.
+Some formats have special requirements or restrictions on their use in certain parts of their pipeline.
+For example, some formats might be readable but not writable, which is common with compressed formats.
+
+In order to determine the properties and level of support for various formats, you can calll vkGetPhysicalDeviceFormatProperties(),
+the prototype of which is
+```
+void vkGetPhysicalDeviceFormatProperties
+(
+	VkPhysicalDevice			physicalDevice,
+	VkFormat							format,
+	VkFormatProperties*		pFormatProperties
+);
+```
+
+the physical device handle is specified in 'physicalDevice'.
+If your application absolutely required support for a particular format or set of formats, you could check for support befroe even creatin g the logical device and reject particular physical devices from consideration early in application startup, for example.
+The format for which to check support is specified in 'format'. 
+If the device recognizes the format, it will write its level of support into the instance of the VkFormatProperties structure pointed to by 'pFormatProperties'.
+The definition of which is
+```
+typedef struct VkFormatProperties
+{
+	VkFormatFeatureFlags		linearTilingFeatures;
+	VkFormatFeatureFlags		optimalTilingFeatures;
+	VkFormatFeatureFlags		bufferFeatures;
+} VkFormatProperties;
+```
+
+All three fields in the structure are bitfields made up from members of the VkFormatFeatureFlagBits enumeration.
+An image can be in one of two parimary tiling modes:
+```
+1. Linear
+	It is laid out linearly in memory, first by row, then by column, and so on.
+
+2. Optimal
+	It is laid out in highly optimized partterns that make efficient use of the device's memory subsystem.
+```
+
+The 'linearTilingFeatures' field indicates the level of support for a format in images in linear tiling.
+The 'optimalTilingFeatures' field indicates the level of support for a format in images in optimal tiling.
+The 'bufferFeatures' field indicates the level of support for the format when used in a buffer.
+
+The various bits that might be included in these fields are defined as follows:
+```
+1. VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT
+	The format may be used in read-only images that will be sampled by shared.
+
+2. VK_FORMAT_FEATURE_SAMPLED_IMAGE_FILTER_LINEAR_BIT
+	Filter modes that include linear filtering may be used when this format is used for a sampled image.
+
+3. VK_FORMAT_FEATURE_STORAGE_IMAGE_BIT
+	The format may be used in read-write images that will be read and written by shaders.
+
+4. VK_FORMAT_FEATURE_STORAGE_IMAGE_ATOMIC_BIT
+	The format may be used in read-write images that also support atomic operations performed by shaders.
+
+5. VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT
+	The format may be used in read-write texel buffer that will be read from by shaders.
+
+6. VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT
+	The format may be used in read-write texel buffers that may be read from and written to by shaders.
+
+7. VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_ATOMIC_BIT
+	The format may be used in read-write texel buffers that also support atomic operations performed by shaders.
+
+8. VK_FORMAT_FEATURE_VERTEX_BUFFER_BIT
+	The format may be used as the source of vertex data by the vertex-assembly stage of the graphics pipeline.
+
+9. VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BIT
+	The format may be used as a color attachment in the color-blend stage of the graphics pipeline.
+
+10. VK_FORMAT_FEATURE_COLOR_ATTACHMENT_BLEND_BIT
+	Images with this format may be used as color attachments when ble.
+
+11. VK_FORMAT_FEATURE_DEPTH_STENCIL_ATTACHMENT_BIT
+	The format may be used as a depth, stencil, or depth-stencil attachment.
+
+12. VK_FORMAT_FEATURE_BLIT_SRC_BIT
+	The format may be used as the source of data in an image copy oepration.
+
+13. VK_FORMAT_FEATURE_BLIT_DST_BIT
+	The format may be used as the destination of an image copy operation.
+```
+
+Many formats will have a number format support bits turned on.
+A complete list of the mandatory formats is contained in the Vulkan specification.
+If a format is on the madatory list, then it's not strictly necessary to test for support.
+However, for completeness, implementations are expected to accurately report capabilities for all supported formats, even mandatory ones. (????)
+
+The vkGetPhysicalDeviceFormatProperties() function really returnes only a coarse set of flags indicating whether a format may be used at all under particular scenarios.
+For images expecially, there may be more complex interactions between a specific format and its effect on the level of support within an image.
+Therefore, to retrieve even more information about the support for a format when used in images, you can call vkGetPhysicalDeviceImageFormatProperties(),
+the prototype of which is
+```
+VkResult vkGetPhysicalDeviceImageFormatProperties(
+	VkPhysicalDevice					physicalDevice,
+	VkFormat									format,
+	VkImageType							type,
+	VkImageTiling							tiling,
+	VkImageUsageFlags				usage,
+	VkImageCreateFlags				flags,
+	VkImageFormatProperties*		pImageFormatProperties
+);
+```
+
+The type of image that you want to ask about is specified in 'type'.
+This should be one of the image types:
+```
+1. VK_IMAGE_TYPE_1D
+2. VK_IMAGE_TYPE_2D
+3. VK_IMAGE_TYPE_3D
+```
+Different image types might have different restrictions or enhancements.
+The tiling mode for the image is specified in 'tiling' and can be either VK_IMAGE_TILING_LINEAR or VK_IMAGE_TILING_OPTIMAL, indicating linear or optimal tiling, respectively.
+
+The intended use for the image is specified in the 'usage' parameter.
+This is a bitfield indicating how the image is to be used.
+The various uses for an image are discussed later in this chapter.
+The 'flags' field should be set to the same value that will be used when creating the image that will use the format. (???)
+
+If the format is recognized and supported by the Vulkan Implementation, then it will wrtie information about the level of support into the VkImageFormatProperties structure pointed to by 'pImageFormatProperties'.
+The definition of VkImageFormatProperties is
+```
+typedef struct VkImageFormatProperties
+{
+	VkExtent3D							maxExtent;
+	uint32_t								maxMipLevels;
+	uint32_t								maxArrayLayers;
+	VkSampleCountFlags			sampleCounts;
+	VkDeviceSize						maxResourceSize;
+} VkImageFormatProperties;
+```
+
+The 'extent' member of VkImageFormatProperties reports the maximum size of an image that can be created with the specified format.
+For example, formats with fewer bits per pixel may support creating larger images than those with wider pixels.
+'extent' is an instance of the VkExtent3D structure, the definition of which is (????????)
+```
+typedef struct VkExtent3D
+{
+	uint32_t		width;
+	uint32_t		height;
+	uint32_t		depth;
+} VkExtent3D;
+```
+
+The 'maxMipLevels' field reports the maximum number of mipmap levels supported for an image of the requested format along with the other parameters passed to vkGetPhysicalDeviceImageFormatProperties().
+In most cases, 'maxMipLevels' will either report log2(max(extent.x, extent.y, extent.z)) for the image when mipmaps are supported or 1 when mipmaps are not supported.
+
+The 'maxArrayLayers' field reports the maximum number of array layers supported for the image.
+Again, this is likely to be a fairly high number if arrays are supported or 1 if arrays are not supported.
+
+If the image format supports mjultisampling, then the supported sample counts are reported through the 'sampleCounts' field.
+This is a bitfield containing one bit for each supported sample count.
+If bit n is set, then images with 2^n samples are supported in this format.
+If the format is supported at all, at least one bit of this field will be set.
+It is very unlikely that you will ever see a format that supportes multisampling but does not support a single sample per pixel.
+
+Finally, the 'maxResourceSize' field specifies the maximum size, in bytes, that a resource of this format might be.
+This should not be confused with the maximum extent, which reports the maximum size in each of the dimensions that might be supported.
+For example, if an implementation reports that it supports images of 16,384 * 16,384 pixels * 2,048 layers with a format containing 128 bits per pixel, then creating an image of the maximum extent in every dimension would produce 8TiB image.
+However, it might well support creating an 8 * 8 * 2,048 array or a 16,384 * 16,284 nonarray image, either of which would fit into a more moderate memory foot print. (???????)
+

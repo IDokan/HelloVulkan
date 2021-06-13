@@ -16,6 +16,9 @@
     <Filter Include="Graphics">
       <UniqueIdentifier>{4aaebbe1-2487-41a0-9413-01c092854c95}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Graphics\Allocator">
+      <UniqueIdentifier>{050dd0d4-2490-4486-83aa-65c68ec6c8ae}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
@@ -27,6 +30,9 @@
     </ClCompile>
     <ClCompile Include="Graphics\MyVulkan.cpp">
       <Filter>Graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="Graphics\Allocator\Allocator.cpp">
+      <Filter>Graphics\Allocator</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -48,9 +54,15 @@
     <ClInclude Include="Graphics\MyVulkan.h">
       <Filter>Graphics</Filter>
     </ClInclude>
+    <ClInclude Include="Graphics\Allocator\Allocator.h">
+      <Filter>Graphics\Allocator</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Notes\Chp1.OverviewOfVulkan.txt">
+      <Filter>Notes</Filter>
+    </Text>
+    <Text Include="Notes\Chp2.MemoryAndResources.txt">
       <Filter>Notes</Filter>
     </Text>
   </ItemGroup>

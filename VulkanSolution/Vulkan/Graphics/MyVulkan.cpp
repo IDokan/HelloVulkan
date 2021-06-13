@@ -14,12 +14,14 @@ Creation Date: 06.12.2021
 #include "Graphics/MyVulkan.h"
 #include "Vulkan/vulkan.h"
 #include "Helper/VulkanHelper.h"
+#include "Graphics/Allocator/Allocator.h"
 
 namespace MyVulkan
 {
 	VkInstance instance{};
 	std::vector<VkDevice> logicalDevices;
-	const VkAllocationCallbacks* useInternalAllocator = nullptr;
+	allocator allocatorForm;
+	const VkAllocationCallbacks myAllocator = (VkAllocationCallbacks)allocatorForm;
 }
 
 void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
@@ -44,8 +46,7 @@ void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	instanceCreateInfo.pNext = nullptr;
 	instanceCreateInfo.flags = 0;
 	instanceCreateInfo.pApplicationInfo = &applicationInfo;
-
-	VulkanHelper::VkCheck(vkCreateInstance(&instanceCreateInfo, useInternalAllocator, &instance), "Could not create instance");
+	VulkanHelper::VkCheck(vkCreateInstance(&instanceCreateInfo, &myAllocator, &instance), "Could not create instance");
 
 
 	void* getHowMany = nullptr;
@@ -210,13 +211,15 @@ void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 		logicalDeviceCreateInfo.pEnabledFeatures = &requiredFeatures;
 
 		VkDevice logicalDevice{};
-		VulkanHelper::VkCheck(vkCreateDevice(physicalDevice, &logicalDeviceCreateInfo, useInternalAllocator, &logicalDevice), "Vulkan logical device creation is failed!");
+		VulkanHelper::VkCheck(vkCreateDevice(physicalDevice, &logicalDeviceCreateInfo, &myAllocator, &logicalDevice), "Vulkan logical device creation is failed!");
 		logicalDevices.push_back(logicalDevice);
 
 #ifdef PRINT_RESULT
 		resultFile.close();
 #endif
 	}
+
+	CreateBuffers();
 }
 
 void MyVulkan::CleanVulkan()
@@ -224,8 +227,26 @@ void MyVulkan::CleanVulkan()
 	for (VkDevice logicalDevice : logicalDevices)
 	{
 		VulkanHelper::VkCheck(vkDeviceWaitIdle(logicalDevice), "failed to make logical device idle");
-		vkDestroyDevice(logicalDevice, useInternalAllocator);
+		vkDestroyDevice(logicalDevice, &myAllocator);
 	}
 
-	vkDestroyInstance(instance, useInternalAllocator);
+	vkDestroyInstance(instance, &myAllocator);
+}
+
+void MyVulkan::CreateBuffers()
+{
+	static const VkBufferCreateInfo bufferCreateInfo = 
+	{
+		VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,																		// VkStructureType sType
+		nullptr,																																					// const void* pNext
+		0,																																							// VkBufferCreateFlags flags
+		1024 * 1024,																																		// VkDeviceSize size
+		VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,	// VkBufferUsageFlags flags
+		VK_SHARING_MODE_EXCLUSIVE,																									// VkSharingMode sharingMode
+		0,																																							// uint32_t queueFamilyIndexCount
+		nullptr																																					// const uint32_t* pQueueFamilyIndices
+	};
+
+	VkBuffer buffer = VK_NULL_HANDLE;
+	vkCreateBuffer(MyVulkan::logicalDevices.front(), &bufferCreateInfo, &MyVulkan::myAllocator, &buffer);
 }

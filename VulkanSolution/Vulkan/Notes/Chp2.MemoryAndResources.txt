@@ -486,3 +486,516 @@ This should not be confused with the maximum extent, which reports the maximum s
 For example, if an implementation reports that it supports images of 16,384 * 16,384 pixels * 2,048 layers with a format containing 128 bits per pixel, then creating an image of the maximum extent in every dimension would produce 8TiB image.
 However, it might well support creating an 8 * 8 * 2,048 array or a 16,384 * 16,284 nonarray image, either of which would fit into a more moderate memory foot print. (???????)
 
+5. Images
+Images are more complex than buffers in that they are multidimensional; have specific layouts and format information; and can be used as the source and destination for complex operations such as filtering, blending, depth or stencil testing, and so on..
+Images are created using the vkCreateImage() function, 
+the prototype of which is
+```
+VkResult vkCreateImage(
+	VkDevice										device,
+	const VkImageCreateInfo*			pCreateInfo,
+	const VkAllocationCallbacks*		pAllocator,
+	VkImage*										pImage
+);
+```
+
+The 'pCreateInfo' parameter is a pointer to an instance of the VkImageCreateInfo structure,
+the definition of which is
+```
+typedef struct VkImageCreateInfo
+{
+	VkStructureType						sType;
+	const void*								pNext;
+	VkImageCreateFlags				flags;
+	VkImageType							imageType;
+	VkFormat									format;
+	VkExtent3D								extent;
+	uint32_t									mipLevels;
+	uint32_t									arrayLayers;
+	VkSampleCountFlagBits			samples;
+	VkImageTiling							tiling;
+	VkImageUsageFlags				usage;
+	VkSharingMode						sharingMode;
+	uint32_t									queueFamilyIndexCount;
+	const uint32_t*							pQueueFamilyIndices;
+	VkImageLayout						initialLayout;
+} VkImageCreateInfo;
+```
+
+The command fields, 'sType' and 'pNext', appear at the top, as with most other Vulkan structures.
+The 'sType' field should be set to VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO.
+
+The 'flags' field of VkImageCreateInfo contains flags describing some of the properties of the image.
+These are a selection of the VkImageCreateFlagBits enumeration.
+```
+1. VK_IMAGE_CREATE_SPARSE_BINDING_BIT &
+	VK_IMAGE_CREATE_SPARSE_RESIDENCY_BIT &
+	VK_IMAGE_CREATE_SPARTSE_ALIASED_BIT
+	They are used for controlling sparse images, which are covered later in this chapter.
+
+2. VKIMAGE_CREATE_MUTABLE_FORMAT
+	If it is set, then you can create [views] of the image with a different format from the parent.
+	Image views are essentially a special type of image that shares data and layout with its parent but can override prameters such as format.
+	This allows data in the image to be interpreted in multiple ways at the same time.
+	Using image views is a way to create two different aliases for the same data.
+	Image view are covered later in this chapter.
+	
+3. VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT
+	If it is set, then the you will be able to create cube map views of it.
+	Cube maps are covered later in this chapter.
+```
+
+The 'imageType' field of the VkImageCreateInfo structure specifies the type of image that you want to create.
+The image type is essentially the dimensionality of the image and can be one of 
+```
+VK_IMAGE_TYPE_1D -> 1D image
+VK_IMAGE_TYPE_2D -> 2D image
+VK_IMAGE_TYPE_3D -> 3D image
+, respectively
+```
+
+Images also have a format, which describes how texel data is stored in memory and how it is interpreted by Vulkan.
+The format of the image is specified by the 'format' field of the VkImageCreateInfo structure and must be one of the image formats represented by a member of the VkFormatenumeration.
+Vulkan supports a large number of formats-too many to list here.
+We willl use some of the formats in the book examples and explain how they work at that time.
+For the rest, refer to the Vulkan specification.
+
+The 'extent' of an image is its size in texels.
+This is specified in the 'extent' field of the VkImageCreateInfo structure.
+This is an instance of the VkExtent3D structure, which has three members
+```
+typedef struct VkExtent3D
+{
+	uint32_t		width;
+	uint32_t		height;
+	uint32_t		depth;
+} VkExtent3D;
+```
+These should be set to the width, hiehgt, and depth of the desired image, respectively.
+For 1D images, height should be set to 1, and for 1D and 2D images, depth should be set to 1.
+Rather than alias the next-higher dimension as an array count, Vulkan uses an explicit array size, which is set in arrayLayers.
+
+The maximum size of an image that can be created is device-dependent.
+To determine the largest image size, call vkGetPhysicalDeviceFeatures() and check the fields of the embedded VkPhysicalDeviceLimits structure.
+
+Bellow description describe what field is for
+```
+maxImageDimension1D
+	It contains the maximum supported width for 1D images.
+	It is guaranteed to be at least 4,096 texels.
+
+maxImageDimension2D 
+	It contains the maximum side length for 2D images.
+	It is guaranteed to be at least 4,096 texels.
+
+maxImageDimension3D 
+	It contains the maximum side length for 3D images.
+	It is guaranteed to be at least 4,096 texels.
+
+	(side length???)
+
+maxImageArrayLayers
+	It contains the maximum number of layers in an array image.
+	It is guaranteed to be at least 256.
+
+maxImageDimensionCube
+	It contains the maximum side length for the cube.
+	It is guaranteed to be at least 256.
+```
+
+If the image you want to create is smaller than these dimensions, then there's no need to check the device features.
+Further, it's quite cmmon to find Vulkan implementations that support significantly higher limits.
+It would be reasonable to make larger image sizes a hard requirement rather than trying to create fallback paths for lower-end devices. (???????????)
+
+The number of mipmap levels to create in the image is specified in 'mipLevels'.
+Mipmapping is the process of using a set of prefiltered images of successively lower resolution in order to improve image quality when undersampling the image.
+The images that make up the various mipmap levels are arranged in a pyramid.
+
+In a mipmapped texture, the base level is the lowest-numbered level (usually level zero) and has the resolution of the texture.
+Each successive level is half the size of the level above it until halving the size of the image again in one of the dimensions would result in a single texel in that direction.
+Sampling from mipmapped textures is covered in some detail in Chapter 6, "Shaders and Pipelines."
+
+Likewise, the number of samples in the image is specified in 'samples'.
+This field is somewhat unlike the others.
+It must be a member of the VkSampleCountFlagBit enumeration, which is actually defined as bits to be used in a bitfield.
+However, only power-of-two sample counts are currently defined in Vulkan, which means they're "1-hot" values, so single-bit enumerant values work just fine.
+
+The 'tiling' field is a member of the VkImageTiling enumeration, which contains only VK_IMAGE_TILING_LINEAR or VK_IMAGE_TILING_OPTIMAL.
+'Linear' tiling means that image data is laid out left to right, top to bottom, such that if you map the underlying memory and write it with the CPU, it would form a linear image.
+Meanwhile, 'Optimal' tiling is an opaque representation used by Vulkan to lay data out in memory to improve efficiency of the memory subsystem on the device.
+This is generally what you should choose unless you plan to map and manipulate the image with the CPU.
+Optimal tiling will likely perform significantly better than linear tiling in most operations, and linear tiling might not be supported at all for some operations or formats, depending on the Vulkan implementation.
+
+The 'usage' field is a bitfield describing where the image will be used.
+This is similar to the 'usage' field in the VkBufferCreateInfo structure.
+The 'usage' field here is made up of members of the VkImageUsageFlags enumeration, the member of which are as follows:
+```
+1. VK_IMAGE_USAGE_TRANSFER_SRC_BIT &
+	VK_IMAGE_USAGE_TRANSFER_DST_BIT
+	They mean that the image will be the source or destination of transfer commands, respectively.
+	Transfer commands operating on images are covered in Chapter 4, "Moving Data."
+
+2. VK_IMAGE_USAGE_SAMPLED_BIT
+	It means that the image can be sampled from in a shader.
+
+3. VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+	It means that the image can be used for general-purpose storage, including write from a shader.
+
+4. VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+	It means that the image can be bound as a color attachment and drawn into using graphics operations.
+	Framebuffers and their attachments are covered in Chapter 7, "Graphics Pipelines"
+
+5. VK_IMAGE_USAGE_TRASIENT_ATTACHMENT_BIT
+	It means that the image can be used as a transient attachment, which is a special kind of image used to store intermediate results of a graphics oepration.
+	Transient attachments are covered in Chapter 13, "Multipass Rendering".
+
+6. VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
+	It means that the image can be used as a special input during graphics rendering.
+	Input images differ from regular sampled or storage images in that only fragment shaders can read from them and only at their own pixel location.
+	Input attachments are also covered in detail in Chapter 13, "Multipass Rendering."
+```
+
+The 'sharingMode' is identical in function to the similarly named field in the VkBufferCreateInfo structure described in "Buffers" eariler in this chapter.
+```
+VK_SHARING_MODE_EXCLUSIVE
+	Then image will be used with only a single queue family at a time.
+	
+VK_SHARING_MODE_CONCURRENT
+	Then the image may be accessed by multiple queues concurrently.
+```
+Likewise, 'queueFamilyIndexCount' and 'pQueueFamilyIndices' provide similar function and are used when 'sharingMode' is VK_SHARING_MODE_CONCURRENT.
+
+Finally, images have a 'layout', which specifies in part how it will be used at any given moment.
+The 'initialLayout' field determines which layout the image will be created in.
+The available layouts are the members of the VkImageLayout enumeration, which are
+```
+1. VK_IMAGE_LAYOUT_UNDEFINED
+	The state of the image is undefined.
+	The image must be moved into  one of the other layouts before it can be used almost for anything.
+
+2. VK_IMAGE_LAYOUT_GENERAL
+	This is the "lowest common denominator" layout and is used where no other layout matches the intended use case.
+	Images in VK_IMAGE_LAYOUT_GENERAL can be used almost anywhere in the pipeline.
+
+3. VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL
+	The image is going to be rendered into using a graphics pipeline.
+
+4. VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL
+	The image is going to be used as a depth of stencil buffer as part of a graphics pipeline.
+
+5. VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL
+	The image is going to be used for depth testing but will not be written to by the graphics pipeline.
+	In this special state, the image can also be read from in shaders.
+
+6. VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL
+	The image will be bound for reading by shaders.
+	This layout is typically used when an image is going to be used as a texture.
+
+7. VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+	The image is the source of copy operations.
+
+8. VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL
+	The image is the destination of copy operations.
+
+9. VK_IMAGE_LAYOUT_PREINITIALIZED
+	The image contains data placed there by an external actor, such as by mapping the underlying memory and writing into it from the host. (????)
+
+10. VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+	The image is used as the source for presentation, which is the act of showing it to the user.
+```
+
+Images can be moved from layout to layout, and we will cover the various layouts as we introduce the topics related to them.
+However, images must intially be created in either the VK_IMAGE_LAYOUT_UNDEFINED or VK_IMAGE_LAYOUT_PREINITIALIZED layer.
+VK_IMAGE_LAYOUT_PREINITIALIZED should be used only when you have data in memory that you will bind to the image resource immediately.
+VK_IMAGE_LAYOUT_UNDEFINED should be used when you plan to move the resource to another layout before use.
+Images can be moved out of VK_IMAGE_LAYOUT_UNDEFINED layout at little or no cost at any time.
+
+The mechanism for changing the layout of an image is known as a pipeline barrier, or simply a barrier.
+A barrier not only serves as a means to change the layout of a resource but can also synchronize access to that resource by different stages in the Vulkan pipeline and even by different queues running concurrently on the same device. (??)
+As such, a pipeline barrier is fairly complex and quite difficult to get right.
+Pipeline barriers are discussed in some detail in Chapter 4, "Moving Data," and are further explained in the sections of the book where they are relevant.
+
+Bellow codes show a simple example of creating an image resource.
+
+```
+
+	static const VkImageCreateInfo imageCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,		
+		nullptr,																				
+		0,																						
+		VK_IMAGE_TYPE_2D,
+		VK_FORMAT_R8G8B8A8_UNORM,								
+		{1024, 1024, 1},																
+		10,																					
+		1,																						
+		VK_SAMPLE_COUNT_1_BIT	,										
+		VK_IMAGE_TILING_OPTIMAL,										
+		VK_IMAGE_USAGE_SAMPLED_BIT,							
+		VK_SHARING_MODE_EXCLUSIVE,								
+		0,																						
+		nullptr,																				
+		VK_IMAGE_LAYOUT_UNDEFINED								
+	};
+
+	VkImage image = VK_NULL_HANDLE;
+
+	vkCreateImage(device , &imageCreateInfo, &myAllocator, &image);
+
+	vkDestroyImage(device, image, &myAllocator);
+```
+
+The image created by the code is a 1,024 * 1,024 texel 2D image with a single sample, in VK_FORMAT_R8G8B8A8_UNORM format and optimal tiling.
+The code creates it in the undefined layout, which means that we can move it to another layout later to place data into it.
+The image is to be used as a texture in one of our shaders, so we set the VK_IMAGE_USAGE_SAMPLED_BIT usage flag.
+In our simple applications, we use only a single queue, so we set the sharing mode to exlusive.
+
+6. Linear Images
+VK_IMAGE_TILING_OPTIMAL mode represents an opaque, implementation-defined layout that is intended to improve the efficiency of the memory subsystem of the device for read and write operations on the image.
+However, VK_IMAGE_TILING_LINEAR is a transparent layout of the data that is inteded to be intuitive.
+Pixels in the image are laid out left to right, top to bottom.
+
+In addition to the image's width, height, depth, and pixel format, a few pieces of information are needed to enable host access to the underlying image data.
+```
+the row pitch of the image, which is the distance in bytes between the start of each row of the image; 
+the array pitch, which is the distance between array layers; 
+the depth pitch, which is the distance between depth slices.
+```
+Of course, the array pitch and depth pitch apply only to array or 3D images, respectively, and the row pitch applies only to 2D or 3D images.
+
+An image is normally made up of several subresources. 
+Some formats have more than one aspect, which is a component of the image such as the depth or stencil component in a depth-stencil image.
+Mipmap levels and array layers are also considered to be separate subresources.
+The layout of each subresource within an image may be different and therefore has different layout information.
+This information can be queried by calling vkGetImageSubresourceLayout(), the prototype of which is
+```
+void vkGetImageSubresourceLayout(
+	VkDevice										device,
+	VkImage										image,
+	const VkImageSubresource*		pSubresource,
+	VkSubresourceLayout*				pLayout
+);
+```
+
+The device that owns the image that is being queried is passed in 'device', and the image being queried is passed in 'image'.
+A description of the subresource is passed through an instance of the VkImageSubresource structure, a pointer to which is passed in the 'pSubresource' parameter.
+The definition of it is
+```
+typedef struct VkImageSubresource
+{
+	VkImageAspectFlags			aspectMask;
+	uint32_t								mipLevel;
+	uint32_t								arrayLayer;
+} VkImageSubresource;
+```
+
+The aspect or aspects of the image that you want to query the layout of is specified in aspectMask.
+```
+1. VK_IMAGE_ASPECT_COLOR_BIT
+	For color images
+
+2. VK_IMAGE_ASPECT_DEPTH_BIT
+	For depth images
+
+3. VK_IMAGE_ASPECT_STENCIL_BIT
+	For stencil images
+
+i. VK_IMAGE_ASPECT_DEPTH_BIT | VK_IMAGE_ASPECT_STENCIL_BIT
+	For depth-stencil images
+```
+
+The mipmap level for which the parameters are to be returned in specified in 'mipLevel', and the array layer is specified in 'arrayLayer'.
+You should normally set 'arrayLayer' to zero, as the parameters of the image are not expected to change across layers.
+
+When vkGetImageSubresourceLayout() returns, it will have written the layout parameters of the subresource into the VkSubresourceLayout structure pointed to by pLayout.
+The definition of which is 
+```
+typedef struct VkSubresourceLayout {
+	VkDeviceSize			offset;
+	VkDeviceSize			size;
+	VkDeviceSize			rowpitch;
+	VkDeviceSize			arrayPitch;
+	VkDeviceSize			depthPitch;
+} VkSubresourceLayout;
+```
+
+The size of the memory region consumed by the requested subresource is returned in 'size', and the offset within the resource where the subresource begins is returned in 'offset'.
+The 'rowPitch', 'arrayPitch', 'depthPitch' fields contain the row, array layer, and depth slice pitches, respectively.
+The unit of these fields is always bytes. regardless of the pixel format of the images.
+Pixels within a row are always tightly packed.
+Figure 2.2 illustrates how these parameters represent memory layout of an image.
+In the figure, the valid image data is represented by the grey grid, and padding around the image is shown as blank space.
+
+Given the memory layout of an image in 'LINEAR' tiling mode, it is possible to trivially compute the memory address for a single texel within the image.
+Loading image data into a 'LINEAR' tiled image is then simply a case of loading scanlines from the image into memory at the right location.
+For many texel formats and image dimensions, it is highly likely that the image's rows are tightly packed in memory - that is, the 'rowPitch' field of the VkSubresourceLayout structure is equal to the subresource's width.
+In this case, many image-loading libraries will be able to load the image directly into the mapped memory of the image.
+
+7. Nonlinear Encoding
+You may have noticed that some of the Vulkan image formats include SRGB in their names.
+This refers to sRGB color encoding, which is a nonlinear encoding that uses a gamma curve approximating that of CRT.
+Although CRTs are all but obsolete now, sRGB encoding is till in widespread use for texture and image data.
+
+Because the amount of light energy produced by a CRT is not linear with the amount of electrical energy used to produce the electron beam that excites the phosphor, an inverse mapping must be applied to color signals to make a linear rise in numberic value produce a linear increase in light output.
+The amount of light output by a CRT is approximately
+```
+L out = V in ^ y
+```
+
+The standard value of y in NTSC television systems (common in North America, parts of South America, and parts of Asia) is 2.2.
+Meanwhile, the standard value of y in SECAM and PAL systems (common in Europe, Africa, Austraila, and other regions of Asia) is 2.8.
+
+The sRGB curve attempts to compensate for this by applying gamma correction to linear data in memory.
+The standard sRGB transfer function is not a pure gamma curve but is made up of a short linear section followed by a curved, gamma-corrected section.
+The function applied to data to go from linear to sRGB space is
+```
+if (cl >= 1.0)
+{
+	cs = 1.0;
+}
+else if (cl <= 0.0)
+{
+	cs = 0.0;
+}
+else if (cl < 0.0031308)
+{
+	cs = 12.92 * cl;
+}
+else
+{
+	cs = 1.055 * pow(cl, 0.41666) - 0.55;
+}
+```
+
+To go from sRGB space to linear space, the following transform is made:
+```
+if (cs >= 1.0)
+{
+	cl = 1.0;
+}
+else if (cs <= 0.0)
+{
+	cl = 0.0;
+}
+else if (cs <= 0.04045)
+{
+	cl = cs / 12.92;
+}
+else 
+{
+	cl = pow((cs + 0.0555) / 1.055), 2.4);
+}
+```
+
+In both code snippets, 'cs' is the sRGB color space value, and 'cl' is the linear value.
+Figure 2.3 shows a side-by-side comparison of a simple y = 2.2 curve and the standard sRGB transfer function.
+As you can see in the figure, the curves for sRGB correction (shown on the top) and a simple power curve (shown on the bottom) are almost identical.
+While Vulkan implementations are expected to implement sRGB using the official definition, if you need to perform the transformation manually in your shaders, you may be able to get away with a simple power function without accumulating too much error.
+
+When rendering to an image in sRGB format, linear values produced by your shaders are transformed to sRGB encoding before being written into the image.
+When reading from an image in sRGB format, texels are transformed from sRGB format back to linear space before being returned to your shader.
+
+Blending and interpolation always occurs in linear space such that data read from a framebuffer is first transformed from sRGB to linear space and then blended with the source data in linear space, and the final result is transformed back to sRGB encoding before being written into the framebuffer.
+ -> which means calculation occurs in linear space and result in sRGB space.
+
+Rendering in sRGB space provides more precision in darker colors and can result in less banding artifacts and richer colors.
+However, for best image quality, including high-dynamic-range rendering it's best to choose a floating-point color format and render in a linear space, converting to sRGB as late as possible before display.
+
+8. Compressed Image Formats
+Since image resources are the largest consumers of device memory, Vulkan provides the capability for images to be compressed.
+Image compression provides two significant benefits to an application:
+```
+1. It reduces the total amount of memory consumed by image resources used by the application.
+
+2. It reduces the total memory bandwidth consumed while accessing those resources.
+```
+
+All currently defined compressed image formats in Vulkan are what are known as 'block compressed' formats.
+Texels within an image are compressed in small square or rectangular blocks that can be decompressed independently of all others.
+All formats are lossy, and the compression ratio is not competitive with formats such as JPEG or even PNG.
+However, decompression is fast and cheap to implement in hardware, and random access to texels is relatively straightforward.
+
+Support for various compressed image formats is optional, but all Vulkan implementations are required to support at least one family of formats.
+You can determine which family of compressed formats is supported by checking various fields of the device's VkPhysicalDeviceFeatures structure as returned from a call to vkGetPhysicalDeviceProperties().
+
+If 'textureCompressionBC' is VK_TRUE, then the device supports the 'block compressed' formats, also known as BC formats. 
+The BC family includes
+```
+BC1: Made up of the 
+VK_FORMAT_BC1_RGB_UNORM_BLOCK, 
+VK_FORMAT_BC1_RGB_SRGB_BLOCK, 
+VK_FORMAT_BC1_RGBA_UNORM_BLOCK, and
+VK_FORMAT_BC1_RGBA_SRGB_BLOCK formats, BC1 encodes images in blocks 4X4 texels, with each block represented as a 64-bit quantity.
+
+BC2: Consisting of 
+VK_FORMAT_BC2_UNORM_BLOCK and
+VK_FORMAT_BC2_SRGB_BLOCK, BC2 encodes images in blocks of 4X4 texels, which each block represented as a 128-bit quantity.
+BC2 images always have an alpha channel. 
+The encoding for the RGB channels is the same as with BC1 RGB formats, and the alpha is stored as 4bits per texel in a second 64-bit field before the BC1 encoded RGB data.
+
+BC3: The
+VK_FORMAT_BC3_UNORM_BLOCK and
+VK_FORMAT_BC3_SRGB_BLOCK formats make up the BC3 family, again encoding texels in 4X4 blocks, with each block consuming 128 bits of storage.
+The first 64-bit quantity stores compressed alpha values, allowing coherent alpha data to be stored with higher precision than BC2.
+The second 64-bit quantity stores compressed color data in a similar form to BC1.
+
+BC4: 
+VK_FORMAT_BC4_UNORM_BLOCK and 
+VK_FORMAT_BC4_SRGB_BLOCK represent single-channel formats, again encoded as 4X4 blocks of texels, with each block consuming 64 bits of storage.
+The encoding of the single-channel data is essentially the same as that of the alpha channel of a BC3 image.
+
+BC5: Made up of 
+VK_FORMAT_BC5_UNORM_BLOCK and
+VK_FORMAT_BC5_SRGB_BLOCK, the BC5 family is a two-channel format, with each 4X4 block essentially consisting of two BC4 blocks back-to-back.
+
+BC6: The
+VK_FORMAT_BC6H_SFLOAT_BLOCK and
+VK_FORMAT_BC6H_UFLOAT_BLOCK formats are signed and unsigned floating-point compressed formats, respectively.
+Each 4X4 block of RGB texels is stored in 128 bits of data.
+
+BC7:
+VK_FORMAT_BC7_UNORM_BLOCK and
+VK_FORMAT_BC7_SRGB_BLOCK are four channel formats with each 4X4 block of RGBA texel data stored in a 128-bit component.
+```
+
+If the textureCompressionETC2 member of VkPhysicalDeviceFeatures is VK_TRUE, then the device supports the ETC formats, including ETC2 and EAC.
+The following formats are included in this family:
+```
+1. VK_FORMAT_ETC2_R8G8B8_UNORM_BLOCK and
+	VK_FORMAT_ETC2_R8G8B8_SRGB_BLOCK:
+	Unsigned formats where 4X4 blocks of RGB texels are packed into 64 bits of compressed data.
+
+2. VK_FORMAT_ETC2_R8G8B8A1_UNORM_BLOCK and
+	VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK:
+	Unsigned formats where 4x4 blocks of RGB texels plus a one-bit alpha value per texel are packed into 64 bits of compressed data.
+
+3. VK_FORMAT_ETC2_R8G8B8A8_UNORM_BLOCK and
+	VK_FORMAT_ETC2_R8G8B8A8_SRGB_BLOCK:
+	Each 4x4 block of texels is represented as a 128-bit quantity. Each texel has 4 channels.
+
+4. VK_FORMAT_EAC_R11_UNORM_BLOCK and
+	VK_FORMAT_EAC_R11_SNORM_BLOCK:
+	Unsigned and signed single-channel formats with each 4x4 block of texels represented as a 64-bit quantity.
+
+5. VK_FORMAT_EAC_R11G11_UNORM_BLOCK and
+	VK_FORMAT_EAC_R11G11_SNORM_BLOCK:
+	Unsigned and signed two-channel formats with each 4x4 block of texels represented as a 64-bit quantity.
+```
+
+The final family is the ASTC family.
+If the textureCompressionASTC_LDR member of VkPhysicalDeviceFeatures is VK_TRUE, then the device supports the ASTC formats.
+You may have noticed that for all of the formats in the BC andETC families, the block size is fixed at 4x4 texels, but depending on format, the texel format and number of bits used to store the compressed data vary.
+ASTC is different here in that the number of bits per block is always 128, and all ASTC formats have four channels.
+However, the block size in texels can vary.
+The following block sizes are supported:
+```
+4x4, 5x4, 5x5, 6x5, 6x6, 8x5, 8x6, 8x8, 10x5, 10x6, 10x8, 10x10, 12x10, and 12x12.
+```
+
+The format of the token name for ASTC formats is formulated as 
+VK_FORMAT_ASTC_{N}X{M}_{encoding}_BLOCK,
+where {n} and {m} represent the width and height of the block, and {encoding} is either UNORM or SRGB, depending on whether the data is linear or encoded as sRGB nonlinear.
+For example, VK_FORMAT_ASTC_8x6_SRGB_BLOCK is an RGBA ASTC compressed format with 8x6 blocks and sRGB encoded data.
+
+For all formats including SRGB, only the R, G, and B channels use nonlinear encoding.
+The A channel is always stored with linear encoding.

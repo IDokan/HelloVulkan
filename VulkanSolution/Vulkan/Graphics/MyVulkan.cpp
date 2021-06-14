@@ -22,6 +22,9 @@ namespace MyVulkan
 	std::vector<VkDevice> logicalDevices;
 	allocator allocatorForm;
 	const VkAllocationCallbacks myAllocator = (VkAllocationCallbacks)allocatorForm;
+
+	double linearTosRGB(double cl);
+	double sRGBToLinear(double cs);
 }
 
 void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
@@ -62,7 +65,7 @@ void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, reinterpret_cast<VkPhysicalDevice*>(getHowMany)), "The first Procedure with physical devices is failed! (Originally, it might be failed)");
 	arrayOfPhysicalDevices.resize(numOfPhysicalDevices);
 	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, arrayOfPhysicalDevices.data()), "The second Procedure with physical devices is failed! (Logically, should not be failed)");
-	
+
 	// Create logical devices per physical device
 	for (const VkPhysicalDevice& physicalDevice : arrayOfPhysicalDevices)
 	{
@@ -159,7 +162,7 @@ void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 		}
 
 		resultFile << std::endl << std::endl;
-		
+
 		// Get Extensions
 		/*!!!!!!!!!!!!!!!!!!!!!!!!!!!! However, since extension need cost, for now do not use extension. Let us prefer vanilla mode*/
 		uint32_t instanceExtensionCount = 0;
@@ -220,6 +223,7 @@ void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	}
 
 	CreateBuffers();
+	CreateImages();
 }
 
 void MyVulkan::CleanVulkan()
@@ -235,7 +239,7 @@ void MyVulkan::CleanVulkan()
 
 void MyVulkan::CreateBuffers()
 {
-	static const VkBufferCreateInfo bufferCreateInfo = 
+	static const VkBufferCreateInfo bufferCreateInfo =
 	{
 		VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO,																		// VkStructureType sType
 		nullptr,																																					// const void* pNext
@@ -248,5 +252,85 @@ void MyVulkan::CreateBuffers()
 	};
 
 	VkBuffer buffer = VK_NULL_HANDLE;
-	vkCreateBuffer(MyVulkan::logicalDevices.front(), &bufferCreateInfo, &MyVulkan::myAllocator, &buffer);
+	VulkanHelper::VkCheck(vkCreateBuffer(logicalDevices.front(), &bufferCreateInfo, &myAllocator, &buffer), "Creating buffer is failed!");
+
+	vkDestroyBuffer(logicalDevices.front(), buffer, &myAllocator);
+}
+
+void MyVulkan::CreateImages()
+{
+	static const VkImageCreateInfo imageCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO,		// VkStructureType						sType 
+		nullptr,																				// void*											pNext
+		0,																						// VkImageCreateFlags				flags
+		VK_IMAGE_TYPE_2D,													// VkImageType							imageType
+		// This format specifies a four-component, 
+		// 32-bit unsigned normalized format
+		VK_FORMAT_R8G8B8A8_UNORM,								// VkFormat									format
+		{1024, 1024, 1},																// VkExtent3D								extent
+		10,																					// uint32_t										mipLevels
+		1,																						// uint32_t										arrayLayers
+		// single sample
+		VK_SAMPLE_COUNT_1_BIT	,										// VkSampleCountFlagBits			samples
+		VK_IMAGE_TILING_OPTIMAL,										// VkImageTiling							tiling
+		// it is to be used as a texture
+		VK_IMAGE_USAGE_SAMPLED_BIT,							// VkImageUsageFlags				usage
+		VK_SHARING_MODE_EXCLUSIVE,								// VkSharingMode						sharingMode
+		0,																						// uint32_t										queueFamilyIndexCount
+		nullptr,																				// const uint32_t*							pQueueFamilyIndices
+		VK_IMAGE_LAYOUT_UNDEFINED								// VkImageLayout						initialLayout
+	};
+
+	VkImage image = VK_NULL_HANDLE;
+
+	VulkanHelper::VkCheck(vkCreateImage(logicalDevices.front(), &imageCreateInfo, &myAllocator, &image), "Creating Image is failed");
+
+	vkDestroyImage(logicalDevices.front(), image, &myAllocator);
+}
+
+
+double MyVulkan::linearTosRGB(double cl)
+{
+	double cs = 0.0;
+	if (cl >= 1.0)
+	{
+		cs = 1.0;
+	}
+	else if (cl <= 0.0)
+	{
+		cs = 0.0;
+	}
+	else if (cl < 0.0031308)
+	{
+		cs = 12.92 * cl;
+	}
+	else
+	{
+		cs = 1.055 * pow(cl, 0.41666) - 0.55;
+	}
+
+	return cs;
+}
+double MyVulkan::sRGBToLinear(double cs)
+{
+	double cl = 0.0;
+	if (cs >= 1.0)
+	{
+		cl = 1.0;
+	}
+	else if (cs <= 0.0)
+	{
+		cl = 0.0;
+	}
+	else if (cs <= 0.04045)
+	{
+		cl = cs / 12.92;
+	}
+	else
+	{
+		cl = pow(((cs + 0.0555) / 1.055), 2.4);
+	}
+
+	return cl;
 }

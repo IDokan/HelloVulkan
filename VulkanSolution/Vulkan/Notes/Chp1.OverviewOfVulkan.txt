@@ -224,7 +224,7 @@ The meanings of the flags are as follows
 	It means that when this type of memory is concurrently accessed by both the host and device, those accesses will be coherent between the two clients.(?????????? two clients???? who are they??)
 	If this bit is not set then the device or host may not see the results of writes performed by each until caches are explicitly flushed.
 
-4. VK_MEMORY_PEOPERTY_HOST_CACHED_BIT:
+4. VK_MEMORY_PROPERTY_HOST_CACHED_BIT:
 	It means that data in this type of memory is cached by the host.
 	Read accesses to this type of memory are typically faster than they would be if this bit were not set.
 	However, access by the device may have slightly higher latency, especially if the memory is also coherent.

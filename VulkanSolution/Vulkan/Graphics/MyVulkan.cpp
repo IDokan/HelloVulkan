@@ -19,12 +19,18 @@ Creation Date: 06.12.2021
 namespace MyVulkan
 {
 	VkInstance instance{};
+	std::vector<VkPhysicalDevice> physicalDevices;
 	std::vector<VkDevice> logicalDevices;
 	allocator allocatorForm;
 	const VkAllocationCallbacks myAllocator = (VkAllocationCallbacks)allocatorForm;
 
 	double linearTosRGB(double cl);
 	double sRGBToLinear(double cs);
+
+	uint32_t ChooseHeapFromFlags(
+		const VkMemoryRequirements& memoryRequirements, 
+		VkMemoryPropertyFlags requiredFlags, 
+		VkMemoryPropertyFlags preferredFlags);
 }
 
 void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
@@ -69,6 +75,8 @@ void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	// Create logical devices per physical device
 	for (const VkPhysicalDevice& physicalDevice : arrayOfPhysicalDevices)
 	{
+		physicalDevices.push_back(physicalDevice);
+
 		/*!!!!!!!! Skip memory stuff at this moment*/
 		VkPhysicalDeviceProperties physicalProperty{};
 		vkGetPhysicalDeviceProperties(physicalDevice, &physicalProperty);
@@ -289,6 +297,37 @@ void MyVulkan::CreateImages()
 	vkDestroyImage(logicalDevices.front(), image, &myAllocator);
 }
 
+void MyVulkan::CreateCubeImages()
+{
+	VkImageCreateInfo createInfo;
+	createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+	createInfo.pNext = nullptr;
+	createInfo.flags = VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT;
+	createInfo.imageType = VK_IMAGE_TYPE_2D;
+	createInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+	createInfo.extent = VkExtent3D{ 1024, 1024, 1 };
+	createInfo.mipLevels = 1;
+	createInfo.arrayLayers = 6;
+	createInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+	createInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+	createInfo.usage = VK_IMAGE_USAGE_SAMPLED_BIT;
+	createInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	createInfo.queueFamilyIndexCount = 0;
+	createInfo.pQueueFamilyIndices = nullptr;
+	createInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+	VkImage cube = VK_NULL_HANDLE;
+
+	VulkanHelper::VkCheck(vkCreateImage(logicalDevices.front(), &createInfo, &myAllocator, &cube), "Image creation is failed!");
+
+	VkImageViewCreateInfo viewCreateInfo;
+	viewCreateInfo;
+
+	//vkCreateImageView(logicalDevices.front(), )
+
+	vkDestroyImage(logicalDevices.front(), cube, &myAllocator);
+}
+
 
 double MyVulkan::linearTosRGB(double cl)
 {
@@ -333,4 +372,49 @@ double MyVulkan::sRGBToLinear(double cs)
 	}
 
 	return cl;
+}
+
+uint32_t MyVulkan::ChooseHeapFromFlags(const VkMemoryRequirements& memoryRequirements, VkMemoryPropertyFlags requiredFlags, VkMemoryPropertyFlags preferredFlags)
+{
+	VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
+	vkGetPhysicalDeviceMemoryProperties(physicalDevices.front(), &deviceMemoryProperties);
+
+	uint32_t selectedType = ~0u;
+	uint32_t memoryType;
+		
+	// ??? What? magic number??? What does it come from? -> Aha type of memoryTypeBits is 32bit unsigned integer
+	for (memoryType = 0; memoryType < 32; memoryType++)
+	{
+		if (memoryRequirements.memoryTypeBits & (1<<memoryType))
+		{
+			const VkMemoryType& type = deviceMemoryProperties.memoryTypes[memoryType];
+
+			// If it exactly matches my preffered properties, grab it.
+			if ((type.propertyFlags & preferredFlags) == preferredFlags)
+			{
+				selectedType = memoryType;
+				break;
+			}
+		}
+	}
+
+	if (selectedType != ~0u)
+	{
+		for (memoryType = 0; memoryType < 32; memoryType++)
+		{
+			if (memoryRequirements.memoryTypeBits & (1 << memoryType))
+			{
+				const VkMemoryType& type = deviceMemoryProperties.memoryTypes[memoryType];
+
+				// If it has all my required properties, it'll do.
+				if ((type.propertyFlags & requiredFlags) == requiredFlags)
+				{
+					selectedType = memoryType;
+					break;
+				}
+			}
+		}
+	}
+
+	return selectedType;
 }

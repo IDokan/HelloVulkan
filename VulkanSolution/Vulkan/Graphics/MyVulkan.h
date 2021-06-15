@@ -19,4 +19,5 @@ namespace MyVulkan
 
 	void CreateBuffers();
 	void CreateImages();
+	void CreateCubeImages();
 }

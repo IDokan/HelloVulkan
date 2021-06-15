@@ -236,7 +236,7 @@ typedef struct VkBufferCreateInfo
 	const void*						pNext;
 	VkBufferCreateFlags		flags;
 	VkDeviceSize					size;
-	VkBufferUsageFlags		flags;
+	VkBufferUsageFlags		usage;
 	VkSharingMode				sharingMode;
 	uint32_t							queueFamilyIndexCount;
 	const uint32_t*					pQueueFamilyIndices;
@@ -646,7 +646,7 @@ The 'usage' field here is made up of members of the VkImageUsageFlags enumeratio
 	Framebuffers and their attachments are covered in Chapter 7, "Graphics Pipelines"
 
 5. VK_IMAGE_USAGE_TRASIENT_ATTACHMENT_BIT
-	It means that the image can be used as a transient attachment, which is a special kind of image used to store intermediate results of a graphics oepration.
+	It means that the image can be used as a transient attachment, which is a special kind of image used to store intermediate results of a graphics operation.
 	Transient attachments are covered in Chapter 13, "Multipass Rendering".
 
 6. VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
@@ -999,3 +999,691 @@ For example, VK_FORMAT_ASTC_8x6_SRGB_BLOCK is an RGBA ASTC compressed format wit
 
 For all formats including SRGB, only the R, G, and B channels use nonlinear encoding.
 The A channel is always stored with linear encoding.
+
+9. Resource Views
+Buffers and images are the two primary types of resources supported in Vulkan.
+In addition to creating these two resource types, you can create 'views' of existing resources in order to partition them, reinterpret their content, or use them for multiple purposes.
+Views of buffers, which represent a subrange of a buffer object, are known as 'buffer views', and view of images, which can alias formats or represent a subresource of another image, are known as 'image views'.
+
+Before a view of a buffer or image can be created, you need to bind memory to the parent object.
+
+10. Buffer Views
+A buffer view is used to interpret the data in a buffer with a specific format.
+Because the raw data in the buffer is then treated as a sequence of texels, this is also known as a texel buffer view.
+A texel buffer view can be accessed directly in shaders, and Vulkan will automatically convert the texels in the buffer into the format expected by the shader.
+One example use for this functionality is to directly fetch the properties of vertices in a vertex shader by reading from a texel buffer rather than using a vertex buffer.
+While this is more restrictive, it does allow random access to the data in the buffer.
+
+To create a buffer view, call vkCreateBufferView(), 
+the prototype of which is
+```
+VkResult vkCreateBufferView(
+	VkDevice											device,
+	const VkBufferViewCreateInfo*		pCreateInfo,
+	const VkAllocationCallbacks*			pAllocator,
+	VkBufferView*									pView
+);
+```
+
+The device that is to create the new view is passed in 'device'. 
+This should be the same device that created the buffer of which you are creating a view.
+The remaining parameters of the new view are passed through a pointer to an instance of the VkBufferViewCreateInfo structure, the definition of which is
+```
+typedef struct VkBufferViewCreateInfo
+{
+	VkStructureType						sType;
+	const void*								pNext;
+	VkBufferViewCreateFlags		flags;
+	VkBuffer									buffer;
+	VkFormat									format;
+	VkDeviceSize							offset;
+	VkDeviceSize							range;
+} VkBufferViewCreateInfo;
+```
+
+The 'sType' field of VkBufferViewCreateInfo should be set to VK_STRUCTURE_TYPE_BUFFER_VIEW_CREATE_INFO.
+The 'pNext' should be set to nullptr.
+The 'flags' field is reserved and should be set to 0.
+The parent buffer is specified in 'buffer'.
+The new view will be a "window" into the parent buffer starting at 'offset' bytes and extending for 'range' bytes.
+When bound as a texel buffer, the data in this buffer is interpreted as a sequence of texels with the format as specified in 'format'.
+
+The maximum number of texels that can be stored in a texel buffer is determined by inspecting the 'maxTexelBufferElements' field of the device's VkPhysicalDeviceLimits structure, which can be retreived by calling vkGetPhysicalDeviceProperties().
+If the buffer is to be used as a texel buffer, then 'range' divided by the size of a texel in 'format' must be less than or equal to this limit.
+'maxTexelBufferElements' is guaranteed to be at least 65,536, so if the view you're creating contains fewer texels, there's no need to query this limit.
+
+The parent buffer must have been created with the
+VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT or
+VK_BUFFER_USAGE_STORAGE_TEXEL_BUFFER_BIT flags in the 'usage' field of the VkBufferCreateInfo used to create the buffer.
+The specified format must support the
+VK_FORMAT_FEATURE_UNIFORM_TEXEL_BUFFER_BIT,
+VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_BIT, or
+VK_FORMAT_FEATURE_STORAGE_TEXEL_BUFFER_ATOMIC_BIT as reported by vkGetPhysicalDeviceFormatProperties().
+
+On success, vkCreateBufferView() places the handle to the newly created buffer view in the variable pointed to by 'pView'.
+If 'pAllocator' is not nullptr, then the allocation callbacks specified in the VkAllocationCallbacks structure it points to are used to allocate any host memory required by the new object.
+
+10. Image Views
+In many cases, the image resource cannot be used directly, as more information about it is needed than is included in the resource itself.
+For example, you cannot use an image resource directly as an attachment to a framebuffer or bind an image into a descriptor set in order to sample from it in a shader.
+To satisfy theses additional requirements, you must create an image view, which is essentially a collection of properties and a reference to a parent image resource.
+
+An image view also allows all or part of an existing image to be seen as a different format.
+The resulting new of the parent image must have the same dimensions as the parent, although a subset of the parent's array layers or mip levels may be included in the view.
+The format of the parent and child images must also be 'compatible', which usually means that they have the same number of bits per pixel, even if the data formats are completely different and even if there are a different number of channels in the image.
+
+To create a new view of an existing image, call vkCreateImageView(), the prototype of which is 
+```
+VkResult vkCreateImageView(
+	VkDevice											device,
+	const VkImageViewCreateInfo*		pCreateInfo,
+	const VkAllocationCallbacks*			pAllocator,
+	VkImageView*									pView
+);
+```
+
+The device that will be used to create the new view and that should own the parent image is specified in 'device'.
+The remaining paremeters used in the creation of the new view are passed through an instance of the VkImageViewCreateInfo structure, a pointer to which is passed in 'pCreateInfo'.
+The definition of VkImageViewCreateInfo is
+```
+typedef struct VkImageViewCreateInfo
+{
+	VkStructureType							sType;
+	const void*									pNext;
+	VkImageViewCreateFlags			flags;
+	VkImage										image;
+	VkImageViewType						viewType;
+	VkFormat										format;
+	VkComponentMapping				components;
+	VkImageSubresourceRange		subresourceRange;
+} VkImageViewCreateInfo;
+```
+
+The 'sType' field of the structure should be set to VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO.
+The 'pNext' should be set to nullptr.
+The 'flags' field is reserved for future use and should be set to 0.
+
+The parent image of which to create a new view is specified in 'image'.
+The type of view to create is specified in 'viewType'.
+The view type must be compatible with the parent's image type and is a member of the VkImageViewType enumertion, which is larger than the VkImageType enumeration used in creating the parent image.
+The image view types are as follows:
+```
+1. VK_IMAGE_VIEW_TYPE_1D, 
+	VK_IMAGE_VIEW_TYPE_2D, and
+	VK_IMAGE_VIEW_TYPE_3D
+	They are the "normal" 1D, 2D, and 3D image types.
+
+2. VK_IMAGE_VIEW_TYPE_CUBE and
+	VK_IMAGE_VIEW_TYPE_CUBE_ARRAY
+	They are cube map and cube map array images.
+
+3. VK_IMAGE_VIEW_TYPE_1D_ARRAY and
+	VK_IMAGE_VIEW_TYPE_2D_ARRAY
+	They are 1D and 2D array images.
+```
+
+Note that all images are essentially considered array images, even if they only have one layer.
+It is, however, possible to create nonarray views of parent images that refer to one of the layers of the image.
+
+The format of the new view is specified in 'format'.
+This must be a format that is compatible with that of the parent image.
+In general, if two formats have the same number of bits per pixel, then they are considered compatible.
+If either or both of the formats is block compressed image format, then one of two things must be true:
+```
+1. If both images have compressed formats, then the number of bits per block must match between those formats.
+
+2. If only one image is compressed and the other is not, then bits per block in the compressed image must be the same as the number of bits per texel in the uncompressed image.
+```
+
+By creating an uncompressed view of a compressed image, you give access to the raw, compressed data, making it possible to do things like write compressed data from a shader into the image or interpret the compressed data directly in your application.
+Ntoe that while all block-compressed formats encode blocks either as 64-bit or 128-bit quantities, there are no uncompressed, single-channel 64-bit or 128-bit image formats.
+To alias a compressed image as an uncompressed format, you need to choose an uncompressed format with the same number of bits per texel and then aggregate the bits from the different image channels within your shader to extract the individual fields from the compressed data.
+
+The component ordering in the view may be different from that in the parent.
+This allows, for example, an RGBA view of a BGRA format image to be created.
+This remapping is specified using an instance of VkComponentMapping, the definition of which is simply
+```
+typedef struct VkComponentMapping
+{
+	VkComponentSwizzle r;
+	VkComponentSwizzle g;
+	VkComponentSwizzle b;
+	VkComponentSwizzle a;
+} VkComponentMapping;
+```
+
+Each member of VkComponentMapping specifies the 'source' of data in the parent image that will be used to fill the resulting texel fetched from the child view.
+They are members of the VkComponentSwizzle enumeration, the members of which are as follows:
+```
+1. VK_COMPONENT_SWIZZLE_R, 
+	VK_COMPONENT_SWIZZLE_G,
+	VK_COMPONENT_SWIZZLE_B, and
+	VK_COMPONENT_SWIZZLE_A
+	They indicate that the source data should be read from the R, G, B, or A channels of the parent image, respectively.
+
+2. VK_COMPONENT_SWIZZLE_ZERO and 
+	VK_COMPONENT_SWIZZLE_ONE
+	They indicate that the data in the child image should be read as zero or one, respectively, regardless of the content of the parent image.
+
+3. VK_COMPONENT_SWIZZLE_IDENTITY
+	It indicates that the data in the child image should be read from the corresponding channel in the parent image.
+	Note that the numeric value of VK_COMPONENT_SWIZZLE_IDENTITY is zero, so simply seetting the entire VkComponentMapping structure to zero will result in an identity mapping between child and parent images.
+```
+
+The child image can be a subset of the parent image.
+This subset is specified using the embedded VkImageSubresourceRange structure in 'subresourceRange'.
+The definition of which is
+```
+typedef struct VkImageSubresourceRange
+{
+	VkImageAspectFlags		aspectMask;
+	uint32_t							baseMipLevel;
+	uint32_t							levelCount;
+	uint32_t							baseArrayLayer;
+	uint32_t							layerCount;
+} VkImageSubresourceRange;
+```
+
+The 'aspectMask' field is a bitfield made up from members of the VkImageAspectFlagBits enumeration specifying which aspects of the image are affected by the barrier.
+Some image types have more than one logical part, even though the data itself might be interleaved or otherwise related.
+An example of this is depth-stencil images, which have both a depth component and a stencil component.
+Each of these two components may be viewable as a separate image in its own right, and these subimages are known as 'aspects'. 
+The flags that can be included in 'aspectMask' are
+```
+1. VK_IMAGE_ASPECT_COLOR_BIT:
+	The color part of an image.
+	There is usually only a color aspect in color images.
+
+2. VK_IMAGE_ASPECT_DEPTH_BIT:
+	The depth aspect of a depth-stencil image.
+
+3. VK_IMAGE_ASPECT_STENCIL_BIT:
+	DThe stencil aspect of a depth-stencil image.
+
+4. VK_IMAGE_ASPECT_METADATA_BIT:
+	Any additional infromation associated with the image that might track its state and is used, for example, in various compression techniques.
+```
+
+When you create the new view of the parent image, that view can refer to only one aspect of the parent image.
+Perhaps the most common use case of this is to create a depth- or stencil-only view of a combined depth-stencil format image.
+
+To create a new image view that corresponds only to a subset of the parent's mip chain, use the 'baseMipLevel' and 'levelCount' to specify where in the mip chain the view begins and how many mip levels it will contain.
+If the parent image does not have mipmaps, these fields should be set to zero and one, respectively.
+
+Likewise, to create an image view of a subset of a parent's array layers, use the 'baseArrayLayer' and 'layerCount' fields to specify the starting layer and number of layers, respectively.
+Again, if the parent image is not an array image, then 'baseArrayLayer' should be set to zero and 'layerCount' should be set to one.
+
+11. Image Arrays
+All images have a layer count, contained in the 'arrayLayers' field of their VkImageCreateInfo structure.
+
+Images can be aggregated into arrays, and each lelement of an array image is known as a layer.
+Array images allow images to be rouped into single objects, and sampling from multiple layers of the same array image is often more performant than sampling from several loose array objects.
+Because all Vulkan images have a 'layerCount' field, they are all technically array images.
+However, in practive, we only refer to images with a 'layerCount' greater than 1 as an array image.
+
+When views are created of images, the view is explicitly marked as either an array or a nonarray.
+A nonarray view implicitly has only one layer whereas an array view has multiple layers.
+Sampling from a nonarray view may perform better than sampling from a single layer of an array image, simply because the device needs to perform fewer indirections and parameter lookups.
+
+A 1D array texture is conceptually different from a 2D texture, and a 2D array texture is different from a 3D texture.
+The primary difference is that linear filtering can be performed in the y direction of a 2D texture and in the z direction in a 3D texture, whereas filtering cannot be performed across multiple layers in an array image. (????????)
+Notice that there is no 3D array image view type included in VkImageViewType, and most Vulkan implementations will not alow you to create a 3D image with an 'arrayLayers' field greater than 1.
+
+In addition to image arrays, a 'cube map' is a special type of image that allows groups of siz layers of an array image to be interpreted as the sides of a cube.
+Imagine standing in the center of a cube-shaped room.
+These faces are often notated as the -X, +X, -Y, +Y, -Z, and +Z faces.
+These are the six faces of a cube map, and a group of six consecutive array layers can be interpreted in that order.
+
+A cube map is sampled using a 3D coordinate. 
+This coordinate is interpreted as a vector pointing from the center of the cube map outward, and the point sampled in the cube-map is the point where the vector meets the cube.
+
+Figure 2.4 shows this pictorially. 
+As you can see in the figure, the cube map is constructed from a selection of six consecutive elements from the parent texture.
+To create a cube-map view, first create a 2D array image with at least six faces.
+The 'imageType' field of the VkImageCreateInfo structure should be set to VK_IMAGE_TYPE_2D and the 'arrayLayers' field should be at least 6.
+Note that the number of layers in the parent array does not have to be a multiple of 6, but it has to be at least 6.
+
+The 'flags' field of the parent image's VkImageCreateInfo structure must have the VK_IMAGE_CREATE_CUBE_COMPATIBLE_BIT set, and the image must be square (because the faces of a cube are square).
+
+Next we create a view of the 2D array parent, but rather than creating a normal 2D (array) view of the image, we create a cube-map view.
+To do this, set the 'viewType' field of the VkImageViewCreateInfo structure used to creat the view to VK_IMAGE_VIEW_TYPE_CUBE.
+In the embedded 'subresourceRange' field, the 'baseArrayLayer' and 'layerCount' fields are used to determine where in the array the cube map begins.
+To create a single cube, 'layerCount' should be set to 6.
+
+The first element of the array (at the index specified in the 'baseArrayLayer' field) becomes the -X face, and the next five layers become the +X, -Y, +Y, -Z, and +Z faces, in that order.
+
+Cube maps can also form arrays of their own. This is simply a concatenation of an integer multiple of six faces, with each group of six forming a separate cube.
+To create a cube-map array image, set the 'viewType' field of VkImageViewCreateInfo to VK_IMAGE_VIEW_TYPE_CUBE_ARRAY, and set the 'layerCount' for the array divided by 6.
+The number of layers in the parent image must be at least as many layers as are referenced by the cube-map view.
+
+When data is placed in a cube map or cube-map array image, it is treated identically to an array image.
+Each array layer is laid out consecutively, and commands such as vkCmdCopyBufferToImage() (which is covered in Chapter 4, "Moving Data") can be used to write into the image.
+The image can be bound as a color attachment and rendered to.
+Using layered rendering, you can even write to multiple faces of a cube map in a single drawing command.
+
+12. Destroying Resources
+When you are done with buffers, images, and other resources, it is important to destroy them cleanly.
+Before destroying a resource, you must make sure that it is not in use and that no work is pending that might access it.
+Once you are certain that this is the case, you can destroy the resource by calling the appropriate destruction function.
+To destroy a buffer resource, call vkDestroyBuffer(), the prototype of which is
+```
+void vkDestroyBuffer(
+	VkDevice											device,
+	VkBuffer											buffer,
+	const VkAllocationCallbacks*			pAllocator
+);
+```
+
+Note that destroying a buffer object for which other views exist will also invalidate those views.
+The view objects themselves must still be destroyed explicitly, but it is not legal to access a view of a buffer that has been destroyed.
+To destroy a buffer view, call vkDestroyBufferView(), the prototype of which is
+```
+void vkDestroyBufferView(
+	VkDevice										device,
+	VkBufferView								bufferView,
+	const VkAllocationCallbacks*		pAllocator
+);
+```
+
+Destruction of images is almost identical to that of buffers.
+To destroy an image object, call vkDestroyImage(), the prototype of which is
+```
+void vkDestroyImage (
+	VkDevice										device,
+	VkImage										image,
+	const VkAllocationCallbacks*		pAllocator
+);
+```
+
+As with buffers, destroying an image invalidates all views of that image.
+It is not legal to access a view of an image that has already beend destroyed.
+The only thing you can do with such views is to destroy them.
+Destroying an image view is accomplished by calling vkDestroyImageView(), the prototype of which is
+
+```
+void vkDestroyImageView (
+	VkDevice										device,
+	VkImageView								imageView,
+	const VkAllocationCallbacks*		pAllocator);
+```
+
+13. DEVICE MEMORY MANAGEMENT
+When the Vulkan device operates on data, the data must be stored in 'device memory'.
+This is memory that is accessible to the device.
+In a Vulkan system there are four classes of memory.
+Some systems may have only a subset of these, and some may only have two.
+Given a host (the processor upon which your application is running) and a device (the processor that executes your Vulkan commands), there could be separate memory physically attached to each.
+In addition, some regions of the physical memory attached to each processor might be accessible to the other processor or processors in the system. (????)
+
+In some cases, the visible region of shared memory might be relatively small, and in other cases, there may actually be only one physical piece of memory, which is shared between the host and the device.
+Figure 2.5 demonstrates the memory map of a host and device with physically separate memories.
+
+Any memory that is accessible to the device is known as 'device memory', even if that memory is physically attached to the host.
+In this case, it is 'host local device memory'. 
+This is distinct from host memory, which might also be known as system memory, which is regular memory allocated with a function such as 'malloc' or 'new'.
+Device memory may also be accessible to the host through a mapping.
+
+A typical discrete GPU as found on an add-in card plugged into a PIC-Express slot will have an amount of dedicated memory physically attached to its circuit board.
+Some part of this memory may be accessible only to the device, and some part of the memory may be accessible to the host through some form of window.
+In addition, the GPU will have access to some or all of the host's system memory.
+All of these pools of memory will appear as a heap to the host, and memory will be mapped into those heaps via the various types of memory.
+
+On the other hand, a typical embedded GPU-such as those found in embedded systems, mobile devices, or even laptop processors-may share memory controller and subsystem with the host processor.
+In this case, it is likely that access to main system memory is coherent and the device will expose fewer heaps-perhaps only one.
+This is considered a 'unified memory architecture'.
+
+14. Allocating Device Memory
+A device memory allocation is represented as a VkDeviceMemory object that is created using the vkAllocateMemory() function, the prototype of which is
+```
+VkResult vkAllocateMemory(
+	VkDevice										device,
+	const VkMemoryAllocateInfo*		pAllocateInfo,
+	const VkAllocationCallbacks*		pAllocator,
+	VkDeviceMemory*						pMemory
+);
+```
+
+'AllocateInfo' describes the new device memory object which, if the allocation is successful, will be placed in the variable pointed to by 'pMemory'.
+'pAllocateInfo' points to an instance of the VkMemoryAllocateInfo structure, the definition of which is
+```
+typedef struct VkMemoryAllocateInfo
+{
+	VkStructureType		sType;
+	const void*				pNext;
+	VkDeviceSize			allocationSize;
+	uint32_t					memoryTypeIndex;
+} VkMemoryAllocateInfo;
+```
+
+This is a simple structure containing only the size and the memory type to be used for the allocation.
+'sType' should be set to VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO.
+'pNext' should be set to nullptr unless an extension is in use that requires more information about the allocation.
+The size of the allocation is passed in 'allocationSize' and is measured in bytes.
+The memory type, passed in 'memoryTypeIndex', is an index into the memory type array returned from a call to vkGetPhysicalDeviceMemoryProperties(), as described in "Physical Device Memory" in Chapter 1, "Overview of Vulkan".
+
+Once you have allocated device memory, it can be used to back resources such as buffers and images.
+Vulkan may use device memory for other purposes, such as other types of device objects, internal allocations and data structures, scratch storage, and so on.
+These allocations are managed by the Vulkan driver, as the requirements may vary quite widely between implementations.
+
+When you are done with a memory allocation, you need to free it.
+To do this, call vkFreeMemory(), the prototype of which is
+```
+void vkFreeMemory(
+	VkDevice										device,
+	VkDeviceMemory						memory,
+	const VkAllocationCallbacks*		pAllocator
+);
+```
+
+vkFreeMemory() takes the memory object directly in 'memory'.
+It is your responsibility to ensure that there is no work queued up to a device that might use the memory object before you free it.
+Vulkan will not track this for you.
+If a device attempts to access memory after it's been freed, the results can be unpredictable and can easily crash your application.
+
+Further, access to 'memory' must be externally synchronized.
+Attempting to free device memory with a call to vkFreeMemory() while another command is executing in another thread will produce undefined behavior and possibly crash your application.
+
+On some platforms, there may be an upper bound to the total number of memory allocations that can exist within a single process.
+If you try to create more allocations than this limit, allocation could fail.
+This limit can be determined by calling vkGetPhysicalDeviceProperties() and inspecting the 'maxMemoryAllocationCount' field of the returned VkPhysicalDeviceLimits structure.
+The limit is guaranteed to be at least 4,096 allocations, though some platforms may report a much higher limit.
+Although this may seems low, the intention is that you create a small number of large allocations and then suballocate from them to place many resources in the same allocation.
+There is no upper limit to the total number of resources can be created, memory allowing.
+
+Normally, when you allocate memory from a heap, that memory is permanently assigned to the returned VkDeviceMemory object until that object is destroyed by calling vkFreeMemory().
+In some cases, you (or even the Vulkan implementation) may not know exactly how much memory is required for certain operations, or indeed whether any memory is required at all.
+
+In particular, this is often the case for images that are used for intermediate storage of data during rendering.
+When the image is created, if the VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT is included in the VkImageCreateInfo structure,
+then Vulkan knows that the data in the image will live for a short time, and therefore, it's possible that it may never need to be written out to device memory.
+
+In this case, you can ask Vulkan to be 'lazy' with its allocation of the memory object to defer true allocation until Vulkan can determine that the physical storage for data is really needed.
+To do this, choose a memory type with the VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT set.
+Choosing an otherwise-appropriate memory type that does not have this bit set will still work correctly but will always allocate the memory up front, even if it never ends up being used. (????? Is not this good? Since allocating memory cost a lot timely, I learned that allocating memory at the loading or specific time)
+
+If you want to know whether a memory allocation is physically backed and how much backing gas actually been allocated for a memory object, call vkGetDeviceMemoryCommitment(),
+the prototype of which is 
+```
+void vkGetDeviceMemoryCommitment (
+	VkDevice					device,
+	VkDeviceMemory	memory,
+	VkDeviceSize*			pCommittedMemoryInBytes
+);
+```
+
+The device that owns the memory allocation is passed in 'device' and the memory allocation to query is passed in 'memory'.
+'pCommittedMemoryInBytes' is a pointer to a variable that will be overwritten with the number of bytes actually allocated for the memory object.
+That commitment will always come from the heap associated with the memory type used to allocate the memory object.
+
+For memory objects allocated with memory types that do not include VK_MEMORY_PROPERTY_LAZILY_ALLOCATED_BIT, or if the memory object ended up fully committed,
+	vkGetDeviceMemoryCommitment() will always return the full size of the memory object.
+The commitment returned from vkGetDeviceMemoryCommitment() is informational at best.
+In many cases, the information could be out of data, and there's not much you can do with the information anyway.
+
+14. Host Access to Device Memory
+As discussed eariler in this chapter, device memory is divided into multiple regions.
+Pure device memory is accessible only to the device.
+However, there are regions of memory  that are accessible to both the host and the device.
+The host is the processor upon which your application is running, and it is possible to ask Vulkan to give you a pointer to memory allocated from host-accessible regions.
+This is known as 'mapping' memory.
+
+To map device memory into the host's address space, the memory object to be mapped must have been allocated from a heap that has the 
+	VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT flag set in its heap properties.
+Assuming that this is the case, mapping the memory to obtain a pointer usable by the host is achieved by calling vkMapMemory(), the prototype of which is
+```
+VkResult vkMapMemory(
+	VkDevice						device,
+	VkDeviceMemory		memory,
+	VkDeviceSize				offset,
+	VkDeviceSize				size,
+	VkMemoryMapFlags	flags,
+	void**							ppData
+);
+```
+
+The handle to the memory object being mapped is passed in memory.
+Access to the memory object must be externally synchronized.
+To map a reange of a memory object, specify the starting offset in 'offset' and the size of the region in 'size'.
+If you want to map the entire memory object, set offset to 0 and 'size' to VK_WHOLE_SIZE.
+Setting 'offset' to a nonzero value and 'size' to VK_WHOLE_SIZE will map the memory object starting from 'offset' to the end.
+'offset' and 'size' are both specified in bytes.
+You should not attempt to map a region of the memory object that extends beyond its bounds.
+
+The 'flags' parameter is reserved for future use and should be set to zero.
+
+If vkMapMemory() is successful, a pointer to the mapped region is writeen into the variable pointed to by 'ppData'.
+This pointer can then be cast to the appropriate type in your application and dereferenced to directly read and write the device memory.
+Vulkan guarantees that pointers returned from vkMapMemory() are aligned to an integer multiple of the device's minimum memory mapping alignment when 'offset' is subtracted from them.
+
+This value is reported in the 'minMemoryMapAlignment' field of the VkPhysicalDeviceLimits structure returned from a call to vkGetPhysicalDeviceProperties().
+It is guaranteed to be at least 64 bytes but could be any higher power of two.
+On some CPU architectures, much higher performance can be achieved by using memory load and store instructions that assume aligned addresses.
+'minMemoryMapAlignment' will often match a cache line size or the natural alignment of the machine's widest register, for example, to facilitate this.
+Some host CPU instructions will fault if passed an unaligned address.
+Therefore, you can check 'minMemoryMapAlignment' once and decide 
+	whether to use optimized functions that assume aligned addressing or fallback functions that can handle unaligned addresses at the expense of performance.
+		�ڡڡڡڡڡڡڡڡڡڡڡڡڡڡڡڡڡڡڡڡڡڡ� This line looks important.
+
+
+When you're done with the pointer to the mapped memory range, it can be unmapped by calling vkUnmapMemory(), the prototype of which is
+```
+vkUnmapMemory(
+	VkDevice					device,
+	VkDeviceMemory	memory
+);
+```
+
+The device that owns the memory object is passed in 'device', and the memory object to be unmapped is passed in 'memory'.
+As with vkMapMemory(), access to the memory object must be externally synchronized.
+
+It's not possible to map the same memory object more than once at the same time.
+That is, you cannot call vkMapMemory() on the same memory object with different memory ranges, whether they overlap or not, without unmapping the memory object in between.
+The range isnot needed when unmapping the object becasue Vulkan knows the range that was mapped.
+
+As soon as the memory object is unmapped, any pointer received from a call to vkMapMemory() is invalid and should not be used.
+Also, if you map the same range of the same memory object over and over, you should not assume that the pointer you get back will be the same.
+
+When device memory is mapped into host address space, there are effectively two clients of that memory, which may both perform writes into it.
+There is likely to be a cache hierarchy on both the host and the device sides of the mapping, and those caches may or may not be coherent.
+In order to ensure that both the host and the device see a coherent view of data written by the other client, 
+	it is necessary to force Vulkan to flush caches that mightcontain data written by the host but not yet made visible to the device 
+	or to invalidate a host cache that might hold stale data that has been overwritten by the device.
+
+Each memory type advertised by the device has a number of properties, one of which might be VK_MEMORY_PROPERTY_HOST_COHERENT_BIT.
+If this is the case, and a mapping is made from a region with this property set, then Vulkan will take care of coherency between caches.
+In some cases, the caches are automatically coherent because they are either shared between host and device or have some form of coherency protocal to keep them in sync.
+In other cases, a Vulkan driver might be able to infer when caches need to be flushed or invalidated and then perform these operations behind the scenes.
+
+If VK_MEMORY_PROPERTY_HOST_COHERENT_BIT is not set in the memory properties of a mapped memory region,
+	then it is your responsibility to explicitly flush or invalidate caches that might be affected by the mapping.
+To flush host caches that might contain pending writes, call vkFlushMappedMemoryRanges(), the prototype of which is
+```
+VkResult vkFlushMappedMemoryRanges(
+	VkDevice												device,
+	uint32_t												memoryRangeCount,
+	const VkMappedMemoryRange*			pMemoryRanges
+);
+```
+
+The number of ranges to flush is specified in 'memoryRangeCount', and the details of each range are passed in an instance of the VkMappedMemoryRange structure.
+A pointer to an array of 'memoryRangeCount' of these structures is passed through the 'pMemoryRanges' is
+```
+typedef VkMappedMemoryRange
+{
+	VkStructureType			sType;
+	const void*					pNext;
+	VkDeviceMemory		memory;
+	VkDeviceSize				offset;
+	VkDeviceSize				size;
+} VkMappedMemoryRange;
+```
+
+The 'sType' field of VkMappedMemoryRange should be set to VK_STRUCTURE_TYPE_MAPPED_MEMORY_RANGE.
+The 'pNext' should be set to nullptr.
+Each memory range refers to a mapped memory object specified in the 'memory' field and a mapped range within that object, specified by 'offset' and 'size'.
+You don't have to flush the entire mapped region of the memory object, so 'offset' and 'size' do not need to match the parameters used in vkMapMemory().
+Also if the memory object is not mapped, or if 'offset' and 'size' specify a region of the object that is not mapped, then the flush command has no effect.
+To just flush any existing mapping on a memory object, set 'offset' to zero and 'size' to VK_WHOLE_SIZE.
+
+A flush is necessary if the host has written to a mapped memory region and needs the device to see the effect of those writes.
+However, if the device writes to a mapped memory region and you need the host to see the effect of the device's writes, 
+	you need to invalidate any caches on the host that might now hold stale data.
+To do this, call vkInvalidateMappedMemoryRange(), the prototype of which is
+```
+VkResult vkInvalidateMappedMemoryRange(
+	VkDevice											device,
+	uint32_t											memoryRangeCount,
+	const VkMappedMemoryRange*		pMemoryRanges
+);
+```
+
+The number of regions is speccified in 'memoryRangeCount', and a pointer to an array of 'memoryRangeCount' VkMappedMemoryRange structures is passed in 'pMemoryRanges'.
+The fields of the VkMappedMemoryRangeStructures are interpreted exactly as they are in vkFlushMappedMemoryRanges(),	
+	except that the operation performed is an invalidation rather than a flush.
+
+vkFlushMappedMemoryRanges() and vkInvalidateMappedMemoryRanges() affect only caches and coherency of access by the 'host' and have no effect on the device.
+Regardless of whether a memory mapping is coherent or not, access by the device to memory that has been mapped must still be synchronized using 'barriers', 
+	which will be discussed layer in this chapter.
+
+15. Binding Memory to Resources
+Before a resource such as a buffer or image can be used by Vulkan to store data, memory must be bound to it.
+Before memory is bound to a resource, you should determine what 'type' of memory and how much of it the resource requires.
+There is a different function for buffers and for textures.
+They are vkGetBufferMemoryRequirements() and vkGetImageMemoryRequirements(), and their prototypes are
+```
+void vkGetBufferMemoryRequirements(
+	VkDevice									device,
+	VkBuffer									buffer,
+	VkMemoryRequirements*		pMemoryRequirements
+);
+
+void vkGetImageMemoryRequirements(
+	VkDevice									device,
+	VkImage									image,
+	VkMemoryRequirements*		pMemoryRequirements
+);
+```
+
+The only difference between these two functions is that vkGetBufferMemoryRequirements() takes a handle to a buffer object and 
+	vkGetImageMemoryRequirements() takes a handle to an image object.
+Both functions return the memory requirements for the resource in an instance of the VkMemoryRequirements structure, 
+	the address of which is passed in the 'pMemoryRequirements' parameter.
+The definition of which is
+```
+typedef struct VkMemoryRequirements
+{
+	VkDeviceSize			size;
+	VkDeviceSize			alignment;
+	uint32_t					memoryTypeBits;
+} VkMemoryRequirements;
+```
+
+The amount of memory needed by the resource is placed in the 'size field.
+The alignment requirements of the object are placed in the 'alignment' field.
+When you bind memory to the object (which we will get to in a moment), 
+	you need to ensure that the offset from the start of the memory object meets the alignment requirements of the resource and 
+	that there is sufficient space in the memory object to store the object.
+
+The 'memoryTypeBits' field is populated with all the memory types that the resource can be bound to.
+One bit is turned on, starting from the least significant bit, for each type that can be used with the resource.
+If you have no particular requirements for the memory, 
+	simply find the lowest-set bit and use its index to choose the memory type, 
+	which is then used as the 'memoryTypeIndex' field in the allocation info passed to a call to vkAllocateMemory().
+If you do have particular requirements or preferences for the memory - if you want to be able to map the memory or prefer that it be host local, for example - look for a type that includes those bits and is supported by the resource. (????????)
+
+Below codes show an example of an appropriate algorithm for choosing the memory type for an image resource.
+```
+
+
+uint32_t MyVulkan::ChooseHeapFromFlags(const VkMemoryRequirements& memoryRequirements, VkMemoryPropertyFlags requiredFlags, VkMemoryPropertyFlags preferredFlags)
+{
+	VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
+	vkGetPhysicalDeviceMemoryProperties(physicalDevices.front(), &deviceMemoryProperties);
+
+	uint32_t selectedType = ~0u;
+	uint32_t memoryType;
+		
+	// ??? What? magic number??? What does it come from? -> Aha type of memoryTypeBits is 32bit unsigned integer
+	for (memoryType = 0; memoryType < 32; memoryType++)
+	{
+		if (memoryRequirements.memoryTypeBits & (1<<memoryType))
+		{
+			const VkMemoryType& type = deviceMemoryProperties.memoryTypes[memoryType];
+
+			// If it exactly matches my preffered properties, grab it.
+			if ((type.propertyFlags & preferredFlags) == preferredFlags)
+			{
+				selectedType = memoryType;
+				break;
+			}
+		}
+	}
+
+	if (selectedType != ~0u)
+	{
+		for (memoryType = 0; memoryType < 32; memoryType++)
+		{
+			if (memoryRequirements.memoryTypeBits & (1 << memoryType))
+			{
+				const VkMemoryType& type = deviceMemoryProperties.memoryTypes[memoryType];
+
+				// If it has all my required properties, it'll do.
+				if ((type.propertyFlags & requiredFlags) == requiredFlags)
+				{
+					selectedType = memoryType;
+					break;
+				}
+			}
+		}
+	}
+
+	return selectedType;
+}
+
+```
+
+The algorithm shown in upper code chooses a memory type given the memory requirements for an object, a set of hard requirements, and a set of preferred requirements.
+First, it iterates through the device's supported memory types and checks each for the set of preferred flags.
+If there is a memory type that contains all of the flags that the caller prefers, then it immediately returns that memory type.
+If none of the device's memory types exactly matches the preferred flags, then it iterates again, this time returning the first memory type that meets all of the requirements.
+
+Once you have chosen the memory type for the resource, you can bind a piece of a memory object to that resource by calling either vkBindBufferMemory() for buffer objects
+	or vkBindImageMemory() for image objects.
+Their prototypes are
+```
+VkResult vkBindBufferMemory(
+	VkDevice						device,
+	VkBuffer						buffer,
+	VkDeviceMemory		memory,
+	VkDeviceSize				memoryOffset
+);
+
+VkResult vkBindImageMemory(
+	VkDevice						device,
+	VkImage						image,
+	VkDeviceMemory		memory,
+	VkDeviceSize				memoryOffset
+);
+```
+
+Again, 'device' must own both the resource and the memory object, whose handle is passed in 'memory'.
+This is the handle of a memory allocation created through a call to vkAllocateMemory().
+
+Access to 'buffer' and 'image' from vkBindBufferMemory() and vkBindImageMemory(), respectively, must be externally synchronized.
+Once memory has been bound to a resource object, the memory binding cannot be changed again.
+If two threads attempt to execute vkBindBufferMemory() or vkBindImageMemory() concurrently,
+	then which thread's binding takes effect and which one is invalid is subject to a race condition.
+Even resolving the race condition would not produce a legal command sequence, so this should be avoided.
+
+The 'memoryOffset' parameter specifies 'where' in the memory object the resource will live.
+The amount of memory consumed by the object is determined from the size of the object's requirements, 
+	as discovered with a call to vkGetBufferMemoryRequirements() or vkGetImageMemoryRequirements().
+
+It is very strongly recommended that rather than simply creating a new memory allocation for each resource,
+	you create a pool of a small number of relatively large memory allocations and place multiple resources in each one at different offsets.
+It is possible for two resources to overlap in memory.
+In general, aliasing data like this is not well defined, but if you can be sure that two resources are not used at the same time, this can be a good way to reduce the memory requirements of your application.
+
+An example of a device memory allocator is included with the book's source code. (which does not included though)
+
+16. 

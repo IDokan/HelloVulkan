@@ -27,9 +27,13 @@ namespace MyVulkan
 	double linearTosRGB(double cl);
 	double sRGBToLinear(double cs);
 
+	// When required or preferredFlags are not,
 	uint32_t ChooseHeapFromFlags(
-		const VkMemoryRequirements& memoryRequirements, 
-		VkMemoryPropertyFlags requiredFlags, 
+		const VkMemoryRequirements& memoryRequirements);
+	// returns ~0u if matched memory does not exist.
+	uint32_t ChooseHeapFromFlags(
+		const VkMemoryRequirements& memoryRequirements,
+		VkMemoryPropertyFlags requiredFlags,
 		VkMemoryPropertyFlags preferredFlags);
 }
 
@@ -374,47 +378,49 @@ double MyVulkan::sRGBToLinear(double cs)
 	return cl;
 }
 
+uint32_t MyVulkan::ChooseHeapFromFlags(const VkMemoryRequirements& memoryRequirements)
+{
+	for (uint32_t memoryType = 0; memoryType < VK_MAX_MEMORY_TYPES; memoryType++)
+	{
+		if ((memoryRequirements.memoryTypeBits & memoryType) != 0)
+		{
+			return memoryType;
+		}
+	}
+}
+
 uint32_t MyVulkan::ChooseHeapFromFlags(const VkMemoryRequirements& memoryRequirements, VkMemoryPropertyFlags requiredFlags, VkMemoryPropertyFlags preferredFlags)
 {
 	VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
 	vkGetPhysicalDeviceMemoryProperties(physicalDevices.front(), &deviceMemoryProperties);
 
-	uint32_t selectedType = ~0u;
-	uint32_t memoryType;
-		
-	// ??? What? magic number??? What does it come from? -> Aha type of memoryTypeBits is 32bit unsigned integer
-	for (memoryType = 0; memoryType < 32; memoryType++)
+	for (uint32_t memoryType = 0; memoryType < VK_MAX_MEMORY_TYPES; memoryType++)
 	{
-		if (memoryRequirements.memoryTypeBits & (1<<memoryType))
+		if (memoryRequirements.memoryTypeBits & (1 << memoryType))
 		{
 			const VkMemoryType& type = deviceMemoryProperties.memoryTypes[memoryType];
 
 			// If it exactly matches my preffered properties, grab it.
 			if ((type.propertyFlags & preferredFlags) == preferredFlags)
 			{
-				selectedType = memoryType;
-				break;
+				return memoryType;
 			}
 		}
 	}
 
-	if (selectedType != ~0u)
+	for (uint32_t memoryType = 0; memoryType < VK_MAX_MEMORY_TYPES; memoryType++)
 	{
-		for (memoryType = 0; memoryType < 32; memoryType++)
+		if (memoryRequirements.memoryTypeBits & (1 << memoryType))
 		{
-			if (memoryRequirements.memoryTypeBits & (1 << memoryType))
-			{
-				const VkMemoryType& type = deviceMemoryProperties.memoryTypes[memoryType];
+			const VkMemoryType& type = deviceMemoryProperties.memoryTypes[memoryType];
 
-				// If it has all my required properties, it'll do.
-				if ((type.propertyFlags & requiredFlags) == requiredFlags)
-				{
-					selectedType = memoryType;
-					break;
-				}
+			// If it has all my required properties, it'll do.
+			if ((type.propertyFlags & requiredFlags) == requiredFlags)
+			{
+				return memoryType;
 			}
 		}
 	}
 
-	return selectedType;
+	return ~0U;
 }

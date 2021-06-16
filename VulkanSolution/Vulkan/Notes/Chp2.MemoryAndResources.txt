@@ -1578,7 +1578,7 @@ typedef struct VkMemoryRequirements
 } VkMemoryRequirements;
 ```
 
-The amount of memory needed by the resource is placed in the 'size field.
+The amount of memory needed by the resource is placed in the 'size' field.
 The alignment requirements of the object are placed in the 'alignment' field.
 When you bind memory to the object (which we will get to in a moment), 
 	you need to ensure that the offset from the start of the memory object meets the alignment requirements of the resource and 
@@ -1594,7 +1594,7 @@ If you do have particular requirements or preferences for the memory - if you wa
 Below codes show an example of an appropriate algorithm for choosing the memory type for an image resource.
 ```
 
-
+// When I have particular requirements or preferences for the memory,
 uint32_t MyVulkan::ChooseHeapFromFlags(const VkMemoryRequirements& memoryRequirements, VkMemoryPropertyFlags requiredFlags, VkMemoryPropertyFlags preferredFlags)
 {
 	VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
@@ -1603,8 +1603,7 @@ uint32_t MyVulkan::ChooseHeapFromFlags(const VkMemoryRequirements& memoryRequire
 	uint32_t selectedType = ~0u;
 	uint32_t memoryType;
 		
-	// ??? What? magic number??? What does it come from? -> Aha type of memoryTypeBits is 32bit unsigned integer
-	for (memoryType = 0; memoryType < 32; memoryType++)
+	for (memoryType = 0; memoryType < VK_MAX_MEMORY_TYPES; memoryType++)
 	{
 		if (memoryRequirements.memoryTypeBits & (1<<memoryType))
 		{
@@ -1680,10 +1679,294 @@ The amount of memory consumed by the object is determined from the size of the o
 	as discovered with a call to vkGetBufferMemoryRequirements() or vkGetImageMemoryRequirements().
 
 It is very strongly recommended that rather than simply creating a new memory allocation for each resource,
-	you create a pool of a small number of relatively large memory allocations and place multiple resources in each one at different offsets.
+	you create a pool of a small number of relatively large memory allocations and place multiple resources in each one at different offsets.�ڡڡڡڡڡڡڡڡڡڡڡ�
 It is possible for two resources to overlap in memory.
 In general, aliasing data like this is not well defined, but if you can be sure that two resources are not used at the same time, this can be a good way to reduce the memory requirements of your application.
 
 An example of a device memory allocator is included with the book's source code. (which does not included though)
 
-16. 
+16. Sparse Resources 
+Sparse resources are a special type of resource that can be partially backed by memory and can have their memory backing changed after they have been created and even used in the application.
+A sparse resource must still be bound to memory before it can be used, although that binding can be changed.
+Additionally, an image or buffer can support sparse residency, which allows parts of the image to not be backed by memory at all.
+
+The create a sparse image, set the VK_IMAGE_CREATE_SPARSE_BINDING_BIT in the 'flags' field of the VkImageCreateInfo structure used to create the image.
+Likewise, to create a sparse buffer, set the VK_BUFFER_CREATE_SPARSE_BINDING_BIT in the 'flags' field of the VkBufferCreateInfo structure used to create the buffer.
+
+If an image was created with the VK_IMAGE_CREATE_SPARSE_BINDING_BIT bit set, 
+	your application should call vkGetImageSparseMemoryRequirements() to determine the additional requirements that the image needs.
+The prototype of vkGetImageSparseMemoryRequirements() is
+```
+void vkGetImageSparseMemoryRequirements(
+	VkDevice														device,
+	VkImage														image,
+	uint32_t*														pSparseMemoryRequirementCount,
+	VkSparseImageMemoryRequirements*		pSparseMemoryRequirements
+);
+```
+
+The 'pSparseMemoryRequirements' parameter points to an array of VkSparseImageMemoryRequirements structures that will be filled with the requirements of the image.
+
+It is also work similarly with vkGetPhysicalDeviceQueueFamilyProperties().
+First call with nullptr in 'pSparseMemoryRequirements' to get 'pSparseMemoryRequirementCount' and then call the function again with dynamically allocated array with the variable.
+
+The definition of VkSparseImageMemoryRequirements is
+```
+typedef struct VkSparseImageMemoryRequirements
+{
+	VkSparseImageFormatProperties		formatProperties;
+	uint32_t												imageMipTailFirstLod;
+	VkDeviceSize										imageMipTailSize;
+	VkDeviceSize										imageMipTailOffset;
+	VkDeviceSize										imageMipTailStride;
+} VkSparseImageMemoryRequirements;
+```
+
+The first field of VkSparseImageMemoryRequirements is an instance of the VkSparseImageFormatProperties structure that provides general information about how the image is laid out in memory with respect to binding.
+```
+typedef struct VkSparseImageFormatProperties {
+	VkImageAspectFlags					aspectMask;
+	VkExtent3D									imageGranularity;
+	VkSparseImageFormatFlags		flags;
+} VkSparseImageFormatProperties;
+```
+
+The 'aspectMask' field of VkSparseImageFormatProperties is a bitfield indicating the image aspects to which the properties apply.
+This will generally be all of the aspects in the image.
+For color image, it will be VK_IMAGE_ASPECT_COLOR_BIT, and for depth, stencil, and depth-stencil images, it will be either or both of VK_IMAGE_ASPECT_DEPTH_BIT and VK_IMAGE_ASPECT_STENCIL_BIT.
+
+When memory is bound to a sparse image, it is bound in blocks rather than to the whole resource at once.
+Memory has to be bound in implementation-specific sized blocks, and the 'imageGranularity' field of VkSparseImageFormatProperties contains this size.
+
+Finally, the 'flags' field contains some additional flags describing further behavior of the image. The flags that may be included are
+```
+1. VK_SPARSE_IMAGE_FORMAT_SINGLE_MIPTAIL_BIT:
+	If this bit is set and the image is an array, then the mip tail shares a binding shared by all array layers.
+	If the bit is not set, then each array layer has its own mip tail that can be bound to memory independently of others.
+
+2. VK_SPARSE_IMAGE_FORMAT_ALIGNED_MIP_SIZE_BIT:
+	If this bit is set, it is an indicator that the mip tail begins with the first level that is not a multiple of the image's binding granularity.
+	If the bit is not set, then the tail begins at the first level that is smaller than the image's binding granularity.
+
+3. VK_SPARSE_IMAGE_FORMAT_NONSTANDARD_BLOCK_SIZE_BIT:
+	If this bit is set, then the image's format does support sparse binding, but not with the standard block sizes.
+	The values reported in 'imageGranularity' are still correct for the image but do not necessarily match the standard block for the format.
+```
+
+Unless VK_SPARSE_IMAGE_FORMAT_NONSTANDARD_BLOCK_SIZE_BIT is set in 'flags', then the values in 'imageGranularity' match a set of standard block sizes for the format.
+The size, in texels, of various formats is shown in Table 2.1.
+
+The remaining fields of VkSparseImageMemoryRequirements describe how the format used by the image bahaves in the mip tail.
+The mip tail is the region of the mipmap chain beginning from the first level that cannot be sparsely bound to memory.
+This is typically the first level that is smaller than the size of the format's granularity.
+As memory must be bound to sparse resources in units of the granularity, the mip tail presents an all-or-nothing binding opportunity.
+Once any level of the mipmap's tail is bound to memory, all levels within the tail become bound.
+
+The mip tail begins at the level reported in the 'imageMipTailFirstLod' field of VkSparseImageMemoryRequirements.
+The size of the tail, in bytes, is contained in 'imageMipTailSize', and it begins at 'imageMipTailOffset bytes into the image's memory binding region.
+If the image does not have a single mip tail binding for all array layers (as indicated by the presence of VK_SPARSE_IMAGE_FORMAT_SINGLE_MIPTAIL_BIT in the 'aspectMask' field of VkSparseImageFormatProperties), 
+	then 'imageMipTailStride' is the distance, in bytes, between the start of the memory binding for each mip tail level.
+
+The properties of a specific format can also determined by calling vkGetPhysicalDeviceSparseImageFormatProperties(), which, given a specific format, 
+	will return a VkSparseImageFormatProperties describing that format's sparse image requirements without the need to create an image and query it.
+The prototype of vkGetPhysicalDeviceSparseImageFormatProperties() is
+```
+void vkGetPhysicalDeviceSparseImageFormatProperties(
+	VkPhysicalDevice								physicalDevice,
+	VkFormat												format,
+	VkImageType										type,
+	VkSampleCountFlagBits						samples,
+	VkImageUsageFlags							usage,
+	VkImageTiling										tiling,
+	uint32_t*												pPropertyCount,
+	VkSparseImageFormatProperties*		pProperties
+);
+```
+
+The format of the image is passed in 'format'.
+The type of image(VK_IMAGE_TYPE_1D, VK_IMAGE_TYPE_2D, or VK_IMAGE_TYPE_3D) is passed in 'type'.
+If multisampling is required, the number of samples (represented as one of the members of the VkSampleCountFlagBits enumeration) is passed in 'samples'.
+
+The intended usage for the image is passed in 'usage'.
+This should be a bitfield containing the flags specifying how an image with this format will be used.
+Be aware that sparse images may not be supported at all under certain use cases, so it's best to set this field conservatively and accurately rather than just turning on every bit and hoping for the best.
+Finally, the tiling mode to be used for the image is specified in 'tiling'.
+Again, standard block sizes may be supported only in certain tiling modes.
+For example, it's very unlikely that an implementation would support standard (or even reasonable) block sizes when 'LINEAR' tiling is used.
+
+Just as with vkGetPhyiscalDeviceImageFormatProperties(), vkGetPhyiscalDeviceSparseImageFormatProperties() can return an array of properties.
+Thus, 'pPropertyCount' and 'pProperties' work as what we did.
+Call this function twice.
+First time to overwrite to 'pPropertyCount', and second time to get properties with dynamically allocated array.
+
+Because the memory binding used to back sparse images can be changed, 
+	even after the image is in use, the update to the binding properties of the image is pipelined along with that work.
+Unlike vkBindImageMemory() and vkBindBufferMemory(), which are operations likely carried out by the host, 
+	memory is bound to a sparse resource using an operation on the queue, allowing the device to execute them.
+The command to bind memory to a sparse resource is vkQueueBindSparse(), the prototype of which is
+```
+VkResult vkQueueBindSparse(
+	VkQueue									queue,
+	uint32_t									bindInfoCount,
+	const VkBindSparseInfo*			pBindInfo,
+	VkFence									fence
+);
+```
+
+The queue that will execute the binding operation is specified in 'queue'.
+Several binding operations can be performed by a single call to vkQueueBindSparse().
+The number of operations to perform is passed in 'bindInfoCount', and 'pBindInfo' is a pointer to an array of 'bindInfoCount' VkBindSparseInfo structures, each describing one of the bindings.
+The definition of VkBindSparseInfo is
+```
+typedef struct VkBindSparseInfo {
+	VkStructureType															sType;
+	const void*																	pNext;
+	uint32_t																		waitSemaphoreCount;
+	const VkSemaphore*													pWaitSemaphores;
+	uint32_t																		bufferBindCount;
+	const VkSparseBufferMemoryBindInfo*						pBufferBinds;
+	uint32_t																		imageOpaqueBindCount;
+	const VkSparseImageOpaqueMemoryBindInfo*			pImageOpaqueBinds;
+	uint32_t																		imageBindCount;
+	const VkSparseImageMemoryBindInfo*						pImageBinds;
+	uint32_t																		signalSemaphoreCount;
+	const VkSemaphore*													pSignalSemaphores;
+} VkBindSparseInfo;
+```
+
+The act of binding memory to sparse resources is actually pipelined with other work performed by the device.
+As you read in Chapter 1, "Overview of Vulkan", work is performed by submitting it to queues.
+The binding is then performed along with the execution of commands submitted to the same queue.
+Because vkQueueBindSparse() behaves a lot like a command submission, VkBindSparseInfo contains many fields related to synchronization.
+
+The 'sType' field of VkBindSparseInfo should be set to VK_STRUCTURE_TYPE_BIND_SPARSE_INFO.
+The 'pNext' should be set to nullptr.
+As with VkSubmitInfo, 
+	each sparse binding operation can optionally wait for one or more semaphores to be signaled before performing the operation and can signal one or more semaphores when it is done.
+This allows updates to the sparse resource's bindings to be synchronized with other work performed by the device.
+
+The number of semaphores to wait on is specified in 'waitSemaphoreCount', and the number of semaphores to signal is specified in 'signalSemaphoreCount'.
+The 'pWaitSemaphores' field is a pointer to an array of 'waitSemaphoreCount' semaphore handles to wait on,
+	and 'pSignalSemaphores' is a pointer to an array of 'signalSemaphoreCount' samaphores to signal.
+Semaphores are covered in some detail in Chapter 11, "Synchronization".
+
+Each binding operation can include updates to buffers and images.
+The number of buffer binding updates is specified in 'bufferBindCount' and 'pBufferBinds' is a pointer to an array of 'bufferBindCount' VkSparseBufferMemoryBindInfo structures,
+	each describing one of the buffer memory binding operations.
+The definition of VkSparseBufferMemoryBindInfo is
+```
+typedef struct VkSparseBufferMemoryBindInfo
+{
+	VkBuffer										buffer;
+	uint32_t										bindCount;
+	const VkSparseMemoryBind*		pBinds;
+};
+```
+
+Each instance of VkSparseBufferMemoryBindInfo contains the handle of the buffer to which memory will be bound.
+A number of regions of memory can be bound to the buffer at different offsets.
+The number of memory regions is specified in 'bindCount', and each binding is described by an instance of the VkSparseMemoryBind structure.
+'pBinds' is a pointer to an array of 'bindCount' VkSparseMemoryBind structures.
+The definition of which is
+```
+typedef struct VkSparseMemoryBind {
+	VkDeviceSize								resourceOffset;
+	VkDeviceSize								size;
+	VkDeviceMemory						memory;
+	VkDeviceSize								memoryOffset;
+
+	VkSparseMemoryBindFlags		flags;
+} VkSparseMemoryBind;
+```
+
+The size of the block of memory to bind to the resource is contained in 'size'.
+The offsets of the block in the resource and in the memory object are contained in 'resourceOffset' and 'memoryOffset', respectively, and are both expressed in units of bytes.
+The memory object that is the source of storage for the binding is specified in 'memory'.
+When the binding is executed, the block of memory, 'size' bytes long and starting at 'memoryOffset' bytes into the memory object specified in 'memory', 
+	will be bound into the buffer specified in the 'buffer' field of the VkSparseBufferMemoryBindInfo structure.
+
+The 'flags' field contains additional flags that can be used to further control the binding.
+No flags are used for buffer resources.
+However, image resources use the same VkSparseMemoryBind structure to affect memory bindings directly to images.
+This is known as an opaque image memory binding, and the opaque image memory bindings to be performed are also passed through the VkBindSparseInfo structure.
+The 'pImageOpaqueBinds' member of VkBindSparseInfo points to an array of 'imageOpaqueBindCount' VkSparseImageOpaqueMemoryBindInfo structures defining the opaque memory bindings.
+The definition of VkSparseImageOpaqueMemoryBindInfo is
+```
+typedef struct VkSparseImageOpaqueMemoryBindInfo
+{
+	VkImage											image;
+	uint32_t											bindCount;
+	const VkSparseMemoryBind*			pBinds;
+} VkSparseImageOpaqueMemoryBindInfo;
+```
+
+Just as with VkSparseBufferMemoryBindInfo, 
+	VkSparseImageOpaqueMemoryBindInfo contains a handle to the image to which to bind memory in 'image' and a pointer to an array of VkSparseMemoryBind structures in 'pBinds',
+	Which is 'bindCount' elements long.
+This is the same structure used for buffer memory bindings.
+However, when this structure is used for images, 
+	you can set the 'flags' field of each VkSparseMemoryBind structure to indlucde the VK_SPARSE_MEMORY_BIND_METADATA_BIT flag in order to explicitly bind memory to the metadata associated with the iamge.
+
+When memory is bound opaquely to a sparse image, the blocks of memory have no defined correlation with texels in the image.
+Rather, the backing store of the image is treated as a large, opaque region of memory with no information about how texels are laid out in it provided to the application.
+However, so long as memory is bound to the entire image when it is used, results will still be well-defined and consistent.
+This allows sparse images to be backed by multiple, smaller memory objects, potentially easing pool allocation strategies, for example.
+
+To bind memory to an explicit region of an image, 
+	you can perform a nonopaque image memory binding by passing one or more VkSparseImageMemoryBindInfo structures 
+	through the VkBindSparseInfo structures passed to vkQueueBindSparse().
+The definition of VkSparseImageMemoryBindInfo is
+```
+typedef struct VkSparseImageMemoryBindInfo
+{
+	VkImage													image;
+	uint32_t													bindCount;
+	const VkSparseImageMemoryBind*		pBinds;
+} VkSparseImageMemoryBindInfo;
+```
+
+Again, the VkSparseImageMemoryBindInfo structure contains a handle to the image to which to bind memory in 'image'.
+A count of the number of bindings to perform in 'bindCount'.
+A pointer to an array of structures describing the bindings in 'pBinds'.
+This time, however, 'pBinds' points to an array of 'bindCount' VkSparseImageMemoryBind structures, the definition of which is
+```
+typedef struct VkSparseImageMemoryBind
+{
+	VkImageSubresource					subresource;
+	VkOffset3D									offset;
+	VkExtent3D									extent;
+	VkDeviceMemory						memory;
+	VkDeviceSize								memoryOffset;
+	VkSparseMemoryBindFlags		flags;
+} VkSparseImageMemoryBind;
+```
+
+The VkSparseImageMemoryBind structure contains much more information about how the memory is to be bound to the image resource.
+For each binding, the image subresource to which the memory is to be bound is specified in 'subresource', which is an instance of the VkImageSubresource, the definition of which is
+```
+typedef struct VkImageSubresource
+{
+	VkImageAspectFlags		aspectMask;
+	uint32_t							mipLevel;
+	uint32_t							arrayLayer;
+} VkImageSubresource;
+```
+
+The VkImageSubresource allows you to specify the aspect of the image 
+	(VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_ASPECT_DEPTH_BIT, or VK_IMAGE_ASPECT_STENCIL_BIT, for example) in 'aspectMask'
+The mipmap level to which you want to bind memory in 'mipLevel', and the array layer where the memory should be bound in 'arrayLayer'.
+For nonarray images, 'arrayLayer' should be set to zero.
+
+Within the subresource, the 'offset' and 'extent' fields of the VkSparseImageMemoryBind structure define the offset and size of the region of texels to bind the image data to.
+This must be aligned to the tile-size boundaries, 
+	which are either the standard sizes as shown in Table 2.1 or the per-format block size that can be retrieved from vkGetPhysicalDeviceSparseImageFormatProperties().
+
+Again, the memory object from which to bind memory is specified in 'memory', and the offset within the memory where the backing store resides is specified in 'memoryOffset'.
+The same flags are available in the 'flags' field of VkSparseImageMemoryBind.
+
+SUMMARY
+This chapter introduced you to the different types of resources that are used by Vulkan.
+It described how the memory used to back them is allocated and then associated with them.
+It also explained how you can manage the application memory used by Vulkan through the use of a custom allocator.
+You have seen how to move resources from state to state and how to synchronize access to them through pipeline barriers.
+This enables efficient, parallel access to resources both from multiple stages of the Vulkan pipeline and from the host.

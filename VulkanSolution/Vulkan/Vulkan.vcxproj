@@ -184,6 +184,7 @@
   <ItemGroup>
     <Text Include="Notes\Chp1.OverviewOfVulkan.txt" />
     <Text Include="Notes\Chp2.MemoryAndResources.txt" />
+    <Text Include="Notes\Chp3.QueuesAndCommands.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

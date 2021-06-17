@@ -1,0 +1,202 @@
+Chapter 3. Queues and Commands
+
+What you will learn in this chapter
+
+```
+1. What a queue is and how to use it.
+2. How to create commands and send them to Vulkan.
+3. How to ensure that a devices has finished processing your work.
+```
+
+Vulkan devices expose multiple queues that perform work.
+In this chapter, we discuss the varous queue types and explain how to submit work to them in the form of command buffers.
+We also show how to instruct a queue to complete all of the work you've sent it.
+
+1. Device Queues
+
+Each device in Vulkan has one or more queues.
+The queue is the part of the device that actually performs work.
+It can be thought of as a subdevice that exposes a subset of the device's functionality.
+In some implementations, each queue may even be a physically separatepart of the system.
+
+Queues are grouped into one or more 'queue families', each containing one or more queues.
+Queues within a single family are esssentially identical.
+Their capabilities are the same, their performance level and access to system resources is the same, and there is no cost (beyond synchronization) of transferring work between them.
+If a device contains multiple cores that have the same capabilities but differ in performance, access to memory, or some other factor that might mean they cannot operate identically,
+	it may expose them in separate families that otherwise appear identical.
+
+As discussed in Chapter 1, "Overveiw of Vulkan", you can query the properties of each of a physical device's queue families by calling vkGetPhysicalDeviceQueueFamilyProperties().
+This function writes the properties of the queue family into an instance of the VkQueueFamilyProperties structure that you hand it.
+
+The number and type of queues that you wish to use must be specified when you create the device.
+As you saw in Chapter 1, "Overview of Vulkan", the VkDeviceCreateInfo structure that you pass to vkCreateDevice() contains the 'queueCreateInfoCount' and 'pQueueCreateInfos' members.
+Chapter 1, "Overview of Vulkan", glossed over them, but now it's time to fill them in.
+The 'queueCreateInfoCount' member contains the number of VkDeviceQueueCreateInfo structures stored in the array pointed to by 'pQueueCreateInfos'.
+The definition of the VkDeviceQueueCreateInfo structure is
+```
+typedef struct VkDeviceQueueCreateInfo
+{
+	VkStructureType							sType;
+	const void*									pNext;
+	VkDeviceQueueCreateFlags		flags;
+	uint32_t										queueFamilyIndex;
+	uint32_t										queueCount;
+	const float*									pQueuePriorities;
+} VkDeviceQueueCreateInfo;
+```
+
+As with most Vulkan structures, the 'sType' field is the structure type, which in this case should be VK_STRUCTURE_TYPE_QUEUE_CREATE_INFO.
+The 'pNext' field is used for extensions and should be set to nullptr when none are used.
+The 'flags' field contains flags controlling queue contruction, but no flag is defined for use in the current version of Vulkan, so this field should be set to zero.
+
+The fields of interest here are 'queueFamilyIndex' and 'queueCount'.
+The 'queueFamilyIndex' field specifies the family from which you want to allocate queues, and the 'queueCount' field specifies the number of queues to allocate from that family.
+To allocate queues from multiple families, simply pass an array of more than one VkDeviceQueueCreateInfo structure in the 'pQueueCreateInfos' member of the VkDeviceCreateInfo structure.
+
+The queues are contructed when the device is created.
+For this reason, we do not "create" queues, but obtain them from the device.
+To do this, call vkGetDeviceQueue() :
+```
+void vkGetDeviceQueue(
+	VkDevice				device,
+	uint32_t				queueFamilyIndex,
+	uint32_t				queueIndex,
+	VkQueue*			pQueue
+);
+```
+
+The 'device' specifies the device from which you want to obtain the queue.
+The 'queueFamilyIndex' is the family index.
+The 'queueIndex' must refer to a queue that was initialized when the device was created.
+If they do, a queue handle is placed into the variable pointed to by 'pQueue'; otherwise, this variable is set to VK_NULL_HANDLE.
+
+2. Creating Command Buffers
+
+The primary purpose of a queue is to process work on behalf of your application.
+Work is represented as a sequence of commands that are recorded into 'command buffers'.
+Your application will create command buffers containing the work it needs to do and 'submit' them to one of the queues for execution.
+Before you can record any commands, you need to create a command buffer.
+Command buffers themselves are not created directly, but allocated from pools.
+To create a pool, call vkCreateCommandPool(), whose prototype is 
+```
+VkResult vkCreateCommandPool (
+	VkDevice													deivce,
+	const VkCommandPoolCreateInfo*			pCreateInfo,
+	const VkAllocationCallbacks*					pAllocator,
+	VkCommandPool*									pCommandPool
+);
+```
+
+As with most Vulkan object creation functions, the first parameter, 'device', is the handle to the device that will own the new pool object, 
+	and a description of the pool is passed via a  structure, a pointer to which is placed in 'pCreateInfo'.
+This structure is an instance of VkCommandPoolCreateInfo, the definition of which is
+```
+typedef struct VkCommandPoolCreateInfo
+{
+	VkStructureType							sType;
+	const void*									pNext;
+	VkCommandPoolCreateFlags		flags;
+	uint32_t										queueFamilyIndex;
+} VkCommand PoolCreateInfo;
+```
+
+As with most Vulkan structures, the first two fields, 'sType' and 'pNext', contain the structure type and a pointer to another structure containing more information about the pool to be created.
+Here, we'll set 'sType' to VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO and, because we're not passing any extra information, set 'pNext' to nullptr.
+
+The 'flags' field contains flags that determine the behavior of the pool and the command buffers that are allocated from it.
+These are members of the VkCommandPoolCreateFlagBits enumeration, and there are currently two flags defined for use here.
+
+```
+1. VK_COMMAND_POOL_CREATE_TRANSIENT_BIT
+	Setting this indicates that command buffers taken from the pool will be short-lived and returned to the pool shortly after use.
+	Not setting this bit suggests to Vulkan that you might keep the command buffers around for some time.
+
+2. VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT
+	Setting this allows individual command buffers to be reused by resetting them or restarting them. (Don't worry, we will cover that in a moment.)
+	If this bit is not specified, then only the pool itself can be reset, which implicitly recycles all of the command buffers allocated from it.
+```
+
+Each of these bits may add some overhead to the work done by a Vulkan implementation to track the resources or otherwise alter its allocation strategy.
+For example, setting VK_COMMAND_POOL_CREATE_TRANSIENT_BIT may cause a Vulkan implementation to employ a more advanced allocation strategy for the pool in order toavoid fragmentation as command buffers are frequently allocated and then returned to it.
+Setting VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT may cause the implementation to track the reset status of each command buffer rather than simply track it at the pool level.
+
+In this case, we're actually going to set both bits.
+This gives us the most flexibility, possibly at the expense of some performance in cases where we could have managed command buffers in bulk.
+
+Finally, the 'queueFamilyIndex' field of VkCommandPoolCreateInfo specifies the family of queues to which command buffers allocated from this pool will be submitted.
+This is necessary because even where two queues on a device have the same capabilities and support the same set of commands, 
+	issuing a particular command to one queue may work differently from ussing that same command to another queue.
+
+The 'pAllocator' parameter is used for application-managed host memory allocations, which is covered in Chapter 2, "Memory and Resources".
+Assuming successful creation of the command pool, its handle will be written into the variable pointed to by 'pCommandPool', and vkCreateCommandPool() will return VK_SUCCESS.
+
+Once we have a pool from which to allocate command buffers, we can grab new command buffers by calling vkAllocateCommandBuffers(), which is defined as
+```
+VkResult vkAllocateCommandBuffers(
+	VkDevice														device,
+	const VkCommandBufferAllocateInfo*		pAllocateInfo,
+	VkCommandBuffer*										pCommandBuffers
+);
+```
+
+The device used to allocate the command buffers is passed in 'device'.
+The remaining parameters describing the command buffers to allocate are passed in an instance of the VkCommandBufferAllocateInfo structure.
+The 'address of which is passed in 'pCommandBuffers'.
+The definition of the VkCommandBufferAllocateInfo is
+```
+typedef struct VkCommandBufferAllocateInfo
+{
+	VkStructureType					sType;
+	const void*							pNext;
+	VkCommandPool				commandPool
+	VkCommandBufferLevel		level;
+	uint32_t								commandBufferCount;
+} VkCommandBufferAllocateInfo;
+```
+
+The 'sType' field should be set to VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO.
+As we're using only the core feature set here, we set the 'pNext' parameter to nullptr.
+A handle to the command pool that we created earlier is placed into the commandPool parameter.
+
+The 'level' parameter specifies the 'level' of the command buffers that we want to allocate.
+It can be set to either VK_COMMAND_BUFFER_LEVEL_PRIMARY or VK_COMMAND_BUFFER_LEVEL_SECONDARY.
+Vulkan allows 'primary' command buffers to call 'secondary' command buffers.
+For our first few examples, we will use only primary-level command buffers.
+We'll cover secondary-level command buffers later in the book.
+
+If vkAllocateCommandBuffers() is successful, it will return VK_SUCCESS and place the handles to the allocated command buffers in the array pointed to by pCommandBuffers.
+This array should be big enough to hold all the handles.
+Of course, if you want to allocate only a single command buffer, you can point this at a regular VkCommandBuffer handle.
+
+To free command buffers, we use the vkFreeCommandBuffers() command, which is declared as 
+```
+void vkFreeCommandBuffers(
+	VkDevice									device,
+	VkCommandPool					commandPool,
+	uint32_t									commandBufferCount,
+	const VkCommandBuffer*		pCommandBuffers
+);
+```
+
+The 'device' parameter is the device that owns the pool from which the command buffers were allocated.
+'commandPool' is a handle to that pool.
+The 'commandBufferCount' is the number of command buffers to free.
+The 'pCommandBuffers' is a pointer to an array of 'commandBufferCount' handles to the command buffers to free.
+Note that freeing a command buffer does not neccessarily free all of the resources associated with it but returns them to the pool from which they were allocated.
+
+To free all of the resources used by a command pool and all of the command buffers allocated from it, call vkDestroyCommandPool(), the prototype of which is 
+```
+void vkDestroyCommandPool(
+	VkDevice										device,
+	VkCommandPool						commandPool,
+	const VkAllocationCallbacks*		pAllocator
+);
+```
+
+The device that owns the command pool is passed in the 'device' parameter, and a handle to the command pool to destroy is passed in 'commandPool'.
+A pointer to a host memory allocation structure compatible with the one used to create the pool is passed in 'pAllocator'.
+This parameter should be nullptr if the 'pAllocator' parameter to vkCreateCommandPool() was also nullptr.
+
+There is no need to explicitly free all of the command buffers allocated from a pool before destroying the pool.
+The command buffers allocated from the pool are all greed as a part of destroying the pool and freeing its resources.
+Care should be taken, however, that no command buffers allocated from the pool are still executing or queued for execution on the device when vkDestroyingCommandPool() is called.

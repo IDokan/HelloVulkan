@@ -200,3 +200,141 @@ This parameter should be nullptr if the 'pAllocator' parameter to vkCreateComman
 There is no need to explicitly free all of the command buffers allocated from a pool before destroying the pool.
 The command buffers allocated from the pool are all greed as a part of destroying the pool and freeing its resources.
 Care should be taken, however, that no command buffers allocated from the pool are still executing or queued for execution on the device when vkDestroyingCommandPool() is called.
+
+3. Recycling command buffers
+In many applications, a similar sequence of commands is used to render all or part of each frame. 
+Therefore, it is likely that you will record similar command buffers over and over. 
+Using the commands introduced so far, you would call vkAllocateCommandBuffers() to grab one or more command buffer handles, 
+	record commands into the command buffers, and then call vkFreeCommandBuffers() to return the command buffers to their respective pools. 
+This is a relatively heavyweight operation, and if you know that you will reuse a command buffer for similar work many times in a row, 
+	it may be more efficient to reset the command buffer. 
+This effectively puts the command buffer back into its original state but does not necessarily interact with the pool at all. 
+Therefore, if the command buffer dynamically allocates resources from the pool as it grows, 
+	it can hang on to those resources and avoid the cost of reallocation the second and subsequent times it¡¯s rebuilt. 
+	To reset a command buffer, call vkResetCommandBuffer(), the prototype of which is
+```
+VkResult vkResetCommandBuffer(
+	VkCommandBuffer							commandBuffer,
+	VkCommandBufferResetFlags		flags
+);
+```
+
+The command buffer to reset is passed in 'commandBuffer'. 
+'flags' specifies additional operations to perform while resetting the command buffer. 
+The only flag defined for use here is VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT. 
+If this bit is set, then resources allocated from the pool by the command buffer are returned to the pool. 
+Even with this bit set, it¡¯s probably still more efficient to call vkResetCommandBuffer() than it is to free and reallocate a new command buffer.
+
+It¡¯s also possible to reset all the command buffers allocated from a pool in one shot. 
+To do this, call vkResetCommandPool(), the prototype of which is
+```
+VkResult vkResetCommandPool(
+	VkDevice										device,
+	VkCommandPool						commandPool,
+	VkCommandPoolResetFlags		flags
+);
+```
+
+The device that owns the command pool is specified in device, and the pool to reset is specified in commandPool. 
+Just as with vkResetCommandBuffer(), the flags parameter specifies additional action to be taken as part of resetting the pool. 
+Again, the only flag defined for use here is VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT. 
+When this bit is set, any resources dynamically allocated by the pool are freed as part of the reset operation.
+
+Command buffers allocated from the pool are not freed by vkResetCommandPool(), but all reenter their initial state as if they had been freshly allocated. 
+vkResetCommandPool() is typically used at the end of a frame to return a batch of reusable command buffers to their pool rather than individually reset individual command buffers.
+
+Care should be taken to try to keep the complexity of command buffers consistent over their multiple uses if they are reset without returning resources to the pool. 
+As a command buffer grows, it may allocate resources dynamically from the pool, and the command pool may allocate resources from a systemwide pool. 
+The amount of resources that a command buffer may consume is essentially unbounded, 
+	because there is no hard-wired limit to the number of commands you can place in a single command buffer. 
+If your application uses a mix of very small and very large command buffers, it¡¯s possible that eventually all command buffers will grow as large as the most complex command buffers.
+
+To avoid this scenario,	
+	either periodically specify the VK_COMMAND_BUFFER_RESET_RELEASE_RESOURCES_BIT or VK_COMMAND_POOL_RESET_RELEASE_RESOURCES_BIT 
+	when resetting command buffers or their pools, respectively, 
+	or try to ensure that the same command buffers are always used in the same way-either short, simple command buffers or long, complex command buffers. Avoid mixing use cases.
+
+4. Submission of commands
+To execute the command buffer on the device, we need to submit it to one of the device¡¯s queues. 
+To do this, call vkQueueSubmit(), the prototype of which is
+```
+VkResult vkQueueSubmit (
+	VkQueue							queue,
+	uint32_t							submitCount,
+	const VkSubmitInfo*		pSubmits,
+	VkFence							fence
+);
+```
+
+This command can submit one or more command buffers to the device for execution. 
+The 'queue' parameter specifies the device queue to which to send the command buffer. 
+Access to the queue must be externally synchronized. 
+All of the command buffers to submit were allocated from a pool, and that pool must have been created with respect to one of the device¡¯s queue families. 
+This is the queueFamilyIndex member of the VkCommandPoolCreateInfo structure passed to vkCreateCommandPool(). 
+'queue' must be a member of that family.
+
+The number of submissions is specified in 'submitCount', and an array of structures describing each of the submissions is specified in 'pSubmits'. 
+Each submission is represented by an instance of the VkSubmitInfo structures, the definition of which is
+```
+typedef struct VkSubmitInfo
+{
+	VkStructureType							sType;
+	const void*									pNext;
+	uint32_t										waitSemaphoreCount;
+	const VkSemaphore*					pWaitSemaphores;
+	const VkPipelineStageFlags*		pWaitDstStageMask;
+	uint32_t										commandBufferCount;
+	const VkCommandBuffer*			pCommandBuffers;
+	uint32_t										signalSemaphoreCount;
+	const VkSemaphore*					pSignalSemaphores;
+} VkSubmitInfo;
+```
+
+The sType field of VkSubmitInfo should be set to VK_STRUCTURE_TYPE_SUBMIT_INFO, and pNext should be set to nullptr. 
+Each VkSubmitInfo structure can represent multiple command buffers that are to be executed by the device.
+
+Each set of command buffers can be wrapped in a set of semaphores upon which to wait before beginning execution 
+	and can signal one or more semaphores when they complete execution. 
+A semaphore is a type of synchronization primitive that allows work executed by different queues to be scheduled and coordinated correctly. 
+We will cover semaphores along with other synchronization primitives in Chapter 11, ¡°Synchronization.¡± 
+For now, we¡¯re not going to use these fields, 
+	so waitSemaphoreCount and signalSemaphoreCount can be set to zero, and pWaitSemaphores, pWaitDstStageMask, and pSignalSemaphores can all be set to nullptr.
+
+The command buffers we want to execute are placed in an array, and its address is passed in pCommandBuffers. 
+The number of command buffers to execute (the length of the pCommandBuffers array) is specified in commandBufferCount. 
+At some time after the vkQueueSubmit() command is called, the commands in the command buffers begin executing on the device. 
+Commands submitted to different queues on the same device (or to queues belonging to different devices) may execute in parallel. 
+vkQueueSubmit() returns as soon as the specified command buffers have been scheduled, possibly long before they¡¯ve even begun executing.
+
+The fence parameter to vkQueueSubmit() is a handle to a fence object, which can be used to wait for completion of the commands executed by this submission. 
+A fence is another type of synchronization primitive that we will cover in Chapter 11, ¡°Synchronization.¡± 
+For now, we¡¯ll set fence to VK_NULL_HANDLE. 
+Until we cover fences, we can wait for all work submitted to a queue to complete by calling vkQueueWaitIdle(). 
+Its prototype is
+```
+VkResult vkQueueWaitIdle(
+	VkQueue		queue
+);
+```
+
+A shortcut to wait for all commands submitted to all queues on a single device to have completed is to call vkDeviceWaitIdle(). Its prototype is
+```
+VkResult vkDeviceWaitIdle (
+	VkDevice		device
+);
+```
+
+Calling vkQueueWaitIdle() or vkDeviceWaitIdle() is really not recommended, as they fully flush any work on the queue or device and are very heavyweight operations.
+Neither should be called in any performance-critical part of your application. 
+Suitable use cases include just before shutting down the application or when reinitializing application subsystems 
+	such as thread management, memory management, and so on, where there is likely to be a substantial pause anyway.
+
+Summary
+This chapter introduced you to command buffers, which are the mechanisms by which commands are communicated by your application to the Vulkan device. 
+We introduced our first Vulkan command and showed you how to ask the device to execute work for you.
+
+We discussed how to send the command buffers to the Vulkan device for execution by submitting them to the queue. 
+You saw how to ensure that all work submitted to a queue or to a device has finished executing. 
+Although we glossed over a number of important topics, 
+	such as how to call one command buffer from another and how to implement fine-grained synchronization between the host and the device and between queues on the device, 
+	these topics will be discussed in upcoming chapters.

@@ -35,6 +35,8 @@ namespace MyVulkan
 		const VkMemoryRequirements& memoryRequirements,
 		VkMemoryPropertyFlags requiredFlags,
 		VkMemoryPropertyFlags preferredFlags);
+
+	void FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize length, const float value);
 }
 
 void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
@@ -423,4 +425,9 @@ uint32_t MyVulkan::ChooseHeapFromFlags(const VkMemoryRequirements& memoryRequire
 	}
 
 	return ~0U;
+}
+
+void MyVulkan::FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize size, const float value)
+{
+	vkCmdFillBuffer(cmdBuffer, dstBuffer, offset, size, *(const uint32_t*)&value);
 }

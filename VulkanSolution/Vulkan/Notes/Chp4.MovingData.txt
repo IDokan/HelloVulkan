@@ -1,0 +1,537 @@
+Chapter 4. Moving Data
+
+What you'll learn in this chapter.
+```
+1. How to manage the state of resources as they are used by Vulkan.
+2. How to copy data between resources and fill buffers and images with a known value.
+3. How to perform blit operations to stretch and scale image data.
+```
+
+Grpahics and copute operations are generally data-intensive.
+Vulkan includes several objects that provide a means to store and manipulate data.
+It is often necessary to move data into and out of those objects, and several commands are provided to do that exactly that : copy data and fill buffer and image objects.
+Further, at any given time a resource may be in one of any number of states, and many part sof the Vulkan pipeline may need aceess to them.
+This chapter covers data movement commands that can be sued to copy data and fill memory - 
+	the commands needed to mange the state of resources as they are accessed by your applications.
+
+Chapter 3, "Queues and Commands", showed that commands executed by the device are placed in command buffers and submitted to one of its queues for execution.
+This is important because it means that commands are not executed as you call them in your application, 
+	but as they are encounted by the device while it makes its way through the command buffers you've submitted.
+The first command you were introduced to, vkCmdCopyBuffer(), copies data between two buffers or between different regions in the same buffer.
+This is one of may commands that affect buffers, images, and other obejcts in Vulkan.
+This chapter covers similar commands for filling, copying, and clearing buffers and images.
+
+1. Managing Resource State
+
+At any given time in the execution of a program, each resource can be in one of many different states.
+For example, if the graphics pipeline is drawing to an image or using it as the source of texture data, or if Vulkan is copying data from the host into an image, 
+	each of those usage scenarios is diffrent.
+For some Vulkan implementations, there may be no real difference between  some of these states, and for others, 
+	accurately knowing the state of a resource at a given point in time can make the difference between  your application working or rendering junk.
+
+Because commands in command buffers are responsible for most access to resources, 
+	and because command buffers might be built in a different order from the order in which they are submitted for execution,
+	it's not really practical for Vulkan implementations to attempt to track the state of a resource and make sure it's in the right one for each usage scenario.
+In particular, a resource may begin in one state and move to another due to the execution of a command buffer.
+While drivers could track the state of resources as they are used in a command buffer,
+	tracking state across command buffers would require significant effort^1 when the command buffers were submitted for execution.
+Therefore, this responsibility falls to your application.
+Resource state is perhaps most important for images because they are complex, structured resources.
+
+1.	The validation layers do, in fact, attempt to track this state.
+	While this comes with a substantial performance impact, the layer is capable of catching and reporting many resource-state-related issues.
+
+The state of an image is roughly divided into two essentially orthogonal pieces of state: 
+	its layout, which determines how to data is laid out in memory and was discussed breifly earlier in the book,
+	and a record of who last wrote to the image, which affects caching and coherency of data on the device.
+The initial layout of an image is specified when it is created, and then can be changed throughout the image's lifetime, 
+	either explictly using 'barriers' or implicitly using renderpass.
+Barriers also marshal access to resources from different parts of the Vulkan pipeline, and in some cases, 	transitioning a resource from one layout to another 
+	can be accomplished at other midpipeline synchronization work performed by barriers.
+
+The specific use cases for each layout are discussed in some depth later in the book.
+However, the fundamental act of moving a resource from state to state is known as a barrier,
+	and it is extreamly important to get barriers right and to use them effectively in your application.
+
+2. Pipeline Barriers
+
+A barrier is a synchronization mechanism for memory access management and resource state movement within the stages of the Vulkan pipeline.
+The primary command for synchronizing access to resources and moving them from state to state is vkCmdPipelineBarrier(), the prototype of which is
+```
+void vkCmdPipelineBarrier(
+	VkCommandBuffer							commandBuffer,
+	VkPipelineStageFlags						srcStageMask,
+	VkPipelineStageFlags						dstStageMask,
+	VkDependencyFlags						dependencyFlags,
+	uint32_t											memoryBarrierCount,
+	const VkMemoryBarrier*					pMemoryBarriers,
+	uint32_t											bufferMemoryBarrierCount,
+	const VkBufferMemoryBarrier*		pBufferMemoryBarriers,
+	uint32_t											imageMemoryBarrierCount,
+	const VkImageMemoryBarrier*		pImageMemoryBarrier
+);
+```
+
+The command buffer that will execute the barrier is passed in 'commandBuffer'.
+The next two parameters, 'srcStageMask' and 'dstStageMask', 
+	specify which pipeline stages wrote to the resource last and which stages will read from the resource next, respectively.
+That is, they specify the source and destination for the data flow represented by the barrier.
+Each is constructed from a number of the members of the VkPipelineStageFlgasBits enumeration.
+```
+1. VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT:
+	The 'top of pipe' is considered to be hit as soon as the device starts processing the command.
+
+2. VK_PIPELINE_STAGE_DRAW_INDIRECT_BIT:
+	When the pipeline executes an 'indirect' command, it fetches some of the parameters for the command from memory.
+	This is the stage that fetches those parameters.
+
+3. VK_PIPELINE_STAGE_VERTEX_INPUT_BIT:
+	This is the stage where vertex attributes are fetched from their respective buffers.
+	After this, content of vertex buffers can be overwritten, even if the resulting vertex shaders have not yet completed execution.
+
+4. VK_PIPELINE_STAGE_VERTEX_SHADER_BIT:
+	This stage is passed when all vertex shader work resulting from a drawing command is completed.
+
+5. VK_PIPELINE_STAGE_TESSELLATION_CONTROL_SHADER_BIT:
+	This stage is passed when all tessellation control shader invocations produced as the result of a drawing command have completed execution.
+
+6. VK_PIELINE_STAGE_TESSELLATION_EVALUATION_SHADER_BIT:
+	This stage is passed when all tessellation evaluation shader invocations produced as the result of a drawing command have completed execution.
+
+7. VK_PIPELINE_STAGE_GEOMETRY_SHADER_BIT:
+	This stage is passed when all geometry shader invocations produced as the result of a drawing command have completed execution.
+
+8. VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT:
+	This stage is passed when all fragment shader invocations produced as the result of a drawing command have completed execution.
+	Note that there is no way to know that a primitive has been completely rasterized while the resuling fragment shaders have not yet completed.
+	However, rasterization does not access memory, so no information is lost here.
+
+9. VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT:
+	All per-fragment test that might occur 'before' the fragment shader is launched have completed.
+
+10.	VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT:
+	All per-fragment tests that might occur 'after' the fragment shader is executed have completed.
+	Note that outputs to the depth and stencil attachments happen as part of the test, 
+		so this stage and the early fragment test stage include the depth and stencil outputs.
+
+11.	VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT:
+	Fragments produced by the pipeline have been written to the color attachments.
+
+12.	VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT:
+	Compute shader invocations produced as the result of a dispatch have completed.
+
+13.	VK_PIPELINE_STAGE_TRANSFER_BIT:
+	Any pending transfers triggered as a result of call to vkCmdCopyImage() or vkCmdCopyBuffer(), for example, have completed.
+
+14.	VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT:
+	All operations considered to be part of the graphics pipeline have completed.
+
+15.	VK_PIPELINE_STAGE_HOST_BIT:
+	This pipeline stage corresponds to access from the host.
+
+16.	VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT:
+	When used as a destination, this special flag means that any pipeline stage may access memory.
+	As a source, it's effectively equivalent to VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT.
+
+17.	VK_PIPELINE_STAGE_ALL_COMMANDS_BIT:
+	This stage is the big hammer.
+	Whenever you just do not know what's going on, use this; it will synchronize everything with everything.
+	Just use it wisely.
+```
+
+Because the flags specified in 'srcStageMask' and 'dstStageMask' are used to indicate 'when' things happen,
+	it's acceptable for Vulkan implementations to move them around or interpret them in various ways.
+The 'srcStageMask' specifies when the source stage has finished reading or wrting a resource.
+As a result, moving the effective position of that stage later in the pipeline doesn't change the fact that those accesses have completed;	
+	it may mean only that the implementation waits longer than it really needs to for them to complete.
+
+Likewise, the 'dstStageMask' specifies the point at which the pipeline will wait before proceeding.
+If an implementation moves that wait point earlier, that will still work.
+The event that it waits on will still have completed when the logically later parts of the pipeline begin execution.
+That implementation just misses the opporunity to perform work when it was instead wating.
+
+The 'dependencyFlags' parameter specifies a set of flags that describes how the dependency represented by the barrier affects the resources referenced by the barrier.
+The only defined flag is VK_DEPENDENCY_BY_REGION_BIT,
+	which indicates that the barrier affects only the region modified by the source stages (if it can be determined), which is consumed by the destination stages. (???)
+FYI, currently VkDependencyFlagBits has a five flags
+```
+// Provided by VK_VERSION_1_0
+typedef enum VkDependencyFlagBits {
+    VK_DEPENDENCY_BY_REGION_BIT = 0x00000001,
+	// specifies that dependencies will be framebuffer-local.
+
+
+  // Provided by VK_VERSION_1_1
+    VK_DEPENDENCY_DEVICE_GROUP_BIT = 0x00000004,
+	specifies that a subpass has more than one view.
+
+
+  // Provided by VK_VERSION_1_1
+    VK_DEPENDENCY_VIEW_LOCAL_BIT = 0x00000002,
+	specifies that dependencies are non-device-local.
+
+
+  // Provided by VK_KHR_multiview
+    VK_DEPENDENCY_VIEW_LOCAL_BIT_KHR = VK_DEPENDENCY_VIEW_LOCAL_BIT,
+  // Provided by VK_KHR_device_group
+    VK_DEPENDENCY_DEVICE_GROUP_BIT_KHR = VK_DEPENDENCY_DEVICE_GROUP_BIT,
+} VkDependencyFlagBits;
+```
+
+A single call to vkCmdPipelineBarrier() can be used to trigger many barrier operations.
+There are three types of barrier operations: global memory barriers, buffer barriers, and image barriers.
+Global memory barriers affect things such as synchronized access to mapped memory between the host and the device.
+Buffer and image barriers primarily affect device access to buffer and image resources, respectively.
+
+3. Global Memory Barriers
+
+The number of global memory barriers to be triggered by vkCmdPipelineBarrier() is specified in 'memoryBarrierCount'.
+If this is nonzero, then 'pMemoryBarriers' points to an array of 'memoryBarrierCount' 'VkMemoryBarrier' structures, each defining a single memory barrier. 
+The definition of VkMemoryBarrier is
+
+```
+typedef struct VkMemoryBarrier
+{
+	VkStructureType		sType;
+	const void*				pNext;
+	VkAccessFlags		srcAccessMask;
+	VkAccessFlags		dstAccessMask;
+} VkMemoryBarrier;
+```
+
+The 'sType field of VkMemoryBarrier should be set to VK_STRUCTURE_TYPE_MEMORY_BARRIER, and 'pNext' should be set to nullptr.
+The only other fields in the structure are the source and destination access masks specified in 'srcAccessMask' and 'dstAccessMask', respectively.
+The access masks are bitfields containing members of the VkAccessFlagBits.
+The source access mask specifies how the memory was last written, and the destination access mask specifies how the memory will next be read.
+The available access flags are
+```
+1.	VK_ACCESS_INDIRECT_COMMAND_READ_BIT:
+	The memory referenced will be the source of commands in an indirect drawing or dispatch command such as vkCmdDrawIndirect() or vkCmdDispatchIndirect().
+
+2.	VK_ACCESS_INDEX_READ_BIT:
+	The memory referenced will be the source of index data in an indexed drawing command such as VkCmdDrawIndexed() or vkCmdDrawIndexedIndirect().
+
+3.	VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT:
+	The memory referenced will be the source of vertex data fetched by Vulkan's fixed-function vertex assembly stage.
+
+4.	VK_ACCESS_UNIFORM_READ_BIT:
+	The memory referenced is the source of data for a uniform block accessed by a shader.
+
+5.	VK_ACCESS_INPUT_ATTACHMENT_READ_BIT:
+	The memory referenced is used to back an image used as an input attachment.
+
+6. VK_ACCESS_SHADER_READ_BIT:
+	The memory referenced is used to back an image object that is read from using image loads or texture reads in a shader.
+
+7. VK_ACCESS_COLOR_ATTACHMENT_READ_BIT:
+	The memory referenced is used to back an image used as a color attachment where reads are performed, perhaps because blending is enabled.
+	Note that this is not the same as an input attachment, where data is read explicitly by the fragment shader.
+
+8. VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT:
+	The memory referenced is used to back an image used as a color attachment that will be written to.
+
+9. VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT:
+	The memory referenced is used to back an image used as a depth or stencil attachment that will be read from because the relevant test is enabled.
+
+10.	VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT:
+	The memory referenced is used to back an image used as a depth or stencil attachment that will be written to because the relevant write mask is enabled.
+
+11.	VK_ACCESS_TRANSFER_READ_BIT:
+	The memory referenced is used as the source of dta in a transfer operation such as vkCmdCopyImage(), vkCmdCopyBuffer(), or vkCmdCopyBufferToImage().
+
+12.	VK_ACCESS_TRANSFER_WRITE_BIT:
+	The memory referenced is used as the destination of a transfer operation.
+
+13.	VK_ACCESS_HOST_READ_BIT:
+	The memory referenced is mapped and will be read from by the host.
+
+14.	VK_ACCESS_HOST_WRITE_BIT:
+	The memory referenced is mapped and will be written to by the host.
+
+15.	VK_ACCESS_MEMORY_READ_BIT:
+	All other memory reads not explicitly covered by the preceding cases should specify this bit.
+
+16.	VK_ACCESS_MEMORY_WRITE_BIT:
+	All other memory writes not explicitly covered by the preceding cases should specify this bit.
+```
+
+Memory barriers provide two important pieces of functionality.
+First, they help avoid hazards, and second, they help ensure data consistency.
+
+A 'hazard' occurs when read and write operations are reordered relative to the order in which the programmer expects them to execute.
+They can be very hard to diagnose because they are often platform- or timing-dependent.
+There are three types of hazards:
+```
+1.	A 'read-after-write', or RaW, hazard occurs 
+		when the programmer expects to read from a piece of memory that has recently been written to and that those reads will see the results of the writes.
+	If the read is rescheduled and ends up executing before the write is complete, the read will see old data.
+2. A 'write-after-read, or WaR, hazard occurs 
+		when a programmer expects to overwrite a piece of memory that had previously been read by another part of the program.
+	If the write operation ends up being scheduled before the read operation, then the read operation will see the new data, not the older data it was expecting.
+3. A 'write-after-write', or WaW, hazard occurs
+		when a programmer expects to overwrite the same location in memory multiple times and that only the results of the last write will be visible to subsequent readers.
+	If the writes are rescheduled with respect to one another, then only the result of the write that happened to execute last will be visible to readers.
+
+¡ÚSimply, the name of hazards are the situations that we've not originally expected. 
+	For example, We wanted to write after read but scheduling is messed up, then RaW hazard occurs.
+```
+
+There is no such thing as a read-after-read hazard because no data is modified.
+
+In the memory barrier, the source isn't necessariy a producer of data but the first operation that is protected by that barrier.
+For avoiding RaW hazards, the source is actually a read operation.
+
+For example, to ensure that all texture fetches are complete before overwriting an image with a copy operation,
+	we need to specify VK_ACCESS_SHADER_READ_BIT in the 'srcAccessMask' field and VK_ACCESS_TRANSFER_WRITE_BIT in the 'dstAccessMask' field.
+This tells Vulkan that the first stage is reading from an image in a shader and that the second stage may overwrite that image,
+	so we should not reorder the copy into the image before any shaders that may have read from it.
+			(texture fetching in shader, writing an image in transfer) (?????????????)
+
+Note that there is some overlap between the bits in VkAccessFlagBits and those in VkPipelineStageFlagBits.
+The VkAccessFlagBits flags specify 'what' opeartion is being performed, and the VkPipelineStageFlags Bits describe 'where' in the pipeline the action is performed.
+
+The second piece of functionailty provided by the memory barrier is to ensure consistency of the views of data from different parts of the pipeline.
+For example, if an application contains a shader that 
+	writes to a buffer from a shader and then needs to read that data back from the buffer by mapping the underlying memory object,
+	it should specify VK_ACCESS_SHADER_WRITE_BIT in 'srcAccessmask' and VK_ACCESS_HOST_READ_BIT in 'dstAccessMask'.
+If there are caches in the device that may buffer writes performed by shaders, 
+	those caches may need to be flushed in order for the host to see the results of the write operations.
+
+4. Buffer Memory Barriers
+
+Buffer memory barriers provide finer-grained control of the memory used to back buffer objects.
+The number of buffer memory barriers executed by a call to vkCmdPipelineBarrier() is specified in the 'bufferMemoryBarrierCount' parameter, 
+	and the 'pBufferMemoryBarriers' field is a pointer to an array of this many VkBufferMemoryBarrier structures, each defining a buffer memory barrier.
+The definition of VkBufferMemoryBarrier is
+```
+typedef struct VkBufferMemoryBarrier
+{
+	VkStructureType		sType;
+	const void*				pNext;
+	VkAccessFlags		srcAccessMask;
+	VkAccessFlags		dstAccessMask;
+	uint32_t					srcQueueFamilyIndex;
+	uint32_t					dstQueueFamilyIndex;
+	VkBuffer					buffer;
+	VkDeviceSize			offset;
+	VkDeviceSize			size;
+} VkBufferMemoryBarrier;
+```
+
+The 'sType' field of each VkBuffermemoryBarrier structure should be set to VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER.
+The 'pNext' should be set to nullptr.
+The 'srcAccessMask' and 'dstAccessMask' fields have the same meanings as they do in the VkMemoryBarrier structure.
+Obviously, some of the flags that refer specifically to images, such as color or depth attachments, have little meaning when dealing with buffer memory.
+
+When ownership of the buffer is being transferred from one queue to another and those queues are in different families, 
+	the family indices of the source and destination queues must be supplied in 'srcQueueFamilyIndex' and 'dstQueueFamilyIndex', respectively.
+If there is no trasfer of ownership, then 'srcQueueFamilyIndex' and 'dstQueueFamilyIndex' can both to set to VK_QUEUE_FAMILY_IGNORED.
+In this case, the sole ownership is assumed to be the queue family for which the command buffer is being built.
+
+The buffer the access to which is being controlled by the barrier is specified in 'buffer'.
+To synchronize access to a range of a buffer, use the 'offset' and 'size' fields of the structure to specify that range, in bytes.
+To control access to the whole buffer, simply set 'offset' to zero and 'size' to VK_WHOLE_SIZE.
+
+If the buffer will be accessed by work executing on more than one queue, and those queues are of different families, 
+	additional action must be taken by your application.
+Because a single device exposing multiple queue families may actaully be made up of multiple physical components,
+	and because those components may have their own caches, scheduling architecture, memory controllers, and so on,
+	Vulkan needs to know when a resource is moved from queue to queue.
+If this is the case, specify the queue family index of the source queue in 'srcQueueFamilyIndex' and the family of the destination queue in 'dstQueueFamilyIndex'.
+
+Similarly to image memory barriers, 
+	if the resource is not being transferred between queues belonging to different families, 
+	'srcQueueFamilyIndex' and 'dstQueueFamilyIndex' should be set to VK_QUEUE_FAMILY_IGNORED.
+
+5. Image Memory Barriers
+
+Just as with buffers, special attention should be paid to images, and image memory barriers are used to control access to images.
+The number of image memory barriers to be performed by the call to vkCmdPipelineBarrier() is specified in the 'imageMemoryBarrierCount' parameter,
+	and 'pImageMemoryBarriers' is a pointer to an array of this many VkImageMemoryBarrier structures, each describing a single barrier.
+The definition of which is 
+```
+typedef struct VkImageMemoryBarrier
+{
+	VkStructureType							sType;
+	const void*									pNext;
+	VkAccessFlags							srcAccessMask;
+	VkAccessFlags							dstAccessMask;
+	VkImageLayout							oldLayout;
+	VkImageLayout							newLayout;
+	uint32_t										srcQueueFamilyIndex;
+	uint32_t										dstQueueFamilyIndex;
+	VkImage										image;
+	VkImageSubresourceRange		subresourceRange;
+} VkImageMemoryBarrier;
+```
+
+The 'sType' field of each VkImageMemoryBarrier structure should be set to VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER.
+The 'pNext' should be set to nullptr.
+Just as with the other memory barriers, the 'srcAccessMask' and 'dstAccessMask' fields specify the source and destination access type.
+Again, only some of the access types will apply to images.
+Also, when you are controlling access across queues,
+	the 'srcQueueFamilyIndex' and 'dstQueueFamilyIndex' fields should be set to the family indices of the queues where the source and destination work will take place.
+
+The 'oldLayout' and 'newLayout' fields specify the layouts to be used for the image before and after the barrier.
+These are the same fields that can be used when creating the image.
+The image that the barrier is to affect is specified in 'image',
+	and the parts of the image to be affected by the barrier are specified in 'subresourceRange', which is an instance of the VkImageSubresourceRange structure,
+	the definition of which is
+```
+typedef struct VkImageSubresourceRange
+{
+	VkImageAspectFlags		aspectMask;
+	uint32_t							baseMipLevel;
+	uint32_t							levelCount;
+	uint32_t							baseArrayLayer;
+	uint32_t							layerCount;
+} VkImageSubresourceRange;
+```
+
+The image aspect is the part of the image that is to be included in the barrier. 
+Most image formats and types have only a single aspect. 
+A common exception is a depth-stencil image, which may have a separate aspect for each of the depth and stencil components of the image. 
+It is possible, using the aspect flags, to discard stencil data while keeping depth data for later sampling, for example.
+
+For images with mipmaps, a subset of the mipmaps can be included in the barrier 
+	by specifying the lowest-numbered (highest-resolution) mipmap level in the 'baseMipLevel' field and the number of levels in the 'levelCount' field. 
+If the image doesn¡¯t have a full mipmap chain, 'baseMipLevel' should be set to 0, and levelCount should be set to 1.
+
+Likewise, for array images, a subset of the image layers can be included in the barrier by setting 'baseArrayLayer' to the index of the first layer 
+	and 'layerCount' to the number of layers to include. 
+Again, even if the image is not an array image, you should set 'baseArrayLayer' to 0 and 'layerCount' to 1. 
+In short, treat all images as though they have mipmaps (even if it¡¯s only one level) and all images as though they are arrays (even if they have only one layer).
+
+Listing 4.1 shows an example of how to perform an image memory barrier.
+
+```
+
+	const VkImageMemoryBarrier imageMemoryBarriers =
+	{
+		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,		// sType
+		nullptr,																						// pNext
+		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,			// srcAccessMask
+		VK_ACCESS_SHADER_READ_BIT,										// dstAccessMask
+		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,	// oldLayout
+		VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,	// newLayout
+		VK_QUEUE_FAMILY_IGNORED,											// srcQueueFamilyIndex
+		VK_QUEUE_FAMILY_IGNORED,											// dstQueueFamilyIndex
+		image,																						// image
+		{																								// subresourceRange
+			VK_IMAGE_ASPECT_COLOR_BIT,									// aspectMask
+			0,																							// baseMipLevel
+			VK_REMAINING_MIP_LEVELS,										// levelCount
+			0,																							// baseArrayLeyer
+			VK_REMAINING_ARRAY_LAYERS									// layerCount
+			// If an application wants to use all mip levels or layers in an image after the baseMipLevel or baseArrayLayer, use VK_REMAINING_MIP_LEVELS&_ARRAY_LAYERS
+		}
+	};
+
+	vkCmdPipelineBarrier(m_currentCommandBuffer,
+		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+		VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+		0,
+		0, nullptr,
+		0, nullptr,
+		1, &imageMemoryBarriers);
+```
+
+The image memory barrier shown in Listing 4.1 takes an image that was previously in the 
+	VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL layout and moves it to the VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL layout. 
+The source of data is the color output from the pipeline, as specified by VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT, 
+	and the destination of the data is sampling by a shader, as specified by VK_ACCESS_SHADER_READ_BIT.
+
+There is no transfer of ownership across queues, 
+	so both 'srcQueueFamilyIndex' and 'dstQueueFamilyIndex' are set to VK_QUEUE_FAMILY_IGNORED. 
+Also, we¡¯re performing the barrier across all mipmap levels and array layers in the image, 
+	so the 'levelCount' and 'layerCount' members of the subresourceRange structure are set to 
+	VK_REMAINING_MIP_LEVELS and VK_REMAINING_ARRAY_LAYERS, respectively.
+
+This barrier takes an image that previously was written to as a color attachment by a graphics pipeline and 
+	moves it into a state in which it can be read from by a shader.
+
+6. Clearing and Filling Buffers
+
+You were introduced to buffer objects in Chapter 2, ¡°Memory and Resources.¡± 
+A buffer is a linear region of data backed by memory. 
+In order for a buffer to be useful, you need to be able to fill it with data. 
+In some cases, simply clearing the whole buffer to a known value is all you need to do. 
+This allows you to, for example, initialize a buffer that you will eventually write into using a shader or some other operation.
+
+To fill a buffer with a fixed value, call vkCmdFillBuffer(), the prototype of which is
+
+```
+void vkCmdFillBuffer(
+	VkCommandBuffer			commandBuffer,
+	VkBuffer							dstBuffer,
+	VkDeviceSize					dstOffset,
+	VkDeviceSize					size,
+	uint32_t							data
+);
+```
+
+The command buffer into which to place the command is specified in commandBuffer. 
+The buffer that will be filled with data is specified in dstBuffer. 
+To fill a section of the buffer with data, specify the starting offset of the fill operation, in bytes, in dstOffset and the size of the region, again in bytes, in size. 
+Both dstOffset and size must be multiples of 4. 
+To fill from dstOffset to the end of the buffer, pass the special value, VK_WHOLE_SIZE, in the size parameter. 
+It follows that to fill an entire buffer, simply set dstOffset to 0 and size to VK_WHOLE_SIZE.
+
+The value that you want to fill the buffer with is passed in data. 
+This is a uint32_t variable that is simply replicated for the region of the fill operation. 
+It is as though the buffer is interpreted as an array of uint32_t, and each element from dstOffset to the end of the region is filled with this value. 
+To clear a buffer with a floating-point value, you can reinterpret the floating-point value as a uint32_t value and pass that to vkCmdFillBuffer(). 
+Below codes demonstrate this.
+
+```
+void MyVulkan::FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize size, const float value)
+{
+	vkCmdFillBuffer(cmdBuffer, dstBuffer, offset, size, *(const uint32_t*)&value);
+}
+```
+
+Sometimes, filling a buffer with a fixed value is not enough, and there is a need to place data more explicitly in a buffer object. 
+When a large amount of data is needed to be transfered into or between buffers, 
+	either mapping the buffer and writing to it with the host or copying data from another (possibly mapped) buffer with vkCmdCopyBuffer() is most appropriate. 
+However, for small updates, such as updating the values of a vector or small data structures, 
+	vkCmdUpdateBuffer() can be used to place data directly into a buffer object.
+
+The prototype for vkCmdUpdateBuffer() is
+```
+void vkCmdUpdateBuffer(
+	VkCommandBuffer			commandBuffer,
+	VkBuffer							dstBuffer,
+	VkDeviceSize					dstOffset,
+	VkDeviceSize					dataSize,
+	const uint32_t*					pData
+);
+```
+
+vkCmdUpdateBuffer() copies data directly from host memory into a buffer object. 
+The data is consumed from host memory as soon as vkCmdUpdateBuffer() is called, 
+	and as such, it¡¯s fine to free the host memory data structure or overwrite its content once vkCmdUpdateBuffer() returns. 
+Be aware, though, that the data is not written into the buffer until vkCmdUpdateBuffer() is executed by the device after the command buffer has been submitted. 
+For this reason, Vulkan must make a copy of the data you¡¯ve supplied and hold it 
+	either in some auxiliary data structure associated with the command buffer or directly inside the command buffer itself.
+(¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú)
+
+Again, the command buffer that will contain the command is passed in 'commandBuffer' and the destination buffer object is passed in 'dstBuffer'. 
+The offset at which the data is to be placed is passed in 'dstOffset', and the size of the data to place into the buffer is passed in 'dataSize'. 
+Both 'dstOffset' and 'dataSize' are in units of bytes, but as with vkCmdFillBuffer(), both must be a multiple of 4. 
+The special value VK_WHOLE_SIZE is not accepted for the size parameter to vkCmdUpdateBuffer() 
+	because it is also used as the size of the host memory region that is the source of the data. 
+The maximum size of data that can be placed in a buffer with vkCmdUpdateBuffer() is 65,536 bytes.
+
+'pData' points to the host memory containing the data that will eventually be placed into the buffer object. 
+Although the type of the variable expected here is a pointer to uint32_t, any data can be in the buffer. 
+Simply typecast a pointer to any memory region readable by the host to const uint32_t*, and pass it to 'pData'. 
+Ensure that the data region is at least size bytes long. 
+For example, it¡¯s reasonable to construct a C++ data structure matching the layout of a uniform or shader storage block and 
+	simply copy its entire content into a buffer that will be used appropriately in a shader.
+
+Again, be cautious when using vkCmdFillBuffer().
+It is intended for short, immediate updates to buffers.
+For example, writing a single value into a uniform buffer is probably much more efficiently achieved with vkCmdFillBuffer()
+	than it is with a bufffer mapping and a call to vkCmdCopyBuffer9).
+
+7. Clearing and Filling Images

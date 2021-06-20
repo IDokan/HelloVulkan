@@ -535,3 +535,366 @@ For example, writing a single value into a uniform buffer is probably much more 
 	than it is with a bufffer mapping and a call to vkCmdCopyBuffer9).
 
 7. Clearing and Filling Images
+
+Just as with buffers, it is possible to copy data directly between images and to fill images with fixed values. 
+Images are larger, more complex, opaque data structures, so the raw offsets and data are not generally visible to an application.
+
+Of course, it¡¯s possible to map the memory that is used for backing an image when 'linear tiling' is used for an image, I do not recommend to do it when the mode is not 'linear tiling'. 
+
+To clear an image to a fixed value, call vnCmdClearColorImage(), the prototype of which is
+
+```
+void vkCmdClearColorImage(
+	VkCommandBuffer								commandBuffer,
+	VkImage												image,
+	VkImageLayout									imageLayout,
+	const VkClearColorValue*					pColor,
+	uint32_t												rangeCount,
+	const VkImageSubresourceRange*	pRanges
+);
+```
+
+The command buffer that will contain the clear command is passed in 'commandBuffer'. 
+The image that is to be cleared is passed in 'image', and the layout that the image is expected to be in when the clear command is executed is passed in 'imageLayout'.
+
+The accepted layouts for imageLayout are VK_IMAGE_LAYOUT_GENERAL and VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL. 
+To clear images that are in different layouts, it is necessary to move them to one of these two layouts using a pipeline barrier before executing the clear command.
+
+The values to clear the image to are specified in an instance of the VkClearColorValue union, the definition of which is
+
+```
+typedef union VkClearColorValue
+{
+	float			float32[4];
+	int32_t		int32[4];
+	uint32_t	uint32[4];
+} VkClearColorValue;
+```
+
+The VkClearColorValue is simply a union of three arrays of four values each. 
+One is for floating-point data, one is for signed integer data, and one is for unsigned integer data. 
+Vulkan will read the appropriate member for the format of the image being cleared. 
+Your application can write into the member that matches the source of data. 
+No data conversion is performed by vkCmdClearColorImage(); it is up to your application to fill the VkClearColorValue union correctly.
+
+Any number of regions of the destination image can be cleared with a single call to vkCmdClearColorImage(), although each will be cleared with the same values. 
+If you need to clear multiple regions of the same image with different colors, you will need to call vkCmdClearColorImage() multiple times. 
+However, you want to clear all regions with the same color, 
+	specify the number of regions in 'rangeCount', and pass a pointer to an array of 'rangeCount' VkImageSubresourceRange structures in 'pRanges'. 
+The definition of VkImageSubresourceRange is
+
+```
+typesef struct VkImageSubresourceRange
+{
+	VkImageAspectFlags		aspectMask;
+	uint32_t							baseMipLevel;
+	uint32_t							levelCount;
+	uint32_t							baseArrayLayer;
+	uint32_t							layerCount;
+} VkImageSubresourceRange;
+```
+
+This structure was first introduced in Chapter 2, ¡°Memory and Resources,¡± when we discussed creation of image view. 
+Here, it is used to define the regions of the image that you want to clear. 
+Because we are clearing a color image, the 'aspectMask' must be set to VK_IMAGE_ASPECT_COLOR_BIT. 
+The 'baseMipLevel' and 'levelCount' fields are used to specify the starting mipmap level and number of levels to clear, respectively, 
+	and if the image is an array image, the 'baseArrayLayer' and 'layerCount' fields are used to specify the starting layer and number of layers to clear. 
+If the image is not an array image, these fields should be set to 0 and 1, respectively.
+
+```
+void vkCmdClearDepthStencilImage(
+	VkCommandBuffer								commandBuffer,
+	VkImage												image,
+	VkImageLayout									imageLayout,
+	const VkClearDepthStencilValue*		pDepthStancil,
+	uint32_t												rangeCount,
+	const VkImageSubresourceRange*	pRanges
+);
+```
+
+Again, the command buffer that will perform the clear operation is specified in 'commandBuffer', the image to clear is specified in 'image', 
+	and the layout that the image is expected to be in at the time of the clear operation is specified in 'imageLayout'. 
+As with vkCmdClearColorImage(), imageLayout should be either VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL. 
+No other layouts are valid for a clear operation.
+
+The values to which to clear the depth-stencil image are passed through an instance of the VkClearDepthStencilValue structure, which contains both the depth and stencil clear values. 
+Its definition is
+```
+typedef struct VkClearDepthStencilValue
+{
+	float			depth;
+	uint32_t	stencil;
+} VkClearDepthStencilValue;
+```
+
+As with vkCmdClearColorImage(), a number of ranges of the image can be cleared in a single call to vkCmdClearDepthStencilImage(). 
+The number of ranges to clear is specified in 'rangeCount', 
+	and the 'pRanges' parameter should point to an array of rangeCount VkImageSubresourceRange structures defining the ranges to be cleared.
+
+Because depth-stencil images may contain both a depth and a stencil aspect, 
+	the 'aspectMask' field of each member of 'pRanges' can contain VK_IMAGE_ASPECT_DEPTH_BIT, VK_IMAGE_ASPECT_STENCIL_BIT, or both. 
+If aspectMask contains VK_IMAGE_ASPECT_DEPTH_BIT, 
+	then the value stored in the 'depth' field of the VkClearDepthStencilValue structure is used to clear the depth aspect of the specified range. 
+Likewise, if aspectMask contains VK_IMAGE_ASPECT_STENCIL_BIT, 
+	then the stencil aspect of the specified range will be cleared using the 'stencil' member of the VkClearDepthStencilValue structure.
+
+Note that it¡¯s generally much more efficient to specify a single region with 
+	both VK_IMAGE_ASPECT_DEPTH_BIT and VK_IMAGE_ASPECT_STENCIL_BIT set than it is to specify two regions each with only one bit set.
+
+8. Copying Image Data
+
+In the previous section, we discussed clearing images to a fixed value passed through a simple structure. 
+In many cases, though, you need to upload texture data into images or copy image data between images. 
+Vulkan supports copying image data from a buffer to an image, between images, and from an image to a buffer.
+
+To copy data from a buffer to one or more regions of an image, call vkCmdCopyBufferToImage(), the prototype of which is
+
+```
+void vkCmdCopyBufferToImage(
+	VkCommandBuffer					commandBuffer,
+	VkBuffer									srcBuffer,
+	VkImage									dstImage,
+	VkImageLayout						dstImageLayout,
+	uint32_t									regionCount,
+	const VkBufferImageCopy*		pRegions
+);
+```
+
+The command buffer that will execute the command is specified in 'commandBuffer', the source buffer object is specified in 'srcBuffer', 
+	and the image into which the data will be copied is specified in 'dstImage'. 
+As with the destination image in clears, 
+	the layout of the destination image for copies is expected to be either VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL and 
+	is specified in the 'dstImageLayout' parameter.
+
+The number of regions to update is given in 'regionCount', and 'pRegions' is a pointer to an array of 'regionCount' VkBufferImageCopy structures, 
+	each definining an area of the image to copy data into. 
+The definition of VkBufferImageCopy is
+
+```
+typedef struct VkBufferImageCopy
+{
+	VkDeviceSize							bufferOffset;
+	uint32_t									bufferRowLength;
+	uint32_t									bufferImageHeight;
+	VkImageSubresourceLayers	imageSubresource;
+	VkOffset3D								imageOffset;
+	VkExtent3D								imageExtent;
+} VkBufferImageCopy;
+```
+
+The 'bufferOffset' field contains the offset of the data in the buffer, in bytes. 
+The data in the buffer is laid out left to right, top to bottom, as shown in Figure 4.1. 
+The 'bufferRowLength' field specifies the number of texels in the source image, and 'bufferImageHeight' specifies the number of rows of data in the image. 
+If 'bufferRowLength' is zero, the image is assumed to be tightly packed in the buffer and therefore equal to imageExtent.width. 
+Likewise, if 'bufferImageHeight' is zero, then the number of rows in the source image is assumed to be equal to the height of the image extent, which is in imageExtent.height.
+
+The subresource into which to copy the image data is specified in an instance of the VkImageSubresourceLayers structure, the definition of which is
+
+```
+typedef struct VkImageSubresourceLayers
+{
+	VkImageAspectFlags	aspectMask;
+	uint32_t						mipLevel;
+	uint32_t						baseArrayLayer;
+	uint32_t						layerCount;
+} VkImageSubresourceLayers;
+```
+
+The 'aspectMask' field of VkImageSubresourceLayers contains the aspect or aspects that are the destination of the image copy. 
+Usually, this will be a single bit from the VkImageAspectFlagBits enumeration. 
+If the target image is a color image, then this should simply be set to VK_IMAGE_ASPECT_COLOR_BIT. 
+If the image is a depth-only image, it should be VK_IMAGE_ASPECT_DEPTH_BIT.
+If the image is a stencil-only image, it should be VK_IMAGE_ASPECT_STENCIL_BIT. 
+If the image is a combined depth-stencil image, then you can copy data into both the depth and stencil aspects simultaneously 
+	by specifying both VK_IMAGE_ASPECT_DEPTH_BIT and VK_IMAGE_ASPECT_STENCIL_BIT.
+
+The target mipmap level is specified in 'mipLevel'. 
+You can copy data into only a single mipmap level with each element in the 'pRegions' array, although you can of course specify multiple elements, each targeting a different level. (????)
+
+If the target image is an array image, then you can specify the starting layer and number of layers for the image copy in 'baseArrayLayer' and 'layerCount', respectively. 
+If the image is not an array image, then these fields should be set to 0 and 1.
+
+Each region can target either an entire mipmap level or a smaller window within each mipmap level. 
+The offset of the window is specified in 'imageOffset', and the size of the window is specified in 'imageExtent'. 
+To overwrite an entire mipmap level, set imageOffset.x and imageOffset.y to 0, and set imageExtent.width and imageExtent.height to the size of the mipmap level. 
+It is up to you to calculate this. 
+Vulkan will not do it for you.
+
+It¡¯s also possible to perform the copy in the opposite direction - to copy data from an image into a buffer. 
+To do this, call vkCmdCopyImageToBuffer(), the prototype of which is
+
+```
+void vkCmdCopyImageToBuffer(
+	VkCommandBuffer					commandBuffer,
+	VkImage									srcImage,
+	VkImageLayout						srcImageLayout,
+	VkBuffer									dstBuffer,
+	uint32_t									regionCount,
+	const VkBufferImageCopy*		pRegions
+);
+```
+
+The command buffer to execute the copy is specified in 'commandBufer', the source image in 'srcImage', and the destination buffer in 'dstBuffer'. 
+As with the other copy commands, the 'srcImageLayout' parameter specifies the layout that the source image is expected to be in. 
+Because the image is now the source of data, the layout should either be VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL.
+
+Again, a number of regions can be copied in a single call to vkCmdCopyImageToBuffer(), each represented by an instance of the VkBufferImageCopy structure. 
+The number of regions to copy is specified in 'regionCount', and 
+	the 'pRegions' parameter contains a pointer to an array of regionCount VkBufferImageCopy structures defining each of these regions. 
+This is the same structure accepted by vkCmdCopyBufferToImage(). 
+However, in this use case, 'bufferOffset', 'bufferRowLength', and 'bufferImageHeight' contain parameters for the destination of the copy, 
+	and 'imageSubresource', 'imageOffset', and 'imageExtent' contain parameters for the source of the copy.
+
+Finally, it¡¯s also possible to copy data between two images. To do this, use the vkCmdCopyImage() command, the prototype of which is
+
+```
+void vkCmdCopyImage(
+	VkCommandBuffer			commandBuffer,
+	VkImage							srcImage,
+	VkImageLayout				srcImageLayout,
+	VkImage							dstImage,
+	VkImageLayout				dstImageLayout,
+	uint32_t							regionCount,
+	const VkImageCopy*		pRegions
+);
+```
+
+The command buffer that will execute the command is passed in 'commandBuffer', the image containing the source data is passed in 'srcImage', 
+	and the image that is the destination for the copy is passed in 'dstImage'. 
+Again, the layout for both images must be passed to the copy command. 
+'srcImageLayout' is the expected layout of the source image at the time of the copy and 
+	should be either VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL (as this is the source of a transfer operation). 
+Similarly, dstImageLayout is the expected layout of the destination image and should be either VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL.
+
+As with the buffer-to-image and image-to-buffer copy commands, vkCmdCopyImage() can copy several regions at a time. 
+The number of regions to copy is specified in 'regionCount', and each is represented by an instance of the VkImageCopy structure contained in an array, 
+	the address of which is passed in 'pRegions'. 
+The definition of VkImageCopy is
+
+```
+typedef struct VkImageCopy
+{
+	VkImageSubresourceLayers	srcSubresource;
+	VkOffset3D								srcOffset;
+	VkImageSubresourceLayers	dstSubresource;
+	VkOffset3D								dstOffset;
+	VkExtent3D								extent;
+} VkImageCopy;
+```
+
+Each instance of VkImageCopy contains the subresource information and offsets for the source and destination windows. 
+vkCmdCopyImage() cannot resize image data, so the extent of the source and destination regions is the same and is contained in the extent field.
+
+'srcSubresource' contains the subresource definition for the source data and has the same meaning 
+	as the 'imageSubresource' field in the VkBufferImageCopy structure passed to vkCmdCopyImageToBuffer(). 
+Likewise, the 'dstSubresource' field contains the subresource definition for the destination region and has the same meaning 
+	as the 'imageSubresource' field in the VkBufferImageCopy structure passed to vkCmdCopyBufferToImage().
+
+The srcOffset and dstOffset fields contain the coordinates of the source and destination windows, respectively.
+
+9. Copying Compressed Image data
+
+As discussed in Chapter 2, ¡°Memory and Resources,¡± Vulkan supports a number of compressed image formats. 
+All compression formats currently defined are block-based formats with fixed block sizes. 
+For many of these formats, the block size is 4 ¡¿ 4 texels. For the ASTC formats, the block size varies by image.
+
+When copying data between buffers and images, only an integral number of blocks may be copied. 
+Therefore, the width and height of each image region, in texels, must be integer multiples of the block size used by the image. 
+Further, the origins of copy regions must also be integer multiples of the block size.
+
+It is also possible to copy data between two compressed images or between a compressed and an uncompressed image using vkCmdCopyImage(). 
+When you do so, the source and destination image formats must have the same compressed block size. 
+That is, if the size of the compressed block is 64 bits, for example, 
+	then both the source and destination formats must be compressed images with 64-bit block sizes, or the uncompressed image format must be a 64-bit per-texel format.
+
+When copying from an uncompressed image to a compressed one, 
+	each source texel is treated as a single raw value containing the same number of bits as a block in the compressed image. 
+This value is written directly into the compressed image as though it were the compressed data. 
+The texel values are not compressed by Vulkan. 
+This allows you to create compressed image data in your application or shaders and then copy it into compressed images for later processing. 
+Vulkan does not compress raw image data for you. 
+Further, for uncompressed to compressed copies, 
+	the 'extent' field of the VkImageCopy structure is in units of texels in the source image but must conform to the block size requirements of the destination image.
+
+When copying from a compressed format to an uncompressed format, the opposite is true. 
+Vulkan does not decompress the image data. 
+Rather, it pulls raw 64-bit or 128-bit compressed block values from the source image and deposits them in the destination image. 
+In this case, the destination image should have the same number of bits per texel as bits per block in the source image. 
+For a compressed to uncompressed copy, 
+	the extent field of the VkImageCopy structure is measured in units of texels in the destination image but must conform to the requiremnts imposed by the block size in the source image.
+
+Copying between two block compressed image formats is allowed, so long as both formats have an equal number of bits per block. 
+However, the value of this is debatable, as image data compressed in one format generally does not decode meaningfully when interpreted as another format. 
+Regardless of its worth, when performing this operation, the regions to be copied are still measured in texels, 
+	but all offsets and extents must be integer multiples of the common block size.
+
+The only exception to the rule that image copies into, out of, and between compressed images are aligned to multiples of the block size 
+	occurs when the source or destination image is not an integer multiple of the block size wide or high, and the region to be copied extends to the edge of the image.
+
+10. Stretching images
+
+Of all the image-related commands covered so far, none supports format conversion or resizing of the copied area. 
+To do this, you need to use the vkCmdBlitImage() command, which can take images of different formats and stretch or shrink the region to be copied as it is written into the target image. 
+The term blit is short for block image transfer and refers to the operation of not only copying image data, but potentially also processing it along the way.
+
+The prototype of vkCmdBlitImage() is
+
+```
+void vkCmdBlitImage(
+	VkCommandBuffer		commandBuffer,
+	VkImage						srcImage,
+	VkImageLayout			srcImageLayout,
+	VkImage						dstImage,
+	VkImageLayout			dstImage,
+	uint32_t						regionCount,
+	const VkImageBlit*		pRegions,
+	VkFilter						filter
+);
+```
+
+The command buffer that will execute the command is passed in 'commandBuffer'. 
+The source and destination images are passed in 'srcImage' and 'dstImage', respectively. 
+Again, as with vkCmdCopyImage(), the expected layouts of the source and destination images are passed in 'srcImageLayout' and 'dstImageLayout'. 
+The layout of the source image must be either VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, 
+	and the layout of the destination image must be either VK_IMAGE_LAYOUT_GENERAL or VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL.
+
+As with the other copy commands, vkCmdBlitImage() can copy any number of regions of the source image into the destination image, and each is represented by a data structure. 
+The number of regions to copy is passed in 'regionCount', and 'pRegion' points to an array of 'regionCount' VkImageBlit structures, each defining one of the regions to copy. 
+The definition of VkImageBlit is
+
+```
+typedef struct VkImageBlit
+{
+	VkImageSubresourceLayers		srcSubresource;
+	VkOffset3D									srcOffsets[2];
+	VkImageSubresourceLayers		dstSubresource;
+	VkOffset3D									dstOffsets[2];
+} VkImageBlit;
+```
+
+The 'srcSubresource' and 'dstSubresource' fields of VkImageBlit define the subresource for the source and destination images. 
+Whereas in VkImageCopy each region was defined by a VkOffset3D structure and shared a VkExtent3D structure, 
+	in VkImageBlit each region is defined by a pair of VkOffset3D structures arranged as arrays of two elements.
+
+The first element of the 'srcOffsets' and 'dstOffsets' arrays defines one corner of the region to be copied, and the second element of these arrays defines the opposite corner of the region. 
+The region defined by 'srcOffsets' in the source image is then copied into the region defined by 'dstOffsets' in the destination image. 
+If either region is ¡°upside down¡± with respect to the other, then the copied region will be flipped vertically. 
+Likewise, if one region is ¡°back to front¡± with respect to the other, then the image will be flipped horizontally. 
+If both of these conditions are met, then the copied region will be rotated 180¡Æ with respect to the original.
+
+If the regions are different sizes in the source and destination rectangles, then the image data will be magnified or minified, accordingly. 
+In this case, the filter mode specified in the 'filter' parameter to vkCmdBlitImage() will be used to filter the data. 
+'filter' must be one of VK_FILTER_NEAREST or VK_FILTER_LINEAR to apply point sampling or linear filtering, respectively.
+
+The format of the source image must be one that supports the VK_FORMAT_FEATURE_BLIT_SRC_BIT feature. 
+In most implementations, this will include almost all image formats. 
+Further, the destination format must be one that supports VK_FORMAT_FEATURE_BLIT_DST_BIT. 
+In general, this is any format that can be rendered to or written to by the device using image stores in shaders. 
+It is unlikely that any Vulkan device supports blitting to a compressed image format.
+
+SUMMARY
+This chapter discussed how to clear images with fixed values and full buffer objects with data. 
+We placed small amounts of data directly into buffer objects using commands embedded inside command buffers and explained 
+	how Vulkan is able to copy image data between buffers and images, between images and buffers, and between pairs of images. 
+Finally, we introduced you to the concept of a blit, which is an operation that allows image data to be scaled and to undergo format conversion as it is copied. 
+These operations provide a foundation for getting large amounts of data into and out of the Vulkan device for further processing.

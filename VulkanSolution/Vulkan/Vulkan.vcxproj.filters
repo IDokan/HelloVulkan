@@ -68,5 +68,8 @@
     <Text Include="Notes\Chp3.QueuesAndCommands.txt">
       <Filter>Notes</Filter>
     </Text>
+    <Text Include="Notes\Chp4.MovingData.txt">
+      <Filter>Notes</Filter>
+    </Text>
   </ItemGroup>
 </Project>

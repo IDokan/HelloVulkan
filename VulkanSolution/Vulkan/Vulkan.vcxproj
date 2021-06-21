@@ -186,6 +186,7 @@
     <Text Include="Notes\Chp2.MemoryAndResources.txt" />
     <Text Include="Notes\Chp3.QueuesAndCommands.txt" />
     <Text Include="Notes\Chp4.MovingData.txt" />
+    <Text Include="Notes\Chp5.Presentation.txt" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

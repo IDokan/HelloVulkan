@@ -37,6 +37,8 @@ namespace MyVulkan
 		VkMemoryPropertyFlags preferredFlags);
 
 	void FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize length, const float value);
+
+	void CreateSwapChain();
 }
 
 void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
@@ -430,4 +432,62 @@ uint32_t MyVulkan::ChooseHeapFromFlags(const VkMemoryRequirements& memoryRequire
 void MyVulkan::FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize size, const float value)
 {
 	vkCmdFillBuffer(cmdBuffer, dstBuffer, offset, size, *(const uint32_t*)&value);
+}
+
+void MyVulkan::CreateSwapChain()
+{
+	// First, we create the swap chain.
+	VkSwapchainCreateInfoKHR swapchainCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,		// sType
+		nullptr,																									// pNext
+		0,																											// flags
+		m_mainSurface,																					// surface
+		2, 																										// minImageCount
+		VK_FORMAT_R8G8B8A8_UNORM,													// imageFormat
+		VK_COLORSPACE_SRGB_NONLINEAR_KHR,								// imageColorSpace
+		{1024, 768},																							// imageExtent
+		1,																											// imageArrayLayers
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,							// imageUsage
+		VK_SHARING_MODE_EXCLUSIVE,													// imageSharingMode
+		0,																											// queueFamilyIndexCount
+		nullptr,																									// pQueueFamilyIndices
+		VK_SURFACE_TRANSFORM_INHERIT_BIT_KHR,							// preTransform
+		VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,								// compositeAlpha
+		VK_PRESENT_MODE_FIFO_KHR,													// presentMode
+		VK_TRUE,																							// clipped
+		m_swapChain																						// oldSwapchain
+	};
+
+	VulkanHelper::VkCheck(
+		vkCreateSwapchainKHR(
+		logicalDevices.front(),
+			&swapchainCreateInfo,
+			&myAllocator,
+			&m_swapChain
+		),
+		"vkCreateSwapchainKHR is failed!");
+
+	// Next, we query the swap chain for the number of images it actaully contains.
+	uint32_t swapchainImageCount = 0;
+	VulkanHelper::VkCheck(
+		vkGetSwapchainImagesKHR(
+			logicalDevices.front(),
+			m_swapChain,
+			&swapchainImageCount,
+			nullptr
+		),
+		"vkGetSwapchainImagesKHR is failed!"
+	);
+	// Now we resize our image array and retrieve the image handles from the swap chain.
+	m_swapChainImages.resize(swapchainImageCount);
+	VulkanHelper::VkCheck(
+		vkGetSwapchainImagesKHR(
+			logicalDevices.front(),
+			m_swapChain,
+			&swapchainImageCount,
+			m_swapChainImages.data()
+		),
+		"vkGetSwapchainImagesKHR is failed!"
+	);
 }

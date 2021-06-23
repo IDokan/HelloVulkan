@@ -1,0 +1,478 @@
+What You'll Learn in This Chapter
+```
+1. What a shader is and how it's used.
+2. The basics of SPIR-V, the Vulkan shading language.
+3. How to construct a shader pipeline and use it to do work.
+```
+
+'Shaders' are small programs that are executed directly on the device. 
+These are the fundamental building blocks of any complex Vulkan program. 
+Shaders are perhaps more important to the operation of your program than the Vulkan API itself. 
+This chapter introduces shaders and shader modules, shows how they are constructed from SPIR-V binaries, 
+	and illustrates how those binaries are generated from GLSL using standard tools. 
+It discusses the construction of pipelines containing those shaders and other information required to run them, 
+	and then shows how to execute the shaders to do work on the device.
+
+Shaders are the fundamental building blocks of work to be executed on the device. 
+Vulkan shaders are represented by SPIR-V, which is a binary intermediate representation of program code. 
+SPIR-V can be generated offline using a compiler, online directly inside your application, or by passing a high-level language to a library at runtime. 
+The sample applications accompanying this book take the first approach: compiling the shaders offline and then loading the resulting SPIR-V binaries from disk.
+
+The original shaders are written in GLSL using the Vulkan profile. 
+This is a modified and enhanced version of the same shading language used with OpenGL. 
+Most of the examples, therefore, discuss Vulkan features in terms of their representation in GLSL. 
+However, it should be clear that Vulkan itself knows nothing of GLSL and doesn¡¯t care where SPIR-V shaders come from.
+
+1. An Overview of GLSL
+Although not officially part of the Vulkan specification, Vulkan shares much of its heritage with OpenGL. 
+In OpenGL, the officially supported high-level language is GLSL - the OpenGL Shading Language. 
+Therefore, during the design of SPIR-V, 
+	much attention was paid to ensuring that at least one high-level language would be suitable for use in the generation of SPIR-V shaders. 
+Minor modifications were made to the GLSL specification for use with Vulkan. 
+Some features were added to enable GLSL shaders to interact cleanly with the Vulkan system, 
+	and legacy features in OpenGL that were not carried forward into Vulkan were removed from the Vulkan profile of GLSL.
+
+The result is a slimline version of GLSL that supports most of the features of Vulkan while enabling a high level of portability between OpenGL and Vulkan. 
+In short, if you stick to the modern features of OpenGL in an OpenGL application, 
+	much of what you write in your shaders will compile directly into SPIR-V using the official reference compiler. 
+Of course, you are free to write your own compilers and tools or to use a third-party compiler to produce SPIR-V modules from any language you choose.
+
+The modifications to GLSL to allow it to be used to produce a SPIR-V shader suitable for use with Vulkan are documented in the GL_KHR_vulkan_glsl extension.
+
+In this section, we provide a brief overview of GLSL. 
+It is assumed that the reader is somewhat familiar with high-level shading languages in general and is capable of researching GLSL in more depth if needed.
+
+Listing 6.1 shows the simplest possible GLSL shader. 
+It is simply an empty function, returning void, that does absolutely nothing. 
+It¡¯s actually a valid shader for any stage in the Vulkan pipeline, although executing it in some stages would result in some undefined behavior.
+
+```
+// Listing 6.1: Simplest Possible GLSL Shader
+#version 450 core
+
+void main(void)
+{
+	// Do nothing!
+}
+```
+
+All GLSL shaders should begin with a #version directive to inform the GLSL compiler which version of GLSL we¡¯re using. 
+This allows the compiler to perform appropriate error checks and to allow certain language constructs that have been introduced over time.
+
+When compiled to SPIR-V for use in Vulkan, a compiler should automatically define VULKAN to the version of the GL_KHR_vulkan_glsl extension 
+	in use such that you can wrap Vulkan-specific constructs or functionality in your GLSL shader in #ifdef VULKAN or #if VULKAN > {version} blocks 
+	in order to allow the same shaders to be used with OpenGL or Vulkan. 
+Throughout this book, when Vulkan-specific features are discussed in the context of GLSL, it is assumed that the code beging written is either exclusively for 
+	Vulkan or is wrapped in the appropriate #ifdef preprocessor conditionals to allow it to be compiled for Vulkan.
+
+GLSL is a C-like language, with its syntax and many of its semantics taken from C or C++. 
+If you are a C programmer, you should be comfortable with constructs such as for and while loops; 
+	flow-control keywords such as break and continue; switch statements; relational operators such as ==, <, and >; the ternary operator a ? b : c; and so on. 
+All of these are available in GLSL shaders.
+
+The fundamental data types in GLSL are signed and unsigned integer and floating-point values, denoted as int, uint, and float, respectively. 
+Double-precision floating-point values are also supported using the double data type. 
+Inside GLSL, they have no defined bit width, much as in C. GLSL has no stdint analog, so defining a specific bit width for variables is not supported, 
+	although the GLSL and SPIR-V specifications do provide some minimum guarantees for the range and precision of numeric representations used by Vulkan. 
+However, bit width and layouts are defined for variables sourced from and written to memory. 
+Integers are stored in memory in twos-component form, and floating-point variables follow IEEE conventions wherever possible, 
+	aside from minor differences in precision requirements, handling of denormals and not-a-number (NaN) values, and so on.
+
+In addition to the basic scalar integer and floating-point data types, 
+	GLSL represents short vectors of up to four components and small matrices of up to 4 ¡¿ 4 elements as first-class citizens in the language. 
+Vectors and matrices of the fundamental data types (signed and unsigned integers and floating-point scalars) can be declared. 
+The vec2, vec3, and vec4 types, for example, are vectors of two, three, and four floating-point values, respectively. 
+Integer vectors are notated using the i or u prefixes for signed and unsigned integers, respectively. 
+Thus, 'ivec4' is a vector of four signed integers, and 'uvec4' is a vector of four unsigned integers. 
+The d prefix is used to denote double-precision floating-point. 
+Thus, 'dvec4' is a vector of four double-precision floating-point values.
+
+Matrices are written using the form 'matN' or 'matNxM', representing N ¡¿ N square matrices and N ¡¿ M rectangular matrices, respectively. 
+The d prefix may also be used with matrix data types to form double-precision matrices. 
+Therefore, dmat4 is a 4 ¡¿ 4 matrix of double-precision floating-point values. 
+Matrices of integers, however, are not supported. 
+Matrices are considered to be column-primary and may be treated as arrays of vectors. 
+Thus, writing m[3] where m is of type mat4 yields a four-element vector of floating-point values (a vec4) representing the last column of m.
+
+The Boolean type is also a first-class citizen in GLSL and can be formed into vectors (but not matrices), just like floating-point and integer variables. 
+Boolean variables are written using the bool type. 
+Relational operators comparing vectors produce vectors of Booleans, with each element representing one of the comparison results. 
+The special built-in functions any() and all() are used to produce a single Boolean expressing whether any element of the source vector is true and whether all of the elements of the source vector are true, respectively.
+
+Data produced by the system is passed into GLSL shaders through built-in variables. 
+Examples are variables such as gl_FragCoord, gl_VertexIndex, and so on, 
+	which will each be introduced as we reach the relevant parts of Vulkan throughout this book. 
+Built-in variables often have specific semantics, and reading and writing them can change how a shader behaves.
+
+User-specified data is normally passed into shaders through memory. 
+Variables can be bound together into blocks, which can then be bound to device-accessible resources backed by memory that your application can write into. 
+This allows you to pass large amounts of data to shaders. 
+For smaller but more frequently updated data, special variables called 'push constants' are available and will be covered later in the book.
+
+GLSL provides a very large number of built-in functions. 
+In contrast to C, however, GLSL has no header files, and it is not necessary to #include anything. 
+Rather, the GLSL equivalent to a standard library is automatically provided by the compiler. 
+It includes a large suite of math functions, functions for accessing textures, 
+	and special functions such as flow-control functions that control the execution of the shader on the device.
+
+2. An Overview of SPIR-V
+
+SPIR-V shaders are embedded in modules. 
+Each module can contain one or many shaders. 
+Each shader has an entry point that has a name and a shader type, which is used to define which shading stage the shader runs in. 
+The entry point is where the shader begins execution when it is run. 
+A SPIR-V module is passed to Vulkan along with creation information, and Vulkan returns an object representing that module. 
+The module can then be used to construct a pipeline, which is a fully compiled version of a single shader along with information required to run it on the device.
+
+3. Representation of SPIR-V
+
+SPIR-V is the only officially supported shading language for Vulkan. 
+It is accepted at the API-level and is ultimately used to construct pipelines, which are objects that configure a Vulkan device to do work for your application.
+
+SPIR-V was designed to be easy for tools and drivers to consume. 
+This improves portability by reducing the variability between implementations. 
+The native representation of a SPIR-V module is a stream of 32-bit words stored in memory. 
+Unless you are a tool writer or plan to generate SPIR-V yourself, it is unlikely that you will deal with the binary encoding of SPIR-V directly. 
+Rather, you will either look at a textual representation of SPIR-V or generate SPIR-V using a tool such as glslangvalidator, the official Khronos GLSL compiler.
+
+Saving the shader in Listing 6.1 as a text file with the '.comp' extension tells glslangvalidator that the shader is to be compiled as a compute shader. 
+We can then compile this shader using glslangvalidator with the command line
+```
+glsllangvalidator simple.comp -o simple.spv
+```
+
+This produces a SPIR-V binary named simple.spv. We can disassemble the binary using the SPIR-V disassembler, spirv-dis, which outputs a human-readable disassembly of the generated SPIR-V binary. This is shown in Listing 6.2.
+
+```
+; SPIR-V
+
+; Version: 1.0
+
+; Generator: Khronos Glslang Reference Front End; 1
+
+; Bound: 6
+
+; Schema: 0
+
+				OpCapability Shader
+
+			%1 = OpExtInstImport "GLSL.std.450"
+
+				OpMemoryModel Logical GLSL450
+
+				OpEntryPoint GLCompute %4 "main"
+				
+				OpExecutionMode %4 LocalSize 1 1 1
+				
+				OpSource GLSL 450
+				
+				OpName %4 "main"
+
+			%2 = OpTypeVoid
+			
+			%3 = OpTypeFunction %2
+			
+			%4 = OpFunction %2 None %3
+			
+			%5 = OpLabel
+
+				OpReturn
+				
+				OpFunctionEnd
+```
+
+You can see that the text form of SPIR-V looks like a strange dialect of assembly language. 
+We can step through this disassembly and see how it relates to the original input. 
+Each line of the output assembly represents a single SPIR-V instruction, possibly made up of multiple tokens.
+
+The first instruction in the stream, [OpCapability Shader], requests that the Shader capability be turned on. 
+SPIR-V functionality is roughly divided into related groups of instructions and features. 
+Before your shader can use any of these features, it must declare that it will be using the capability of which the feature is part. 
+The shader in Listing 6.2 is a graphics shader and therefore uses the Shader capability. 
+This is the most fundamental capability. 
+Without this, we cannot compile graphics shaders. 
+As we introduce more SPIR-V and Vulkan functionality, we will introduce the various capabilities that each feature depends on.
+
+Next, we see [%1 = OpExtInstImport "GLSL.std.450"]. 
+This is essentially importing an additional set of instructions corresponding to the functionality included in GLSL version 450, 
+	which is what the original shader was written in. 
+Notice that this instruction is preceeded by '%1 ='. 
+This 'names' the result of the instruction by assigning it an ID. 
+The result of 'OpExtInstImport' is effectively a library. 
+When we want to call functions in this library, we do so using the 'OpExtInst' instruction, 
+	which takes both a library (the result of the OpExtInstImport instruction) and an instruction index. 
+This allows the SPIR-V instruction set to be arbitrarily extended.
+
+Next, we see some additional declarations. 
+'OpMemoryModel' specifies the working memory model for this module, which in this case is the logical memory model corresponding to GLSL version 450. 
+This means that all memory access is performed through resources rather than a physical memory model, which accesses memory through pointers.
+
+Next is the declaration of an entry point in the module. 
+The [OpEntryPoint GLCompute %4 "main"] instruction means that there is an available entry point corresponding to an OpenGL compute shader, 
+	with ID 4 exported with the function name main. 
+This name is used to reference the entry point when we hand the resulting shader module back to Vulkan.
+
+We use this ID in the subsequent instruction, [OpExecutionMode %4 LocalSize 1 1 1], which defines the execution group size of this shader to be 1 ¡¿ 1 ¡¿ 1 work item. 
+This is implicit in GLSL if the local size 'layout' qualifier is not present.
+
+The next two instructions are simply informational. 
+[OpSource GLSL 450] indicates that the module was compiled from GLSL version 450, and [OpName 4 "main"] provides a name for the token with ID 4.
+
+Now we see the real meat of the function. 
+First, [%2 = OpTypeVoid] declares that we want to use ID 2 as the type void. 
+Everything in SPIR-V has an ID, even type definitions. Large, aggregate types can be built up by referencing sequentially smaller, simpler types. 
+However, we need to start from somewhere, and assigning a type to void is where we¡¯re starting.
+
+[%3 = OpTypeFunction %2] means that we¡¯re defining ID 3 as a function type taking void (previously declared as ID 2) and taking no parameters. 
+We use this in the following line, [%4 = OpFunction %2 None %3]. 
+This means that we¡¯re declaring ID 4 (which we previously named "main") 
+	to be an instance of the function 3 (declared in the line above), returning void (as ID 2), and having no particular decarations. 
+This is indicated by None in the instructions and can be used for things like inlining, whether the variable is constant (its constness), and so on. (??????)
+
+Finally, we see the declaration of a label (which is unused and only a side effect of the way the compiler operates), 
+	the implicit return statement, 
+	and eventually the end of the function. 
+This is the end of our SPIR-V module.
+
+The complete binary dump of the shader is 192 bytes long. 
+SPIR-V is quite verbose, as 192 bytes is quite a bit longer than the original shader. 
+However, SPIR-V makes explicit some of the things that are implicit in the original shading language. 
+For example, declaring a memory model is not necessary in GLSL because it supports only a logical memory model. 
+Further, there is some redundancy in the SPIR-V module as compiled here; we don¡¯t care about the name of the main function, 
+	the label with ID 5 is never actually used, and the shader imports the GLSL.std.450 library but never actually uses it. 
+It is possible to strip such unneeded instructions from a module. 
+Even after this, because SPIR-V is relatively sparsely encoded, the resulting binaries are fairly easy to compress with 
+	even a generic compressor and probably significantly more compressible with a specialized compression library.
+
+All SPIR-V code is written in SSA (single static assignment) form, 
+	which means that every virtual register (the tokens written as %n in the listing above) are written exactly once. 
+Almost every instruction that does work produces a result identifier. 
+As we progress to more complex shaders, you will see that machine-generated SPIR-V is somewhat unwieldy, 
+	and because of its verbosity and enforced SSA form, it is quite difficult to write by hand. 
+It is strongly recommended that you use a compiler to generate SPIR-V offline or online by using the compiler as a library that your application can link to.
+
+If you do plan to generate or interpret SPIR-V modules yourself, you can use the defined binary encoder to build tools to parse or create them. 
+However, they have a well-defined binary storage format that is explained later in this chapter.
+
+All SPIR-V modules begin with a magic number that can be used to weakly validate that the binary blob is, in fact, a SPIR-V module. 
+This magic number is 0x07230203 when viewed as a native unsigned integer. 
+This number can also be used to deduce the endianness of the module. 
+Because each SPIR-V token is a 32-bit word, if a SPIR-V module is passed by disk or network to a host of a different endianness, 
+	the bytes within the word are swapped, and its value is changed. 
+For example, if a SPIR-V module stored in little-endian format is loaded by a big-endian host, the magic number will be read as 0x03022307, 
+	so the host knows to swap the byte order of the words in the module.
+
+Following the magic number are several more words that describe properties of the module. 
+First is the version number of SPIR-V used in the module. 
+This is encoded using the bytes of the 32-bit word where bits 16 through 23 contain the major version and bits 8 through 15 contain the minor version. 
+SPIR-V 1.0 therefore uses the encoding 0x00010000. 
+The remaining bits in the version number are reserved. 
+Next is a token containing the version of the tool that generated the SPIR-V module. This value is tool-dependent.
+
+Next is the maximum number of IDs used in the module. 
+All variables, functions, and other components of the SPIR-V module are assigned an ID less than this number, 
+	so including it up front allows tools consuming SPIR-V to allocate arrays of data structures to hold them in rather than allocating those structures on the fly. 
+The last word in the header is reserved and should be set to zero. 
+Following this is the stream of instructions.
+
+4. Handing SPIR-V to Vulkan
+
+Vulkan doesn¡¯t care too much where the SPIR-V shaders and modules come from. 
+Typically, they will be compiled offline as part of building your application, compiled using an online compiler, or generated directly in your application. 
+Once you have a SPIR-V module, you need to hand it to Vulkan so that a 'shader module' object can be created from it. 
+To do this, call vkCreateShaderModule(), the prototype of which is
+```
+VkResult vkCreateShaderModule(
+	VkDevice												device,
+	const VkShaderModuleCreateInfo*		pCreateInfo,
+	const VkAllocationCallbacks*				pAllocator,
+	VkShaderModule*								pShaderModule
+);
+```
+
+As with all Vulkan object creation functions, 
+	vkCreateShaderModule() takes a device handle as input along with a pointer to a structure containing a descrtiption of the object being created. 
+In this case, this is a VkShaderModuleCreateInfo structure, the definition of which is
+```
+typedef struct VkShaderModuleCreateInfo
+{
+	VkStructureType							sType;
+	const void*									pNext;
+	VkShaderModuleCreateFlags		flags;
+	size_t											codeSize;
+	const uint32_t*								pCode;
+} VkShaderModuleCreateInfo;
+```
+
+The 'sType' field of VkShaderModuleCreateInfo should be set to VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved for future use and should be set to zero. 
+The 'codeSize' field contains the size of the SPIR-V module in bytes, the code for which is passed in 'pCode'.
+
+If the SPIR-V code is valid and understood by Vulkan, then vkCreateShaderModule() will return VK_SUCCESS and 
+	place a handle to a new shader module in the variable pointed to by 'pShaderModule'. 
+You can then use the shader module to create pipelines, which are the final form of the shader used to do work on the device.
+
+Once you are done with a shader module, you should destroy it to free its resources. 
+This is performed by calling vkDestroyShaderModule(), the prototype of which is
+```
+void vkDestroyShaderModule(
+	VkDevice										device,
+	VkShaderModule							shaderModule,
+	const VkAllocationCallbacks*		pAllocator
+);
+```
+
+A handle to the device that owns the shader module should be passed in 'device', and the shader module to be destroyed should be passed in 'shaderModule'. 
+Access to the shader module must be externally synchronized. 
+No other access to the shader module needs to be externally synchronized. 
+In particular, it is possible to use the same shader module to create multiple pipelines in parallel, as discussed in the next section. 
+Your application only needs to ensure that the shader module is not destroyed 
+	while there are Vulkan commands executing on other threads that might access the same module.
+
+After the module has been destroyed, its handle is immediately invalidated. 
+However, pipelines created using the module remain valid until they are destroyed. 
+If a host memory allocator was used when the shader module was created, 
+	then a pointer to a compatible allocator should be passed in 'pAllocator'; otherwise, pAllocator should be set to nullptr.
+
+5. Pipelines
+
+As you read in the previous sections, Vulkan uses shader modules to represent collections of shaders. 
+Shader modules are created by handing the module code to vkCreateShaderModule(), 
+	but before they can be used to do useful work on the device, you need to create a pipeline. 
+There are two types of pipeline in Vulkan: compute and graphics. 
+The graphics pipeline is rather complex and contains a lot of state unrelated to shaders. 
+However, a compute pipeline is conceptually much simpler and contains essentially nothing but the shader code itself.
+
+6. Compute Pipelines
+
+Before we discuss creating a compute pipeline, we should cover the basics of compute shaders in general. 
+The shader and its execution are the core of Vulkan. 
+Vulkan also provides access to various fixed blocks of functionality for performing things such as copying data around and processing pixel data. 
+However, the shader will form the core of any nontrivial application.
+
+The compute shader provides raw access to the compute capabilities of the Vulkan device. 
+The device can be seen as a collection of wide vector processing units that operate on related pieces of data. 
+A compute shader is written as though it were a serial, single track of execution. 
+However, there are hints that many such tracks of execution may run together. 
+This is, in fact, how most Vulkan devices are constructed. 
+Each track of execution is known as an 'invocation'.
+
+When a compute shader is executed, many invocations are started at once. 
+The invocations are grouped into local work groups of fixed size, 
+	and then one or more such groups are launched together in what is sometimes known as a 'global work group'. 
+Logically, both the local and global work groups are three-dimensional. 
+However, setting the size of any one of the three dimensions to one reduces the dimensionality of the group.
+
+The size of the local work group is set in the compute shader. 
+In GLSL, this is done using a layout qualifier, 
+	which is translated to the 'LocalSize' decoration on the 'OpExecutionMode' declaration in the SPIR-V shader passed to Vulkan. 
+Listing 6.3 shows the size declaration applied to a GLSL shader, and Listing 6.4 shows the resulting SPIR-V disassembly, truncated for clarity.
+
+```
+// Listing 6.3: Local Size Declaration in a Compute Shader (GLSL)
+#version 450 core
+
+layout (local_size_x = 4, local_size_y = 5, local_size_z 6) in;
+
+void main(void)
+{
+	// Do nothing.
+}
+```
+
+```
+// Listing 6.4: Local Size Declaration in a Compute Shader (SPIR-V)
+				OnCapability Shader
+
+			%1 = OpExtInstImport "GLSL.std.450"
+
+				OpMemoryModel Logical GLSL450
+				
+				OpEntryPoint GLCompute %4 "main"
+				
+				OpExecutionMode %4 LocalSize 4 5 6
+				
+				OpSource GLSL 450
+```
+
+As you can see, the OpExecutionMode instruction in Listing 6.4 sets the local size of the shader to {4, 5, 6} as specified in Listing 6.3.
+
+The maximum local work group size for a compute shader is generally fairly small and 
+	is required only to be at least 128 invocations in the x and y dimensions and 64 invocations in the z dimension. 
+Further, the total ¡°volume¡± of the work group (the product of the limit in x, y, and z directions) is subject to a further limit, 
+	which is required only to be at least 128 invocations. 
+Although many implementations support higher limits, 
+	you should always query those limits if you want to exceed the required minimums.
+
+The maximum size of a work group can be determined from the maxComputeWorkGroupSize field of 
+	the VkPhysicalDeviceLimits structure returned from a call to vkGetPhysicalDeviceProperties(), as explained in Chapter 1, ¡°Overview of Vulkan.¡± 
+Further, the maximum total number of invocations in the local work group is contained in the maxComputeWorkGroupInvocations field of the same structure. 
+An implementation will likely reject a SPIR-V shader that exceeds any of those limits, although behavior can technically be undefined in this case.
+
+7. Creating Pipelines
+
+To create one or more compute pipelines, call vkCreateComputePipelines(), the prototype of which is
+
+```
+VkResult vkCreateComputePipelines(
+	VkDevice													device,
+	VkPipelineCache										pipelineCache,
+	uint32_t													createInfoCount,
+	const VkComputePipelineCreateInfo*		pCreateInfos,
+	const VkAllocationCallbacks*					pAllocator,
+	VkPipeline*												pPipelines
+);
+```
+
+The 'device' parameter to vkCreateComputePipelines() is the device with which the pipelines will be used and is responsible for allocating the pipeline objects. 
+The 'pipelineCache' is a handle to an object that can be used to accelerate the creation of pipeline objects and is covered later in this chapter. 
+The parameters for the creation of each new pipeline is represented by an instance of the VkComputePipelineCreateInfo structure. 
+The number of structures (and therefore the number of pipelines to create) is passed in 'createInfoCount', 
+	and the address of an array of these structures is passed in 'pCreateInfos'. 
+The definition of VkComputePipelineCreateInfo is
+```
+typedef struct VkComputePipelineCreateInfo
+{
+	VkStructureType									sType;
+	const void*											pNext;
+	VkPipelineCreateFlags						flags;
+	VkPipelineShaderStageCreateInfo		stage;
+	VkPipelinelayout									layout;
+	VkPipeline											basePipelineHandle;
+	int32_t													basePipelineIndex;
+} VkComputePipelineCreateInfo;
+```
+
+The 'sType' field of VkComputePipelineCreateInfo should be set to VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved for future use, and in the current version of Vulkan, it should be set to zero. 
+The 'stage' field is an embedded structure containing information about the shader itself and is an instance of the VkPipelineShaderStageCreateInfo structure, 
+	the definition of which is
+```
+typedef struct VkPipelineShaderStageCreateInfo
+{
+	VkStructureType										sType;
+	const void*												pNext;
+	VkPipelineShaderStageCreateFlags		flags;
+	VkShaderStageFlagBits							stage;
+	VkShaderModule										module;
+	const char*												pName;
+	const VkSpecializationInfo*						pSpecializationInfo;
+} VkPipelineShaderStageCreateInfo;
+```
+
+The 'sType' for VkPipelineShaderStageCreateInfo is VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved in the current version of Vulkan and should be set to zero.
+
+The VkPipelineShaderStageCreateInfo structure is used for all stages of pipeline creation. 
+Although graphics pipelines have multiple stages (which you¡¯ll learn about in Chapter 7, ¡°Graphics Pipelines¡±), 
+	compute pipelines have only a single stage, and therefore 'stage' should be set to VK_SHADER_STAGE_COMPUTE_BIT.
+
+'module' is the handle to the shader module you created earlier; it contains the shader code for the compute pipeline you want to create. 
+Because a single shader module can contain multiple entry points and ultimately many shaders, 
+	the entry point that represents this particular pipeline is specified in the 'pName' field of VkPipelineShaderStageCreateInfo. 
+This is one of the few instances where human-readable strings are used in Vulkan.
+
+8. 

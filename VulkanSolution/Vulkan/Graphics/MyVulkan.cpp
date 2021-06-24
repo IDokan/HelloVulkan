@@ -41,6 +41,8 @@ namespace MyVulkan
 	void CreateSwapChain();
 
 	void TransitionImageLayout();
+
+	void SavingPipelineCacheDataToFile(VkDevice device, VkPipelineCache cache, const char* fileName);
 }
 
 void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
@@ -525,4 +527,54 @@ void MyVulkan::TransitionImageLayout()
 		0, nullptr,
 		1, &barrier
 		);
+}
+
+void MyVulkan::SavingPipelineCacheDataToFile(VkDevice device, VkPipelineCache cache, const char* fileName)
+{
+	size_t cacheDataSize;
+	
+	// Determine the size of the cache data.
+	VulkanHelper::VkCheck(
+		vkGetPipelineCacheData(device, cache, &cacheDataSize, nullptr),
+		"first call to vkGetPipelineCacheData failed!"
+	);
+
+	if (cacheDataSize == 0)
+	{
+		// failed!
+		// Handle to fail needed
+		return;
+	}
+
+	FILE* pOutputFile;
+	void* pData;
+
+	// Allocate a temporary store for the cache data.
+	pData = malloc(cacheDataSize);
+
+	if (pData == nullptr)
+	{
+		return;
+	}
+
+	// Retrieve the actual data from the cache.
+	VulkanHelper::VkCheck(
+		vkGetPipelineCacheData(device, cache, &cacheDataSize, pData),
+		"Second call to vkGetPipelineCacheData is failed!"
+	);
+
+	// Open the file as a binary file and write the data to it.
+	pOutputFile = fopen(fileName, "wb");
+
+	if (pOutputFile == nullptr)
+	{
+		free(pData);
+		return;
+	}
+
+	fwrite(pData, 1, cacheDataSize, pOutputFile);
+
+	fclose(pOutputFile);
+
+	free(pData);
 }

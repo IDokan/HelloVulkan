@@ -475,4 +475,351 @@ Because a single shader module can contain multiple entry points and ultimately 
 	the entry point that represents this particular pipeline is specified in the 'pName' field of VkPipelineShaderStageCreateInfo. 
 This is one of the few instances where human-readable strings are used in Vulkan.
 
-8. 
+8. Specialization Constants
+
+The final field in 'VkPipelineShaderStageCreateInfo' is a pointer to an instance of the VkSpecializationInfo structure. 
+This structure contains the information required to specialize a shader, which is the process of building a shader with some of its constants compiled in.
+
+A typical Vulkan implementation will delay final code generation for pipelines until vkCreateComputePipelines() is called. 
+This allows the values of specialization constants to be considered during the final passes of optimization over the shader. 
+Typical uses and applications of specialization constants include
+
+```
+1. Producing special cases through branching:
+	Including a condition on a Boolean specialization constant will result in the final shader taking only one branch of the if statement. 
+	The nontaken branch will probably be optimized away. If you have two similar versions of a shader that differ in only a couple of places, this is a good way to merge them into one.
+
+2. Special cases through switch statements:
+	Likewise, using an integer specialization constant as the tested variable in a switch statement 
+		will result in only one of the cases ever being taken in that particular pipeline. 
+	Again, most Vulkan implementations will optimize out all the never-taken cases.
+
+3. Unrolling loops:
+	Using an integer specialization constant as the iteration count in a for loop 
+		may result in the Vulkan implementation making better decisions about how to unroll the loop or whether to unroll it at all. 
+	For example, if the loop counter ends up with a value of 1, then the loop goes away and its body becomes straight-line code. 
+	A small loop iteration count might result in the compiler unrolling the loop exactly that number of times. 
+	A larger iteration count may result in the compiler unrolling the loop by a factor of the count and then looping over that unrolled section a smaller number of times.
+
+4. Constant folding:
+	Subexpressions involving specialization constants can be folded just as with any other constant. 
+	In particular, expressions involving multiple specialization constants may fold into a single constant.
+
+5. Operation simplification:
+	Trivial operations such as adding zero or multiplying by one disappear, multiplying by negative one can be absorbed into additions turning them to subtractions, 
+		multiplying by small integers such as two can be turned into additions or even absorbed into other operations, and so on.
+```
+
+In GLSL, a specialization constant is declared as a regular constant that is given an ID in a layout qualifier. 
+Specialization constants in GLSL can be Booleans, integers, floating-point values, or composites such as arrays, structures, vectors, or matrices. 
+When translated to SPIR-V, these become OpSpecConstant tokens. 
+Listing 6.5 shows an example GLSL declaration of some specialization constants, and Listing 6.6 shows the resulting SPIR-V produced by the GLSL compiler.
+```
+// Listing 6.5: Specialization Constants in GLSL
+
+#version 450 core
+
+layout (constant_id = 0) const int numThings = 42;
+
+layout (constant_id = 1) const float thingScale = 4.2f;
+
+layout (constant_id = 2) const bool doThat = false;
+
+void main(void)
+{
+	// Do nothing!
+}
+```
+```
+// Listing 6.6: Specialization Constants in SPIR
+; SPIR-V
+; Version: 1.0
+; Generator: Khronos Glslang Reference Front End; 10
+; Bound: 12
+; Schema: 0
+			OpCapability Shader
+		%1 = OpExtInstImport "GLSL.std.450"
+			OpMemoryModel Logical GLSL450
+			OpEntryPoint GLCompute %main "main"
+			OpExecutionMode %main LocalSize 1 1 1
+			OpSource GLSL 450
+			OpName %main "main"
+			OpName %numThings "numThings"
+			OpName %thingScale "thingScale"
+			OpName %doThat "doThat"
+			OpDecorate %numThings SpecId 0
+			OpDecorate %thingScale SpecId 1
+			OpDecorate %doThat SpecId 2
+		%void = OpTypeVoid
+		%3 = OpTypeFunction %void
+		%int = OpTypeInt 32 1														// %6 = OpTypeInt 32 1
+		%numThings = OpSpecConstant %int 42						// %7 = OpSpecConstant %6 42
+		%float = OpTypeFloat 32													// %8 = OpTypeFloat 32
+		%thingScale = OpSpecConstant %float 4.19999981		// %9 = OpSpecConstant %8 4.2
+		%bool = OpTypeBool														// %10 = OpTypeBool
+		%doThat = OpSpecConstantFalse %bool						// %11 = OpSpecConstantFalse %10
+		%main = OpFunction %void None %3
+		%5 = OpLabel
+			OpReturn
+			OpFunctionEnd
+```
+
+Listing 6.6 has been edited to remove portions unrelated to the specialization constants. 
+As you can see, however, %7 is declared as a specialization constant using OpSpecConstant of type %6 (a 32-bit integer) with a default value of 42. 
+Next, %9 is declared as a specialization constant of type %8 (a 32-bit floating-point value) with a default value of 4.2. 
+Finally, %11 is decalared as a Boolean value (type %10 in this SPIR-V) with a default value of false. 
+Note that Booleans are declared with either OpSpecConstantTrue or OpSpecConstantFalse, depending on whether their default value is true or false, respectively.
+
+Note that in both the GLSL shader and the resulting SPIR-V shader, the specialization constants are assigned default values. 
+In fact, they must be assigned default values. 
+These constants may be used like any other constant in the shader. 
+In particular, they can be used for things like sizing arrays where only compile-time constants are otherwise allowed. 
+If new values are not included in the VkSpecializationInfo structure passed to vkCreateComputePipelines(), then those default values are used. 
+However, the constants can be overridden by passing new values when the pipeline is created. 
+The definition of VkSpecializationInfo is
+
+```
+typedef struct VkSpecializationInfo
+{
+	uint32_t												mapEntryCount;
+	const VkSpecializationMapEntry*		pMapEntries;
+	size_t													dataSize;
+	const void*											pData;
+} VkSpecializationInfo;
+```
+
+Inside the VkSpecializationInfo structure, 'mapEntryCount' contains the number of specialization constants that are to be set, 
+	and this is the number of entries in the array of VkSpecializationMapEntry structures in the array pointed to by 'pMapEntries'. 
+Each of these represents a single specialization constant. 
+The definition of VkSpecializationMapEntry is
+```
+typedef struct VkSpecializationMapEntry
+{
+	uint32_t		constantID;
+	uint32_t		offset;
+	size_t			size;
+} VkSpecialzationMapEntry;
+```
+
+The 'constantID' field is the ID of the specialization constant and is used to match the constant ID used in the shader module. 
+This is set using the 'constant_id' layout qualifier in GLSL and the 'SpecId' decoration in SPIR-V. 
+The 'offset' and 'size' fields are the offset and size of the raw data containing the values of the specicialization constants. 
+The raw data is pointed to by 'pData' field of the VkSpecializationInfo structure, and its size is given in 'dataSize'. 
+Vulkan uses the data in this blob to initialize the specialization constants. 
+If one or more of the specialization constants in the shader is not specified in the specialization info when the pipeline is constructed, its default value is used. (¡Ú)
+
+When you are done with a pipeline and no longer need it, you should destroy it in order to free any resources associated with it. 
+To destroy a pipeline object, call vkDestroyPipeline(), the prototype of which is
+```
+void vkDestroyPipeline(
+	VkDevice										device,
+	VkPipeline									pipeline,
+	const VkAllocationCallbacks*		pAllocator
+);
+```
+
+The device that owns the pipeline is specified in 'device', and the pipeline to be destroyed is passed in 'pipeline'. 
+If a host memory allocator was used to create the pipeline, a pointer to a compatible allocator should be passed in 'pAllocator'; 
+	otherwise, 'pAllocator' should be set to nullptr.
+
+After a pipeline has been destroyed, it should not be used again. 
+This includes any references to it from command buffers that may not yet have completed execution. 
+It is the application¡¯s responsibility to ensure that any submitted command buffers referencing the pipeline have completed execution 
+	and that any command buffers into which the pipeline is bound are not submitted after the pipeline is destroyed.
+
+9. Accelerating Pipeline Creation
+
+Creation of pipelines is possibly one of the most expensive operations that your application might perform. 
+Although SPIR-V code is consumed by vkCreateShaderModule(), it is not until you call vkCreateGraphicsPipelines() or vkCreateComputePipelines() 
+	that Vulkan sees all of the shader stages and other state associated with the pipeline that might affect the final code that will execute on the device. 
+For this reason, a Vulkan implementation may delay the majority of work involved in creating a ready-to-run pipeline object until the last possible moment. 
+This includes shader compilation and code generation, which are typically fairly intensive operations.
+
+Because an application that runs many times will use the same pipelines over and over, 
+	Vulkan provides a mechanism to cache the results of pipeline creation across runs of an application. 
+This allows applications that build all of their pipelines at startup to start more quickly. 
+The pipeline cache is represented as an object that is created by calling
+```
+VkResult vkCreatePipelineCache(
+	VkDevice												device,
+	const VkPipelineCacheCreateInfo*		pCreateInfo,
+	const VkAllocationCallbacks*				pAllocator,
+	VkPipelineCache*								pPipelineCache
+);
+```
+
+The device that will be used to create the pipeline cache is specified in 'device'. 
+The remaining parameters for the creation of the pipeline cache are passed through a pointer to an instance of the VkPipelineCacheCreateInfo structure, 
+	the definition of which is
+```
+typedef struct VkPipelineCacheCreateInfo
+{
+	VkStructureType							sType;
+	const void*									pNext;
+	VkPipelineCacheCreateFlags		flags;
+	size_t											initialDataSize;
+	const void*									pInitialData;
+} VkPipelineCacheCreateInfo;
+```
+
+The 'sType' field of the VkPipelineCacheCreateInfo structure should be set to VK_STRUCTURE_TYPE_PIPELINE_CACHE_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved for future use and should be set to zero. 
+If existing data is available from a previous run of the application, its address can be passed through 'pInitialData'. 
+The size of the data is passed in 'initialDataSize'. 
+If no initial data is available, 'initialDataSize' should be set to zero, and 'pInitialData' should be set to nullptr.
+
+When the cache is created, the initial data (if any) is used to prime the cache. 
+If necessary, Vulkan makes a copy of the data. 
+The data pointed to by 'pInitialData' is not modified. 
+As more pipelines are created, data describing them may be added to the cache, growing it over time. 
+To retrieve the data from the cache, call vkGetPipelineCacheData(). 
+The prototype of vkGetPipelineCacheData() is
+```
+VkResult vkGetPipelineCacheData(
+	VkDevice					device,
+	VkPipelineCache		pipelineCache,
+	size_t*						pDataSize,
+	void*						pData
+);
+```
+
+The device that owns the pipeline cache should be specified in 'device'.
+The handle to the pipeline cache whose data is being queried should be passed in 'pipelineCache'. 
+If 'pData' is not nullptr, then it points to a region of memory that will receive the cache data. 
+In this case, the initial value of the variable pointed to by 'pDataSize' is the size, in bytes, of this region of memory. 
+That variable will be overwritten with the amount of data actually written into memory.
+
+If 'pData' is nullptr, then the initial value of the variable pointed to by 'pDataSize' is ignored, 
+	and the variable is overwritten with the size of the data required to store the cache. 
+In order to store the entire cache data, call vkGetPipelineCacheData() twice; 
+	the first time, call it with 'pData' set to nullptr and 'pDataSize' pointing to a variable that will receive the required size of the cache data. 
+Then size a buffer appropriately to store the resulting cache data and call vkGetPipelineCacheData() again, 
+	this time passing a pointer to this memory region in 'pData. Listing 6.7 illustrates how to save the pipeline data to a file.
+```
+// Listing 6.7: Saving Pipeline Cache Data to a File
+
+void MyVulkan::SavingPipelineCacheDataToFile(VkDevice device, VkPipelineCache cache, const char* fileName)
+{
+	size_t cacheDataSize;
+	
+	// Determine the size of the cache data.
+	VulkanHelper::VkCheck(
+		vkGetPipelineCacheData(device, cache, &cacheDataSize, nullptr),
+		"first call to vkGetPipelineCacheData failed!"
+	);
+
+	if (cacheDataSize == 0)
+	{
+		// failed!
+		// Handle to fail needed
+		return;
+	}
+
+	FILE* pOutputFile;
+	void* pData;
+
+	// Allocate a temporary store for the cache data.
+	pData = malloc(cacheDataSize);
+
+	if (pData == nullptr)
+	{
+		return;
+	}
+
+	// Retrieve the actual data from the cache.
+	VulkanHelper::VkCheck(
+		vkGetPipelineCacheData(device, cache, &cacheDataSize, pData),
+		"Second call to vkGetPipelineCacheData is failed!"
+	);
+
+	// Open the file as a binary file and write the data to it.
+	pOutputFile = fopen(fileName, "wb");
+
+	if (pOutputFile == nullptr)
+	{
+		free(pData);
+		return;
+	}
+
+	fwrite(pData, 1, cacheDataSize, pOutputFile);
+
+	fclose(pOutputFile);
+
+	free(pData);
+}
+```
+
+Once you have received the pipeline data, you can store it to disk or otherwise archive it ready for a future run of your application. 
+There is no defined structure to the content of the cache; it is implementation-dependent. 
+However, the first few words of the cache data always form a header that can be used to verify that a blob of data is a valid cache and which device created it.
+
+The layout of the cache header can be represented as the following C structure:
+```
+// This structure does not exist in official headers but is included here for illustration
+typedef struct VkPipelineCacheHeader
+{
+	uint32_t		length;
+	uint32_t		version;
+	uint32_t		vendorID;
+	uint32_t		deviceID;
+	uint8_t			uuid[16];
+} VkPipelineCacheHeader;
+```
+
+Although the members of the structure are listed as uint32_t typed variables, the data in the cache is not formally of type uint32_t. 
+Caches are always stored in little-endian byte order, regardless of the byte ordering of the host. 
+This means that if you want to interpret this structure on a big-endian host, you need to reverse the byte order of the uint32_t fields. (¡Ú)
+
+The 'length' field is the size of the header structure, in bytes. 
+In the current revision of the specification, this length should be 32. 
+The 'version' field is the version of the structure. 
+The only defined version is 1. 
+The 'vendorID' and 'deviceID' fields should match the 'vendorID' and 'deviceID' fields of the VkPhysicalDeviceProperties structure 
+	returned from a call to vkGetPhysicalDeviceProperties(). 
+The 'uuid' field is an opaque string of bytes that uniquely identifies the device. 
+If there is a mismatch between the 'vendorID', 'deviceID', or 'uuid' field and what the Vulkan driver expects, 
+	it may reject the cache data and reset the cache to empty. 
+A driver may also embed checksum, encryption, or other data inside the cache to ensure that invalid cache data is not loaded into the device.
+
+If you have two cache objects and wish to merge them, you can do that by calling vkMergePipelineCaches(), the prototype of which is
+```
+VkResult vkMergePipelineCaches(
+	VkDevice								device,
+	VkPipelineCache					dstCache,
+	uint32_t								srcCacheCount,
+	const VkPipelineCache*		pSrcCaches
+);
+```
+
+The 'device' parameter is a handle to the device that owns the caches that are to be merged. 
+'dstCache' is a handle to the destination cache, which will end up as an amalgamation of all of the entries from all source caches. 
+The number of caches that are to be merged is specified in 'srcCacheCount', 
+	and 'pSrcCaches' is a pointer to an array of VkPipelineCache handles to the caches to be merged.
+
+After vkMergePipelineCaches() has executed, 'dstCache' will contain all of the cache entries from all of the source caches specified in 'pSrcCaches'. 
+It is then possible to call vkGetPipelineCacheData() on the destination cache to retrieve a single, 
+	large cache data structure representing all entries from all of the caches.
+
+This is particularly useful, for example, when creating pipelines in many threads. 
+Although access to the pipeline cache is thread-safe, implementations may internally take locks to prevent concurrent write access to multiple caches. 
+If you instead create multiple pipeline caches - one for each thread - and use them during initial creation of your pipelines, 
+	any per-cache locks taken by the implementation will be uncontested, speeding access to them. (????????)
+Later, when all pipelines are created, you can merge the pipelines in order to save their data in one large resource.
+
+When you are done creating pipelines and no longer need the cache, it¡¯s important to destroy it, because it could be quite large. 
+To destroy a pipeline cache object, call vkDestroyPipelineCache(), the prototype of which is
+```
+void vkDestroyPipelineCache(
+	VkDevice										device,
+	VkPipelineCache							pipelineCache,
+	const VkAllocationCallbacks*		pAllocator
+);
+```
+
+'device' is a handle to the device that owns the pipeline cache, and 'pipelineCache' is a handle to the pipeline cache object that is to be destroyed. 
+After the pipeline cache has been destroyed, it should not be used again, although pipelines created using the cache are still valid. 
+Also, any data retrieved from the cache using a call to vkGetPipelineCacheData() is valid and 
+	can be used to construct a new cache that should result in matches on subsequent pipeline creation requests.
+
+10. Binding Pipelines

@@ -823,3 +823,105 @@ Also, any data retrieved from the cache using a call to vkGetPipelineCacheData()
 	can be used to construct a new cache that should result in matches on subsequent pipeline creation requests.
 
 10. Binding Pipelines
+
+Before you can use a pipeline, it must be bound into the a command buffer that will execute drawing or dispatching commands. 
+When such a command is executed, the current pipeline (and all the shaders in it) are used to process the commands. 
+To bind a pipeline to a command buffer, call vkCmdBindPipeline(), the prototype of which is
+```
+void vkCmdBindPipeline(
+	VkCommandBuffer			commandBuffer,
+	VkPipelineBindPoint		pipelineBindPoint,
+	VkPipeline						pipeline
+);
+```
+
+The command buffer to which you are binding the pipeline is specified in 'commandBuffer', and the pipeline you are binding is specified in 'pipeline'. 
+There are two binding points for pipelines on each command buffer: the graphics and compute binding points. 
+The compute bind point is where compute pipelines should be bound. 
+Graphics pipelines are covered in the next chapter and should be bound to the graphics pipeline bind point.
+
+To bind a pipeline to the compute binding point, set pipelineBindPoint to VK_PIPELINE_BIND_POINT_COMPUTE, 
+	and to bind the pipeline to the graphics binding point, set pipelineBindPoint to VK_PIPELINE_BIND_POINT_GRAPHICS.
+
+The current pipeline binding for each of compute and graphics is part of the state of a command buffer. 
+When a new command buffer is begun, this state is undefined. 
+Therefore, you must bind a pipeline to the relevant binding point before invoking any work that would use a pipeline.
+
+11. Executing Work
+
+In the previous section, you saw how to construct a compute pipeline using vkCreateComputePipelines() and bind it into a command buffer. 
+Once a pipeline is bound, you can use it to execute work.
+
+Compute shaders running as part of a compute pipeline execute in groups called local work groups. 
+These groups logically execute in lockstep and are of a fixed size specified in the shader. 
+The maximum size of a local work group is typically small but must be at least 128 invocations ¡¿ 128 invocations ¡¿ 64 invocations. 
+Further, the maximum number of total invocations in a single local work group may also be smaller than this total volume and is required only to be 128 invocations.
+
+For this reason, local work groups are started in larger groups, sometimes called the global work group or dispatch size. 
+Kicking off work in a compute shader is therefore called dispatching work, or a dispatch. 
+The local work group is logically a 3D construct, or volume of invocations, 
+	although one or two of the dimensions can be a single invocation in size, making the work group flat in that direction. 
+Likewise, these local work groups are dispatched together in three dimensions, even if one or more of those dimensions is a single work group deep.
+
+The command to dispatch a global work group using a compute pipeline is vkCmdDispatch(), the prototype of which is
+```
+void vkCmdDispatch(
+	VkCommandBuffer		commandBuffer,
+	uint32_t						x,
+	uint32_t						y,
+	uint32_t						z
+);
+```
+
+The command buffer that will execute the command is passed in 'commandBuffer'. 
+The number of local work groups in each of the x, y, and z dimensions is passed in the 'x', 'y', and 'z' parameters, respectively. 
+A valid compute pipeline must be bound to the command buffer at the VK_PIPELINE_BIND_POINT_COMPUTE binding point. 
+When the command is executed by the device, a global work group of 'x' ¡¿ 'y' ¡¿ 'z' local work groups begins executing the shader contained in the bound pipeline.
+
+It is perfectly possible to have a local work group that has a different effective dimensionality from that of the global work group. 
+For example, it¡¯s fine to have a 32 ¡¿ 32 ¡¿ 1 dispatch of 64 ¡¿ 1 ¡¿ 1 local work groups.
+
+In addition to being able to specify the number of work groups in the dispatch using parameters to vkCmdDispatch(), 
+	it¡¯s possible to perform an indirect dispatch, where the size of the dispatch in work groups is sourced from a buffer object. 
+This allows dispatch sizes to be computed 
+	after a command buffer is built by performing an indirect dispatch using a buffer and then overwriting the contents of the buffer using the host. 
+The content of the buffer can even be updated using the device itself to provide a limited means for the device to feed itself work.
+
+The prototype of vkCmdDispatchIndirect() is
+```
+void vkCmdDispatchIndirect(
+	VkCommandBuffer		commandBuffer,
+	VkBuffer						buffer,
+	VkDeviceSize				offset
+);
+```
+
+Again, the command buffer that will contain the command is passed in 'commandBuffer'. 
+Rather than passing the dispatch size as in vkCmdDispatch(), the number of workgroups in each dimension are expected to be stored 
+	as three consecutive uint32_t variables at the offset specified in 'offset' (in bytes) in the buffer object specified in 'buffer'. 
+The parameters in the buffer essentially represent an instance of the VkDispatchIndirectCommand structure, the definition of which is
+```
+typedef struct VkDispatchIndirectCommand
+{
+	uint32_t	x;
+	uint32_t	y;
+	uint32_t	z;
+} VkDispatchIndirectCommand;
+```
+
+Again, the contents of the buffer are not read until the vkCmdDispatchIndirect() command is reached during processing of the command buffer by the device.
+
+The maximum number of work groups in each dimension supported by a device can be determined by 
+	inspecting the maxComputeWorkGroupCount field of the device¡¯s VkPhysicalDeviceLimits structure returned from a call to vkGetPhysicalDeviceProperties(), 
+	as explained in Chapter 1, ¡°Overview of Vulkan.¡± 
+Exceeding those limits in a call to vkCmdDispatch() or placing values outside those limits in the buffer referenced by vkCmdDispatchIndirect() 
+	will result in undefined (probably bad) behavior.
+
+11. Resource access in Shaders
+
+The shaders in your program consume and produce data in one of two ways. 
+The first is through interaction with fixed function hardware, and the second is by directly reading and writing resources. 
+You saw in Chapter 2, ¡°Memory and Resources,¡± how to create buffers and images. 
+In this section, we introduce descriptor sets, which are representations of the set of resources that shaders can interact with.
+
+12 

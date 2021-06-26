@@ -1,1000 +1,1 @@
-What You'll Learn in This Chapter
-```
-1. How to display the results of your program onscreen.
-2. How to determine the display devices attached to the system.
-3. How to change display modes and interface with a native window system.
-```
-
-Vulkan is primarily a graphics API in the sense that the majority of its functionality is dedicated to generating and processing images. 
-Most Vulkan applications will be designed to show their results to the user. 
-This is a process known as 'presentation'. 
-However, because the variety of platforms upon which Vulkan runs is large, and because not all applications need to present their outputs to the user visually, 
-	presentation is not a core part of the API but is handled by a set of extensions. 
-This chapter discusses how to enable and use those extensions to get pictures on the screen.
-
-1. Presentation Extension
-
-Presentation in Vulkan is not part of the core API. 
-In fact, a given implementation of Vulkan may not support presentation at all. 
-The reasons for this are
-
-```
-1. Not all Vulkan applications need to present images to the user.
-	Computecentric applications, for example, might produce nonvisual data or produce images that only need to be saved to disk rather than displayed in real time.
-
-2. Presentation is generally handled by the operating system, window system, or other platform-specific library, which can vary quite a bit from platform to platform.
-```
-
-Due to this, presentation is handled by a set of extensions collectively known as the WSI extensions, or Window System Integration systems. 
-Extensions in Vulkan must be enabled explicitly before they can be used, and the extension needed for each platform is slightly different, 
-	as some of the functions take platform-specific parameters. 
-Before you can perform any presentation-related operations, 
-	therefore, you need to enable the appropriate presentation-related extensions using the mechanisms described in Chapter 1, ¡°Overview of Vulkan.¡±
-
-Presentation in Vulkan is handled by a small suite of extensions. 
-Functionality that is common to almost all platforms that support presenting graphical output to the user is supported by one extension, 
-	and functionality that is specific to each platform is supported by a number of smaller, platform-specific extensions.
-
-2. Presentation Surfaces
-
-The object to which graphics data is rendered in order to be presented is known as a 'surface' and is represented by a VkSurfaceKHR handle. 
-This special object is introduced by the 'VK_KHR_surface' extension. 
-This extension adds general functionality for handling surface objects 
-	but is customized on a per-platform basis to provide the platform-specific interfaces to associate a surface with a window. 
-Interfaces are defined for Microsoft Windows, Mir and Wayland, X Windows via either the XCB or Xlib interface, and Android. 
-Further platforms may be added in the future.
-
-The prototypes and data types for the platform-specific parts of the extension are included in the main 'vulkan.h' header file 
-	but are protected behind platform-specific preprocessor guards. 
-The code for this book supports the Windows platform and the Linux platform via the Xlib and Xcb interfaces. 
-To enable the code for these platforms, before including vulkan.h, 
-	we must define one of the VK_USE_PLATFORM_WIN32_KHR, VK_USE_PLATFORM_XLIB_KHR, or VK_USE_PLATFORM_LIB_XCB_KHR defines. 
-The build system for the book¡¯s source code does this for you using a compiler command-line option.
-
-Vulkan is also supported on a wide range of other operating systems and device types. 
-In particular, many of Vulkan¡¯s features are geared to mobile and embedded devices. 
-For example, Vulkan is the API of choice on the Android platform, and in addition to the interfaces covered here, 
-	the Android platform has full support through its own platform interfaces. 
-Outside of initialization, though, using Vulkan on Android should be a fairly similar experience to using Vulkan on other platforms.
-
-3. Presentation on Microsoft Windows
-
-Before we can present, we need to determine whether any queues on a device support presentation operations. 
-Presentation capability is a per-queue-family feature. 
-On Windows platforms, call the vkGetPhysicalDeviceWin32PresentationSupportKHR() function to determine 
-	whether a particular queue family supports presentation. 
-Its prototype is
-```
-VkBool32 vkPhysicalDeviceWin32PresentationSupportKHR(
-	VkPhysicalDevice		physicalDevice,
-	uint32_t						queueFamilyIndex
-);
-```
-
-The physical device being queried is passed in 'physicalDevice', and the queue family index is passed in 'queueFamilyIndex'. 
-If at least one queue family supports presentation, then we can proceed to create presentable surfaces using the device. 
-To create a surface, use the vkCreateWin32SurfaceKHR() function, whose prototype is
-```
-VkResult vkCreateWin32SurfaceKHR(
-	VkInstance													instance,
-	const VkWin32SurfaceCreateInfoKHR*		pCreateInfo,
-	const VkAllocationCallbacks*						pAllocator,
-	VkSurfaceKHR*											pSurface
-);
-```
-
-This function associates a Windows native window handle with a new surface object and returns the object in the variable pointed to by 'pSurface'. 
-Only a Vulkan instance is required, and its handle is passed into 'instance'. 
-The information describing the new surface is passed through 'pCreateInfo', which is a pointer to an instance of the VkWin32SurfaceCreateInfoKHR structure, 
-the definition of which is
-```
-typedef struct VkWin32SurfaceCreateInfoKHR
-{
-	VkStructure											sType;
-	const void*											pNext;
-	VkWin32SurfaceCreateFlagsKHR		flags;
-	HINSTANCE										hinstance;
-	HWND													hwnd;
-} VkWin32SurfaceCreateInfoKHR;
-```
-
-The 'sType' field of VkWin32SurfaceCreateInfoKHR should be set to VK_STRUCTURE_TYPE_DISPLAY_SURFACE_CREATE_INFO_KHR.
-The 'pNext' should be set to nullptr unless another extension in use extends the structure. 
-The 'flags' field is reserved for future use and should be set to zero.
-
-The 'hinstance' parameter should be set to the HINSTANCE of the application or module that was used to create the the native window. 
-This is typically passed to the application in the first parameter of WinMain or can be obtained by calling the Win32 function GetModuleHandle with a null pointer. 
-The 'hwnd' member is the handle to the native window with which to associate the Vulkan surface. 
-This is the window in which the results of presentation to swap chains created for the surface will be displayed.
-
-4. Presentation on Xlib-Based Platforms
-
-The process for creating a surface on an Xlib-based system is similar. 
-First, we need to determine whether the platform supports presentation to an Xlib surface on an X server. 
-To do this, call vkGetPhysicalDeviceXlibPresentationSupportKHR(), whose prototype is
-```
-VkBool32 vkGetPhysicalDeviceXlibPresentationSupportKHR(
-	VkPhysicalDevice		physicalDevice,
-	uint32_t						queueFamilyIndex,
-	Display*						dpy,
-	VisualID						visualID
-);
-```
-
-For the physical device whose handle is specified in 'physicalDevice', and the queue family index specified in 'queueFamilyIndex'.
-The vkGetPhysicalDeviceXlibPresentationSupportKHR() reports whether queues in that family support presentation to Xlib surfaces for a given X server. 
-The connection to the X server is represented by the 'dpy' parameter. 
-Presentation is supported on a per-format basis. 
-In Xlib, formats are represented by visual IDs, and the visual ID for the intended format of the surface is passed in 'visualID'.
-
-Assuming that at least one queue family on a device supports presentation to a format we'd like to use, 
-	we can then create a surface for an Xlib window by calling the vkCreateXlibSurfaceKHR() function, the prototype of which is
-```
-VkResult vkCreateXlibSurfaceKHR(
-	VkInstance												instance,
-	const VkXlibSurfaceCreateInfoKHR*		pCreateInfo,
-	const VkAllocationCallbacks*					pAllocator,
-	VkSurfaceKHR*										pSurface
-);
-```
-
-vkCreateXlibSurfaceKHR() creates a new surface associated with an Xlib window. 
-The Vulkan instance should be passed in 'instance', and the remaining parameters controlling the creation of the surface are passed in 'pCreateInfo', 
-	which is a pointer to an instance of the VkXlibSurfaceCreateInfoKHR structure, the definition of which is
-```
-typedef struct VkXlibSurfaceCreateInfoKHR
-{
-	VkStructureType								sType;
-	const void*										pNext;
-	VkXlibSurfaceCreateFlagsKHR		flags;
-	Display*											dpy;
-	Window											window;
-} VkXlibSurfaceCreateInfoKHR;
-```
-
-The sType field of VkXlibSurfaceCreateInfoKHR should be set to VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR.
-The 'pNext' should be set to nullptr. 
-The 'flags' field is reserved and should be set to zero.
-
-The 'dpy' field is the Xlib Display representing the connection to the X server.
-The 'window' is the Xlib Window handle to the window with which the new surface will be associated.
-
-If vkCreateXlibSurfaceKHR() requires any host memory, it will use the host memory allocator passed in 'pAllocator'. 
-If 'pAllocator' is nullptr, then an internal allocator will be used.
-
-If surface creation is successful, the resulting VkSurface handle is written into the variable pointed to by 'pSurface'.
-
-5. Presentation with Xcb
-
-Xcb is a slightly lower-level interface to the X protocol than is provided by Xlib and may be a better choice for applications that wish to achieve lower latency. 
-As with Xlib and the other platforms, before creating objects for presentation on an Xcb system, 
-	we need to determine whether any of the queues on a physical device support presentation. 
-To do this, call vkGetPhysicalDeviceXcbPresentationSupportKHR(), the prototype of which is
-```
-VkBool32 vkGetPhysicalDeviceXcbPresentationSupportKHR(
-	VkPhysicalDevice		physicalDevice,
-	uint32_t						queueFamilyIndex,
-	xcb_connection_t*		connection,
-	xcb_visualid_t				visual_id
-);
-```
-
-The physical device being queried is passed in 'physicalDevice', and the index of the queue family is passed in 'queueFamilyIndex'. 
-The connection to the X server is passed in 'connection'. 
-Again, presentation capability is reported on a per-visual ID basis, and the visual ID being queried is passed in 'visual_id'.
-
-Once you have determined that at least one queue family on the device supports presentation in the visual ID of your choice, 
-	you can create a surface into which to render using vkCreateXcbSurfaceKHR(), the prototype of which is
-```
-VkResult vkCreateXcbSurfaceKHR(
-	VkInstance												instance,
-	const VkXcbSurfaceCreateInfoKHR*		pCreateInfo,
-	const VkAllocationCallbacks*					pAllocator,
-	VkSurfaceKHR*										pSurface
-);
-```
-
-The Vulkan instance is passed in 'instance', and the remaining parameters controlling creation of the surface 
-	are passed through an instance of the VkXcbSurfaceCreateInfoKHR structure pointed to by 'pCreateInfo'. 
-The definition of VkXcbSurfaceCreateInfoKHR is
-```
-typedef struct VkXcbSurfaceCreateInfoKHR
-{
-	VkStructureType								sType;
-	const void*										pNext;
-	VkXcbSurfaceCreateFlagsKHR		flags;
-	xcb_connection_t *							connection;
-	xcb_window_t									window;
-} VkXcbSurfaceCreateInfoKHR;
-```
-
-The 'sType' field for VkXcbSurfaceCreateInfoKHR should be set to VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO.
-The 'pNext' should be set to nullptr. 
-The 'flags' field is reserved and should be set to zero. 
-The connection to the X server is passed in the 'connection' field, and the handle to the window is passed in 'window'.
-
-If vkCreateXcbSurfaceKHR() is successful, it will write the handle to the new surface into the variable pointed to by 'pSurface'. 
-If it needs any host memory to construct the handle and 'pAllocator' is not nullptr, then it will use your allocator to request that memory.
-
-6. Swap Chains
-
-Regardless of which platform you¡¯re running on, the resulting VkSurfaceKHR handle refers to Vulkan¡¯s view of a window. 
-In order to actually present anything to that surface, it¡¯s necessary to create a special image that can be used to store the data in the window. 
-On most platforms, this type of image is either owned by or tightly integrated with the window system, 
-	so rather than creating a normal Vulkan image object, we use a second object called a swap chain to manage one or more image objects.
-
-Swap-chain objects are used to ask the native window system to create one or more images that can be used to present into a Vulkan surface. 
-This is exposed using the VK_KHR_swapchain extension. 
-Each swap-chain object manages a set of images, usually in some form of ring buffer. 
-The application can ask the swap chain for the next available image, render into it, and then hand the image back to the swap chain ready for display. 
-By managing presentable images in a ring or queue, one image can be presented to the display while another is being drawn to by the application, 
-	overlapping the operation of the window system and application.
-
-To create a swap-chain object, call vkCreateSwapchainKHR(), the prototype of which is
-```
-VkResult vkCreateSwapchainKHR(
-	VkDevice													device,
-	const VkSwapchainCreateInfoKHR*		pCreateInfo,
-	const VkAllocationCallbacks*					pAllocator,
-	VkSwapchainKHR*									pSwapchain
-);
-```
-
-The device with which the swap chain is to be associated is passed in 'device'. 
-The resulting swap chain can be used with any of the queues on device that support presentation. 
-The information about the swap chain is passed in an instance of the VkSwapchainCreateInfoKHR structure, the address of which is passed in 'pCreateInfo'. 
-The definition of VkSwapchainCreateInfoKHR is
-```
-typedef struct VkSwapchainCreateInfoKHR
-{
-	VkStructureType								sType;
-	const void*										pNext;
-	VkSwapchainCreateFlagsKHR		flags;
-	VkSurfaceKHR								surface;
-	uint32_t											minImageCount;
-	VkFormat											imageFormat;
-	VkColorSpaceKHR							imageColorSpace;
-	VkExtent2D										imageExtent;
-	uint32_t											imageArrayLayers;
-	VkImageUsageFlags						imageUsage;
-	VkSharingMode								imageSharingMode;
-	uint32_t											queueFamilyIndexCount;
-	const uint32_t*									pQueueFamilyIndices;
-	VkSurfaceTransformFlagBitsKHR	preTransform;
-	VkCompositeAlphaFlagBitsKHR		compositeAlpha;
-	VkPresentModeKHR						presentMode;
-	VkBool32											clipped;
-	VkSwapchainKHR							oldSwapchain;
-} VkSwapchainCreateInfoKHR;
-```
-
-The 'sType' field for VkSwapchainCreateInfoKHR should be set to VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR.
-The 'pNext' should be set to nullptr. 
-The 'flags' field is reserved for use in future versions of the VK_KHR_swapchain extension and should be set to zero.
-
-The surface to which the new swap chain will present is passed in 'surface'. 
-This should be a surface created with one of the the platform-specific surface creation functions such as vkCreateWin32SurfaceKHR() or vkCreateXlibSurfaceKHR(). 
-The number of images in the swap chain is passed in 'minImageCount'. 
-For example, to enable double or triple buffering, set minImageCount to 2 or 3, respectively. 
-Setting minImageCount to 1 represents a request to render to the front buffer or directly to the display. 
-Some platforms don¡¯t support this (and may not even support double buffering). 
-To determine the minimum and maximum number of images supported in a swap chain, 
-	call vkGetPhysicalDeviceSurfaceCapabilitiesKHR(), which is discussed later in this section.
-
-Note that setting 'minImageCount' to 2 means that you¡¯ll have a single front buffer and a single back buffer. 
-After triggering presentation of a finished back buffer, you won¡¯t be able to begin rendering to the other buffer until the presentation has completed. 
-For best performance, possibly at the price of some latency, you should set 'minImageCount' to at least 3 if the device supports it.
-
-The format and color space of the presentable images is specified in 'imageFormat' and 'imageColorSpace'. 
-The format must be a Vulkan format for which the device reports the presentation capability. 
-The 'imageColorSpace' is a member of the VkColorSpaceKHR enumeration, the only member of which is VK_COLORSPACE_SRGB_NONLINEAR_KHR, 
-	which means that the presentation engine can expect sRGB nonlinear data, if the imageFormat member indicates an sRGB format image.
-
-The 'imageExtent' field specifies the dimensions of the images in the swap chain, in pixels.
-The 'imageArrayLayers' field specifies the number of layers in each image. 
-This can be used to render to a layered image and then present specific layers of it to the user. 
-The 'imageUsage' field is a collection of the standard VkImageUsageFlags enumeration specifying how the images will be used (in addition to as present sources). 
-For example, if you want to render to the image as a normal color attachment, you would include VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 
-	and if you want to write directly to it with a shader, you would include VK_IMAGE_USAGE_STORAGE_BIT.
-
-The set of usages that are included in 'imageUsage' must be selected from the usages supported for swap-chain images. 
-This is determined by calling vkGetPhysicalDeviceSurfaceCapabilitiesKHR(). (???????????????????????????)
-
- The 'preTransform' field specifies how the images should be transformed prior to presentation to the user. 
- This allows images to be rotated or flipped (or both) to accommodate things like portrait displays and rear-projection systems. 
- It is a bitwise combination of a selection of members of the VkSurfaceTransformFlagBitsKHR enumeration.
-
- The 'compositeAlpha' field controls how alpha composition is handled by the window system. 
- This is a member of the VkCompositeAlphaFlagBitsKHR enumeration. 
- If this is set to VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR, 
-	then the alpha channel of the presentable image (if it exists) is ignored and treated as though it contains constant 1.0 values. 
-Other values of compositeAlpha allow partially transparent images to be composited by the native window system.
-
-The 'presentMode' field controls synchronization with the window system and the rate at which the images are presented to the surface. 
-The available modes are
-```
-1. VK_PRESENT_MODE_IMMEDIATE_KHR:
-	When presentation is scheduled, the image is presented to the user as soon as possible, without wating for any external events such as vertical blanking.
-	This provides the highest possible frame rate but can introduce tearing or other artifacts.
-
-2. VK_PRESENT_MODE_MAILBOX_KHR:
-	When a new image is presented, it is marked as the pending image, 
-		and at the next opportunity (probably after the next vertical refresh), the system will display it to the user. 
-	If a new image is presented before this happens, that image will be shown, and the previously presented image will be discarded.
-
-3. VK_PRESENT_MODE_FIFO_KHR:
-	Images to be presented are stored in an internal queue and shown to the user in order. 
-	A new image is taken from the queue at regular intervals (usually after each vertical refresh).
-
-4. VK_PRESENT_MODE_FIFO_RELAXED_KHR:
-	This mode behaves similarly to VK_PRESENT_MODE_FIFO_KHR, except that if the queue is empty and vertical refresh occurs, 
-		the next image posted to the queue will be displayed immediately, similarly to VK_PRESENT_MODE_IMMEDIATE_KHR. 
-	This allows an application running faster than the vertical refresh rate to avoid tearing while still going as fast as possible if it can¡¯t keep up in places.
-```
-
-As a general rule, if you want to run with vertical sync (vsync) on, select VK_PRESENT_MODE_FIFO_KHR, and 
-	if you want to run as fast as possible, select VK_PRESENT_MODE_IMMEDIATE_KHR or VK_PRESENT_MODE_MAILBOX_KHR. 
-VK_PRESENT_MODE_IMMEDIATE_KHR will show visible tearing in most cases but provides the lowest possible latency. 
-VK_PRESENT_MODE_MAILBOX_KHR continues to flip at regular intervals, producing a maximum latency of one vertical refresh, but will not exhibit tearing.
-
-The clipped member of VkSwapchainCreateInfoKHR is used to optimize cases where not all of the surface might be visible. 
-For example, if the surface to which the images will be presented represents a window that might be covered or partially off the screen, 
-	it may be possible to avoid rendering the parts of it that the user will never see. 
-When clipped is VK_TRUE, Vulkan can eliminate those parts of the image from rendering operations. 
-When clipped is VK_FALSE, Vulkan will render the entire image, regardless of whether it¡¯s visible or not.
-
-Finally, the oldSwapchain field of VkSwapchainCreateInfoKHR may be used to pass an existing swap chain associated with the surface back to Vulkan for recycling. 
-This is used when one swap chain is being replaced by another, such as when a window is resized and the swap chain needs to be reallocated with larger images.
-(????? I did not fully get it yet.)
-
-The parameters contained in the VkSwapchainCreateInfoKHR structure must all conform to the capabilities of the suface, 
-	which you can determine by calling vkGetPhysicalDeviceSurfaceCapabilitiesKHR(), the prototype of which is
-```
-VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
-	VkPhysicalDevice						physicalDevice,
-	VkSurfaceKHR							surface,
-	VkSurfaceCapabilitiesKHR*		pSurfaceCapabilities
-);
-```
-
-The physical device that owns the surface is passed in 'physicalDevice', and the surface whose capabilies are being queried is passed in 'surface'. 
-vkGetPhysicalDeviceSurfaceCapabilitiesKHR() then returns information about the surface in an instance of the VkSurfaceCapabilitiesKHR structure, 
-	a pointer to which is provided through the 'pSurfaceCapabilities' parameter. 
-The definition of VkSurfaceCapabilitiesKHR is
-```
-typedef struct VkSurfaceCapabilitiesKHR
-{
-	uint32_t											minImageCount;
-	uint32_t											maxImageCount;
-	VkExtent2D										currentExtent;
-	VkExtent2D										minImageExtent;
-	VkExtent2D										maxImageExtent;
-	uint32_t											maxImageArrayLayers;
-	VkSurfaceTransformFlagsKHR		supportedTransforms;
-	VkSurfaceTransformFlagBitsKHR	currentTransform;
-	VkCompositeAlphaFlagsKHR			supportedCompositeAlpha;
-	VkImageUsageFlags						supportedUsageFlags;
-} VkSurfaceCapabilities;
-```
-
-The number of images in the swap chain must fall between the 'minImageCount' and 'maxImageCount' parameters of the surface¡¯s capabilities. 
-The current size of the surface at the time of the query is returned in 'currentExtent'. 
-If the surface is resizable (such as a sizeable window on a desktop), 
-	then the smallest and largest sizes that the surface can become are returned in 'minImageExtent' and 'maxImageExtent'. 
-If the surface supports presentation from array images, the maximum number of layers in those images is returned in 'minArrayLayers'.
-
-Some surfaces support performing transformations on images as they are presented. 
-For example, an image might be flipped or rotated to accommodate presentation to displays or other devices that are at nonstandard angles. 
-The set of supported transforms is returned in the 'supportedTransforms' field of VkSurfaceCapabilitiesKHR and 
-	is a bitfield made up of a selection of members of the VkSurfaceTransformFlagBitsKHR enumeration. 
-One of those bits is set in 'currentTransform', which contains the current transform applied when the query is made.
-
-If the surface supports composition, then the supported composition modes are contained as a combination of flags from 
-	the VkCompositeAlphaFlagBitsKHR enumeration in the supportedCompositeAlpha field.
-
-Finally, the allowed usage for the images created through a swap chain on this surface is returned in 'supportedUsageFlags'.
-
-Once you have a swap chain associated with a surface to which you want to present, you need to get handles to the images representing the items in the chain. (??)
-To do this, call vkGetSwapchainImagesKHR(), the prototype of which is
-```
-VkResult vkGetSwapchainImagesKHR(
-	VkDevice						device;
-	VkSwapchainKHR		swapchain;
-	uint32_t*						pSwapchainImageCount;
-	VkImage*						pSwapchainImages;
-);
-```
-
-The device that owns the swap chain should be passed in 'device', and the swap chain from which you are requesting images should be passed in 'swapchain'. 
-'pSwapchainImageCount' points to a variable that will contain the number of images received. 
-If 'pSwapchainImages' is nullptr, then the initial value of 'pSwapchainImageCount' will be ignored, 
-	and the variable will instead be overwritten with the number of swap-chain images in the swap-chain object. 
-If 'pSwapchainImages' is not nullptr, then it should be a pointer to an array of VkImage handles that will be filled with the images from the swap chain. 
-The intial value of the variable pointed to by 'pSwapchainImageCount' is the length of the array, 
-	and it will be overwritten with the number of images actually placed in the array.
-
-Because when you create the swap chain, you get to specify only the 'minimum' number of images in the swap chain, not the exact number of images, 
-	you need to use vkGetSwapchainImagesKHR() to determine how many images there really are in a swap chain, even if you just created it. 
-Listing 5.1 demonstrates how to create a swap chain for an existing surface, query the number of images in it, and then query the actual image handles.
-
-```
-// Listing 5.1
-void MyVulkan::CreateSwapChain()
-{
-	// First, we create the swap chain.
-	VkSwapchainCreateInfoKHR swapchainCreateInfo =
-	{
-		VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,		// sType
-		nullptr,																									// pNext
-		0,																											// flags
-		m_mainSurface,																					// surface
-		2, 																										// minImageCount
-		VK_FORMAT_R8G8B8A8_UNORM,													// imageFormat
-		VK_COLORSPACE_SRGB_NONLINEAR_KHR,								// imageColorSpace
-		{1024, 768},																							// imageExtent
-		1,																											// imageArrayLayers
-		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,							// imageUsage
-		VK_SHARING_MODE_EXCLUSIVE,													// imageSharingMode
-		0,																											// queueFamilyIndexCount
-		nullptr,																									// pQueueFamilyIndices
-		VK_SURFACE_TRANSFORM_INHERIT_BIT_KHR,							// preTransform
-		VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,								// compositeAlpha
-		VK_PRESENT_MODE_FIFO_KHR,													// presentMode
-		VK_TRUE,																							// clipped
-		m_swapChain																						// oldSwapchain
-	};
-
-	VulkanHelper::VkCheck(
-		vkCreateSwapchainKHR(
-		logicalDevices.front(),
-			&swapchainCreateInfo,
-			&myAllocator,
-			&m_swapChain
-		),
-		"vkCreateSwapchainKHR is failed!");
-
-	// Next, we query the swap chain for the number of images it actaully contains.
-	uint32_t swapchainImageCount = 0;
-	VulkanHelper::VkCheck(
-		vkGetSwapchainImagesKHR(
-			logicalDevices.front(),
-			m_swapChain,
-			&swapchainImageCount,
-			nullptr
-		),
-		"vkGetSwapchainImagesKHR is failed!"
-	);
-	// Now we resize our image array and retrieve the image handles from the swap chain.
-	m_swapChainImages.resize(swapchainImageCount);
-	VulkanHelper::VkCheck(
-		vkGetSwapchainImagesKHR(
-			logicalDevices.front(),
-			m_swapChain,
-			&swapchainImageCount,
-			m_swapChainImages.data()
-		),
-		"vkGetSwapchainImagesKHR is failed!"
-	);
-}
-
-```
-
-Note that the code in Listing 5.1 contains many hard-coded values. 
-In a more robust application, you should call vkGetPhysicalDeviceSurfaceCapabilitiesKHR() to determine the capabilities of the device 
-	with respect to presenting the surface and the capabilities of the surface to support parameters 
-	such as the transform mode, number of images in the swap chain, and so on.
-
-In particular, the surface format chosen in the 'imageFormat' field of VkSwapchainCreateInfoKHR must be a format that is supported by the surface. 
-To determine which formats can be used for swap chains associated with a surface, call vkGetPhysicalDeviceSurfaceFormatsKHR(), the prototype of which is
-```
-VKAPI_ATTR VkResult VKAPI_CALL vkGetPhysicalDeviceSurfaceFormatsKHR(
-	VkPhysicalDevice				physicalDevice,
-	VkSurfaceKHR					surface,
-	uint32_t*								pSurfaceFormatCount,
-	VkSurfaceFormatKHR*		pSurfaceFormats
-);
-```
-
-The physical device that you are querying is passed in 'physicalDevice', and the surface to which you want to present is passed in 'surface'. 
-If 'pSurfaceFormats' is nullptr, then the variable pointed to by 'pSurfaceFormatCount' is overwritten with the number of formats supported by the surface. 
-If 'pSurfaceFormats' is not nullptr, 
-	then it is a pointer to an array of VkSurfaceFormatKHR structures large enough to receive the number of formats supported by the surface. 
-In this case, the number of elements in the array is passed as the initial value of the variable pointed to by pSurfaceFormats, 
-	and this is overwritten with the number of formats actually written to the array.
-
-The definition of VkSurfaceFormatKHR is
-```
-typedef struct VkSurfaceFormatKHR
-{
-	VkFormat						format;
-	VkColorSpaceKHR		colorSpace;
-} VkSurfaceFormatKHR;
-```
-
-The 'format' field of VkSurfaceFormatKHR is the format of pixels in memory for the surface, and 'colorSpace' is the supported color space. 
-At present, the only defined color space is VK_COLORSPACE_SRGB_NONLINEAR_KHR.
-
-In some cases, devices will support presentation from almost any format. 
-This is generally true of compositing systems that use the image you¡¯ve rendered to as an input to some further processing. 
-However, other devices may support presenting from a very limited set of surface formats - perhaps only a single format for a particular surface. 
-This is likely to be the case when you are presenting directly to a display device.
-(?????????????????????????)
-
-The images you get back from a call to vkGetSwapchainImagesKHR() aren¡¯t immediately usable. 
-Before you can write any data into them, you need to acquire the next available image by using a call to vkAcquireNextImageKHR(). 
-This function retrieves the index of the next image in the swap chain that your application should render to. Its prototype is
-```
-VkResult vkAcquireNextImageKHR(
-	VkDevice						device,
-	VkSwapchainKHR		swapchain,
-	uint64_t						timeout,
-	VkSemaphore				semaphore,
-	VkFence						fence,
-	uint32_t*						pImageIndex
-);
-```
-
-The 'device' parameter is the device that owns the swap chain, and 'swapchain' is the handle to the swap chain to retrieve the next swap-chain image index from.
-
-vkAcquireNextImageKHR() waits for a new image to become available before returning to the application. 
-'timeout' specifies the time, in nanoseconds, that it will wait before returning. 
-If the 'timeout' is exceeded, then vkAcquireNextImageKHR() will return VK_NOT_READY. 
-By setting timeout to 0, you can implement nonblocking behavior whereby 
-	vkAcquireNextImageKHR() will either return a new image immediately or return VK_NOT_READY to indicate that it would block if called with a nonzero timeout.
-
-The index of the next image into which the application should render will be written into the variable pointed to by 'pImageIndex'. 
-The presentation engine might still be reading data from the image, so in order to synchronize access to the image, 
-	the 'semaphore' parameter can be used to pass the handle of a semaphore that will become signaled when the image can be rendered to, 
-	or the 'fence' parameter can be used to pass the handle to a fence that will become signaled when it is safe to render to the image.
-
-Semaphores and fences are two of the synchronization primitives supported by Vulkan. 
-We will cover synchronization primitives in more detail in Chapter 11, ¡°Synchronization.¡±
-
-7. Full-screen Surfaces
-
-The platform-specific extensions mentioned in the previous section allow 
-	a VkSurface object to be created that represents a native window owned by the operating system or window system. 
-These extensions are typically used to render into a window that is visible on a desktop. 
-Although it is often possible to create a window with no border that covers an entire display, it is often more efficient to render directly to a display instead.
-
-This functionality is provided by the VK_KHR_display and VK_KHR_display_swapchain extensions. 
-These extensions provide a platform-independent mechanism for discovering displays attached to a system, 
-	determining their properties and supported modes, and so on.
-
-If the Vulkan implementation supports VK_KHR_display, you can discover the number of display devices 
-	attached to a physical device by calling vkGetPhysicalDeviceDisplayPropertiesKHR().
-The prototype of which is
-```
-VkResult vkGetPhysicalDeviceDisplayPropertiesKHR(
-	VkPhysicalDevice					physicalDevice,
-	uint32_t*									pPropertyCount,
-	VkDisplayPropertiesKHR*		pProperties
-);
-```
-
-Displays are attached to physical devices, and the physical device whose displays you want information about is passed in the 'physicalDevice' parameter. 
-The 'pPropertyCount' is a pointer to a variable that will be overwritten with the number of physical devices attached to the display. 
-If 'pProperties' is nullptr, then the initial value of the variable pointed to by 'pPropertyCount' is ignored, 
-	and it is simply overwritten with the total number of displays attached to the device. 
-However, if 'pPropertyCount' is not nullptr, then it is a pointer to an array of VkDisplayPropertiesKHR structures. 
-The length of this array is passed as the initial value of the variable pointed to by 'pPropertyCount'. 
-The definition of VkDisplayPropertiesKHR is
-```
-typedef struct VkDisplayPropertiesKHR
-{
-	VkDisplayKHR									display;
-	const char*										displayName;
-	VkExtent2D										physicalDimensions;
-	VkExtent2D										physicalResolution;
-	VkSurfaceTransformFlagsKHR		supportedTransforms;
-	VkBool32											planeReorderPossible;
-	VkBool32											persistentContent;
-} VkDisplayPropertiesKHR;
-```
-
-The 'display' member of each of the VkDisplayPropertiesKHR structures is a handle to the display that can be used to reference it later. 
-The 'displayName' is a human-readable string describing the display. 
-The 'physicalDimensions' field gives the dimensions of the display, in millimeters.
-The 'physicalResolution' field gives the native resolution of the display, in pixels.
-
-Some displays (or display controllers) support flipping or rotating images as they¡¯re displayed. 
-If this is the case, those capabilities are reported in the 'supportedTransforms' field. 
-This bitfield is made up of the members of the VkSurfaceTransformsFlagsKHR enumeration described earlier.
-
-If the display supports more than one plane, then 'planeReorderPossible' will be set to VK_TRUE if those planes can be reordered with respect to one another. 
-If the planes can be shown only in a fixed order, then 'planeReorderPossible' will be set to VK_FALSE.
-
-Finally, some displays can accept partial or infrequent updates, which in many cases can improve power efficiency. 
-If the display does support being updated in this manner, 'persistentContent' will be set to VK_TRUE; otherwise, it will be set to VK_FALSE.
-
-All devices will support at least one plane on each connected display. 
-A plane can display images to the user. 
-In some cases, a device will support more than one plane that it can mix in various other planes to produce a final image. 
-These planes are sometimes known as 'overlay planes' because each plane can be overlaid on those logically beneath it. 
-When a Vulkan application presents, it presents to one of the planes of the display. 
-It¡¯s possible to present to multiple planes from the same application.
-
-The supported plane count is considered to be part of the device, 
-	as it is generally the device - not the physical display - that performs composition operations to merge information from the planes into a single image. 
-The physical device can then display a subset of its supported planes on each connected display. 
-To determine the number and type of planes supported by a device, call vkGetPhysicalDeviceDisplayPlanePropertiesKHR().
-The prototype of which is
-```
-VkResult VkGetPhysicalDeviceDisplayPlanePropertiesKHR(
-	VkPhysicalDevice							physicalDevice,
-	uint32_t*											pPropertyCount,
-	VkDIsplayPlanePropertiesKHR*		pProperties
-);
-```
-
-The physical device whose overlay capabilities to query is passed in 'physicalDevice'. 
-If 'pProperties' is nullptr, then 'pPropertyCount' is a pointer to a variable that will be overwritten with the number of display planes supported by the device. 
-If 'pProperties' is not nullptr, 
-	then it must be a pointer to an array of VkDisplayPlanePropertiesKHR structures large enough to hold information about the supported display planes. 
-The number of elements in the array is determined from the initial value of the variable pointed to by 'pPropertyCount'. 
-The definition of VkDisplayPlanePropertiesKHR is
-```
-typedef struct VkDisplayPlanePropertiesKHR
-{
-	VkDisplayKHR		currentDisplay;
-	uint32_t				currentStackIndex;
-} VkDisplayPlanePropertiesKHR;
-```
-
-For each display plane supported by the device, one entry is placed in the 'pProperties' array. 
-Each plane appears on a single physical display, which is represented by the 'currentDisplay' member, 
-	and if the device supports more than one plane on each display, the 'currentStackIndex' indicates the order in which the planes are overlaid on one another.
-
-Some of the device¡¯s display planes may span multiple physical displays. 
-To determine which display devices a display plane is visible on, you can call vkGetDisplayPlaneSupportedDisplaysKHR(), which is declared as
-```
-VkResult vkGetDisplayPlaneSupportedDisplaysKHR(
-	VkPhysicalDevice		physicalDevice,
-	uint32_t						planeIndex,
-	uint32_t*						pDisplayCount,
-	VkDisplayKHR*			pDisplays
-);
-```
-
-For a given physical display, specified in 'physicalDevice', and display plane, specified in 'planeIndex',
-	vkGetDisplayPlaneSupportedDisplaysKHR() writes the number of displays across which that plane is visible into the variable pointed to by 'pDisplayCount'. 
-If 'pDisplays' is not nullptr, then the handles to those displays are written into the array to which it points.
-
-Each display plane has a set of capabilities such as maximum resolution and whether or not it supports various composition modes, 
-	and these capabilities will vary by display mode. 
-To determine these capabilities, call vkGetDisplayPlaneCapabilitiesKHR(), the prototype of which is
-```
-VkResult vkGetDisplayPlaneCapabilitiesKHR(
-	VkPhysicalDevice								physicalDevice,
-	VkDisplayModeKHR							mode,
-	uint32_t												planeIndex
-	VkDisplayPlaneCapabilitiesKHR*		pCapabilities
-);
-```
-
-For a given device (passed in 'physicalDevice') and display mode (a handle to which is passed in 'mode'), 
-	the support for this mode supported by the plane specified in 'planeIndex' is written into an instance of the VkDisplayPlaneCapabilitiesKHR structure, 
-	the address of which is passed in 'pCapabilities'. 
-The definition of VkDisplayPlaneCapabilitiesKHR is
-```
-typedef struct VkDisplayPlaneCapabilitiesKHR
-{
-	VkDisplayPlaneAlphaFlagsKHR		supportedAlpha;
-	VkOffset2D										minSrcPosition;
-	VkOffset2D										maxSrcPosition;
-	VkExtent2D										minSrcExtent;
-	VkExtent2D										maxSrcExtent;
-	VkOffset2D										minDstPosition;
-	VkOffset2D										maxDstPosition;
-	VkExtent2D										minDstExtent;
-	VkExtent2D										maxDstExtent;
-} VkDisplayPlaneCapabitlitiesKHR;
-```
-
-The supported composition modes for the display plane are reported in 'supportedAlpha'. 
-This is a combination of the bits defined in VkDisplayPlaneAlphaFlagBitsKHR, which include
-```
-1.	VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR:
-	The plane does not support blended composition at all, and alll surfaces presented on that plane are considered to be fully opaque.
-
-2.	VK_DISPLAY_PLANE_ALPHA_GLOBAL_BIT_KHR:
-	The plane supports a single, global alpha value that is passed through the 'globalAlpha' member of the 
-		VkDisplaySurfaceCreateInfoKHR structure used to create the surface.
-
-3. VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR:
-	The plane supports per-pixel transparency that is sourced from the alpha channel of the images presented to the surfaces.
-```
-
-The 'minSrcPosition' and 'maxSrcPosition' fields specify the minimum and maximum offset of the displayable region 
-	within a presentable surface that can be displayed on the plane, and the 'minSrcExtent' and 'maxSrcExtent' fields specify its minimum and maximum size.
-
-The 'minDstPosition' and 'maxDstPosition' fields specify the minimum and maximum offset at 
-	which the plane may be placed on the corresponding physical display, and 'minDstExtent' and 'maxDstExtent' indicate its physical size, in pixels, on that display.
-(???????? Looks Dst is focused on 'output')
-
-Together, these fields allow a subset of a surface to be displayed in a window that may span one or more physical displays. 
-This is considered to be a relatively advanced display capability, and in practice, most devices will report 
-	'minSrcPosition', 'minDstPosition', 'maxSrcPosition', and 'maxDstPosition' as the display origin and the maximum extents as the supported resolution of the display.
-
-Each physical display may support multiple display modes. 
-Each mode is represented by a VkDisplayModeKHR handle and has a number of properties. 
-Each display can report a list of predefined display modes, which can be retrieved by calling vkGetDisplayModePropertiesKHR(), the prototype of which is
-```
-VkResult vkGetDisplayModePropertiesKHR(
-	VkPhysicalDevice							physicalDevice,
-	VkDisplayKHR									display,
-	uint32_t*											pPropertyCount,
-	VkDisplayModePropertiesKHR*		pProperties
-);
-```
-
-The physical device to which the display is attached is passed in 'physicalDevice', and the display whose modes you want to query is passed in 'display'. 
-Remember that multiple displays may be connected to a single physical device and each may support a different selection of display modes. 
-The 'pPropertyCount' parameter points to a variable that will be overwritten with the number of supported display modes. 
-The initial value of this variable is ignored if 'pProperties' is nullptr. 
-If 'pProperties' is not nullptr, then it should point to an array of VkDisplayModePropertiesKHR structures that will be filled with information about the display modes. 
-The definition of VkDisplayModePropertiesKHR is
-```
-typedef struct VkDisplayModePropertiesKHR
-{
-	VkDisplayModeKHR						displayMode;
-	VkDisplayModeParametersKHR		parameters;
-} VkDisplayModePropertiesKHR;
-```
-
-The first member of VkDisplayModePropertiesKHR, 'displayMode', is a VkDisplayModeKHR handle to the display mode that can be used to refer to it unambiguously. 
-The second member is an instance of the VkDisplayModeParametersKHR structure containing the parameters of the display mode. 
-The definition of this structure is
-```
-typedef struct VkDisplayModeParametersKHR
-{
-	VkExtent2D		visibleRegion;
-	uint32_t			refreshRate;
-} VkDisplayModeParametersKHR;
-```
-
-The parameters of the display mode are quite simple, containing only the extent of the display, in pixels, 
-	represented by the 'visibleRegion' member of VkDisplayModeParametersKHR and the refresh rate, measured in thousandths of a Hertz. 
-Generally, an application will enumerate the display modes supported by the device to which it wishes to render and select the most appropriate one. 
-If none of the preexisting display modes are suitable, it¡¯s also possible to create new ones by calling vkCreateDisplayModeKHR(), the prototype of which is
-```
-VkResult vkCreateDisplayModeKHR(
-VkPhysicalDisplayDevice							physicalDevice,
-VkDisplayKHR												display,
-const VkDisplayModeCreateInfoKHR*		pCreateInfo,
-const VkAllocationCallbacks*						pAlllocator,
-VkDisplayMdoeKHR*									pMode
-);
-```
-
-The physical device that will own the mode is passed in 'physicalDevice', and the display upon which the mode will be used is passed in 'display'. 
-If creation of the new mode is successful, a handle to it will be written into the variable pointed to by 'pMode'. 
-The parameters of the new mode are passed through a pointer to an instance of the VkDisplayModeCreateInfoKHR structure, the definition of which is
-```
-typedef struct VkDisplayModeCreateInfoKHR
-{
-	VkStructureType									sType;
-	const void*											pNext;
-	VkDisplayModeCreateFlagsKHR		flags;
-	VkDisplayModeParametersKHR			parameters;
-} VkDisplayModeCreateInfoKHR;
-```
-
-The 'sType' field of the VkDisplayModeCreateInfoKHR structure should be set to VK_STRUCTURE_TYPE_DISPLAY_MODE_CREATE_INFO_KHR.
-The 'pNext' should be set to nullptr. 
-The 'flags' field is reserved for future use and should be set to zero. 
-The remaining parameters of the new display mode are contained in an instance of the VkDisplayModeParametersKHR.
-
-Once you have determined the topology of the displays connected to the physical devices in the system, their supported planes, and their display modes, 
-	you can create a VkSurfaceKHR object referencing one of them, which you can use just like a surface referencing a window. 
-To do this, call vkCreateDisplayPlaneSurfaceKHR(), the prototype of which is
-```
-VkResult VkDisplayModeParametersKHR (
-	VkInstance														instance,
-	const VkDIsplaySurfaceCreateInfoKHR*		pCreateInfo,
-	const VkAllocationCallbacks*							pAllocator,
-	VkSurfaceKHR*												pSurface
-);
-```
-
-vkCreateDisplayPlaneSurfaceKHR() is a function that operates at the instance level 
-	because a single display mode might span multiple planes across multiple displays, even being connected to to multiple physical devices. 
-The parameters describing the surface are passed through an instance of the VkDisplaySurfaceCreateInfoKHR structure, 
-	the address of which is passed in 'pCreateInfo'. 
-The definition of VkDisplaySurfaceCreateInfoKHR is
-```
-typedef struct VkDisplaySurfaceCreateInfoKHR
-{
-	VkStructureType									sType;
-	const void*											pNext;
-	VkDisplaySurfaceCreateFlagsKHR		flags;
-	VkDisplayModeKHR							displayMode;
-	uint32_t												planeIndex;
-	uint32_t												planeStackIndex;
-	VkSurfaceTransformFlagBitsKHR		transform;
-	float														globalAlpha;
-	VkDisplayPlaneAlphaFlagBitsKHR		alphaMode;
-	VkExtent2D											imageExtent;
-} VkDisplaySurfaceCreateInfoKHR;
-```
-
-The 'sType' field of VkDisplaySurfaceCreateInfoKHR should be set to VK_STRUCTURE_TYPE_DISPLAY_SURFACE_CREATE_INFO_KHR.
-The 'pNext' should be set to nullptr. 
-The 'flags' field is reserved for future use and should be set to zero. 
-The handle to the display mode that is to be used for the new surface is passed through the 'displayMode' field. 
-This can be one of the predefined display modes returned from a call to vkGetDisplayModePropertiesKHR() 
-	or a user-created display mode produced from a call to vkCreateDisplayModeKHR().
-
-The plane to which the surface will be presented is passed in 'planeIndex', and 
-	the relative order in which the plane should appear when composited with other planes on the device should be passed in 'planeStackIndex'. 
-At time of presentation, the image can be flipped or rotated, assuming that the operation is supported by the display. 
-The operation to be performed is specified in 'transform', which is a single bit selected from the VkSurfaceTransformFlagBitsKHR enumeration. 
-This must be a supported transform for the video mode.
-
-The transforms that can be applied to a surface during presentation depend on the device and surface capabilities, 
-	which can be retrieved by using a call to vkGetPhysicalDeviceSurfaceCapabilitiesKHR().
-
-If the image is to be composited on top of other planes, it is possible to set the transparency for the surface by using the 'globalAlpha' and 'alphaMode' fields. 
-If alphaMode is VK_DISPLAY_PLANE_ALPHA_GLOBAL_BIT_KHR, then globalAlpha sets the global alpha value for composition. 
-If alphaMode is VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR, then the alpha value for each pixel is taken from the presented image, 
-	the value of 'globalAlpha' is ignored. 
-If alphaMode is VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR, then blended composition is disabled.
-
-The 'imageExtent' field specifies the size of the presentable surface. 
-In general, for full-screen rendering, this should be the same as the extent of the display mode selected in 'displayMode'.
-
-8.  Performing Presentation
-
-Presentation is an operation that occurs in the context of a queue. 
-Generally, commands executed inside command buffers submitted to a queue produce the images that are to be presented, 
-	so those images should be shown to the user only when the rendering operations that created them have completed. 
-While a device in a system may support many queues, it is not required that all of them support presentation. 
-Before you can use a queue for presentation to a surface, you must determine whether that queue supports presentation to that surface.
-
-To determine whether a queue supports presentation, 
-	pass the physical device, surface and queue family to a call to vkGetPhysicalDeviceSurfaceSupportKHR(), the prototype of which is
-```
-VkResult vkGetPhysicalDeviceSurfaceSupportKHR(
-	VkPhysicalDevice		physicalDevice,
-	uint32_t						queueFamilyIndex,
-	VkSurfaceKHR			surface,
-	VkBool32*					pSupported
-);
-```
-
-The physical device to query is passed in 'physicalDevice'. 
-All queues are members of a queue family, and all members of a queue family are considered to have identical properties. 
-Therefore, only the family of a queue is needed to determine whether that queue supports presentation. 
-The queue - family index is passed in 'queueFamilyIndex'.
-
-The capability of a queue to present is dependent on the surface. 
-For example, some queues may be able to present into windows owned by the operating system 
-	but have no direct access to physical hardware that controls full-screen surfaces. 
-Therefore, the surface to which you want to present is passed in surface.
-
-If vkGetPhysicalDeviceSurfaceSupportKHR() is successful, the ability of queues in the specified family to present to the surface specified in surface 
-	is written into the variable pointed to by pSupported - VK_TRUE indicating support and VK_FALSE indicating lack of support. 
-If something goes wrong, vkGetPhysicalDeviceSurfaceSupportKHR() will return a failure code, and the value of pSupported will not be overwritten.
-
-Before an image can be presented, it must be in the correct layout. 
-This state is the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout. 
-Images are transitioned from layout to layout using image memory barriers, as discussed briefly in Chapter 2, ¡°Memory and Resources.¡± 
-Listing 5.2 shows how to transition an image 
-	from VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout using an image memory barrier.
-
-```
-// Listing 5.2 Transitioning an Image to Present Source
-void MyVulkan::TransitionImageLayout()
-{
-	const VkImageMemoryBarrier barrier =
-	{
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,			//	sType
-		nullptr, 																							//	pNext
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,				//	srcAccessMask
-		VK_ACCESS_MEMORY_READ_BIT,										//	dstAccessMask
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		//	oldLayout
-		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,							//	newLayout
-		0,																									//	srcQueueFamilyIndex
-		0,																									//	dstQueueFamilyIndex
-		sourceImage,																				//	image
-		{																									//	subresourceRange
-			VK_IMAGE_ASPECT_COLOR_BIT,										//	aspectMask
-			0,																								//	baseMipLevel
-			1,																								//	levelCount
-			0,																								//	baseArrayLayer
-			1																								//	layerCount
-		}
-	};
-
-	vkCmdPipelineBarrier(
-		cmdBuffer,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &barrier
-		);
-}
-```
-
-Note that the image memory barrier is executed inside a command buffer and this command buffer should be submitted to a device queue for execution. 
-Once the image is in VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout, 
-	it can be presented to the user by calling vkQueuePresentKHR(), the prototype of which is
-```
-VkResult vkQueuePresentKHR(
-	VkQueue									queue,
-	const VkPresentInfoKHR*		pPresentInfo
-);
-```
-
-The queue to which the image should be submitted for presentation is specified in 'queue'. 
-The rest of the parameters to the command are passed through an instance of the VkPresentInfoKHR structure, the definition of which is
-```
-typedef struct VkPresentInfoKHR
-{
-	VkStructureType						sType;
-	const void*								pNext;
-	uint32_t									waitSemaphoreCount;
-	const VkSemaphore*				pWaitSemaphores;
-	uint32_t									swapchainCount;
-	const VkSwapchainKHR*		pSwapchains;
-	const uint32_t*							pImageIndices;
-	VkResult*									pResults;
-} VkPresentInfoKHR;
-```
-
-The 'sType' field of VkPresentInfoKHR should be set to VK_STRUCTURE_TYPE_PRESENT_INFO_KHR.
-The 'pNext' should be set to nullptr. 
-Before the images are presented, 
-	Vulkan will optionally wait on one or more semaphores to enable rendering to the images to be synchronized with the presentation operation. 
-The number of semaphores to wait on is passed in the 'waitSemaphoreCount' member.
-The 'pWaitSemaphores' member points to an array of this many semaphore handles to wait on.
-
-A single call to vkQueuePresentKHR() can actually present multiple images to multiple swap chains at the same time. 
-This is useful, for example, in an application that is rendering to multiple windows at the same time. 
-The number of images to preset is specified in 'swapchainCount'. 
-'pSwapchains' is an array of the swap-chain objects to present with.
-
-The images presented to each of the swap chains are not referenced by their VkImage handles 
-	but by the indices into their arrays of swap-chain images as retrieved from the swap-chain object. 
-For each swap chain that will be presented to, one image index is passed through the corresponding element in the array pointed to by 'pImageIndices'.
-
-Each of the separate present operations triggered by the call to vkQueuePresentKHR() can produce its own result code. 
-Remember that some values of VkResult indicate success. 
-'pResults' is a pointer to an array of swapchainCount VkResult variables that will be filled with the results of the present operations.
-
-9. Cleaning Up
-
-Regardless of the method of presentation you¡¯ve used in your application, it is important to clean up correctly. 
-First, you should destroy the swap chain to which you are presenting. 
-To do this, call vkDestroySwapchainKHR(), the prototype of which is
-```
-void vkDestroySwapchainKHR(
-	VkDevice										device,
-	VkSwapchainKHR						swapchain,
-	const VkAllocationCallbacks*		pAllocator
-);
-```
-
-The device that owns the swap chain is passed in 'device', and the swap chain to destroy is passed in 'swapchain'. 
-If a host memory allocator was used to create the swap chain, then a pointer to a compatible allocator is passed in 'pAllocator'.
-
-When the swap chain is destroyed, all of the presentable images associated with the swap chain are also destroyed. 
-Therefore, before you destroy a swap chain, you should ensure that there is no pending work 
-	that might write to any of its surfaces and that there are no pending present operations that might read from them. 
-The easiest way to do this is to call vkDeviceWaitIdle() on the device. 
-While not normally recommended, destruction of a swap chain usually does not occur in a performance-critical part of an application, so in this case, simple is best.
-
-When images are acquired from a swap chain using vkAcquireNextImageKHR() or presented using vkQueuePresentKHR(), 
-	semaphores are passed to these functions to signal and wait on, resepectively. 
-Care should be taken that the semaphores live long enough that the swap chain can complete any signaling operations on them before they are destroyed. 
-To ensure this, it is best to destroy the swap chain before destroying any semaphores that might have been used with it.
-
-SUMMARY
-In this chapter, you learned about the operations supported by Vulkan for getting images onto displays. 
-We covered presenting to various window systems, the mechanism by which you determine which images to render into, 
-	and how to enumerate and control the physical display devices attached to a system. 
-We briefly covered synchronization involved in presenting and will dig further into synchronization primitives later in the book. 
-We also discussed methods for configuring display synchronization. 
-With the information in this chapter, you should have a decent understanding of how Vulkan presents images to the user.
+What You'll Learn in This Chapter```1. How to display the results of your program onscreen.2. How to determine the display devices attached to the system.3. How to change display modes and interface with a native window system.```Vulkan is primarily a graphics API in the sense that the majority of its functionality is dedicated to generating and processing images. Most Vulkan applications will be designed to show their results to the user. This is a process known as 'presentation'. However, because the variety of platforms upon which Vulkan runs is large, and because not all applications need to present their outputs to the user visually, 	presentation is not a core part of the API but is handled by a set of extensions. This chapter discusses how to enable and use those extensions to get pictures on the screen.1. Presentation ExtensionPresentation in Vulkan is not part of the core API. In fact, a given implementation of Vulkan may not support presentation at all. The reasons for this are```1. Not all Vulkan applications need to present images to the user.	Computecentric applications, for example, might produce nonvisual data or produce images that only need to be saved to disk rather than displayed in real time.2. Presentation is generally handled by the operating system, window system, or other platform-specific library, which can vary quite a bit from platform to platform.```Due to this, presentation is handled by a set of extensions collectively known as the WSI extensions, or Window System Integration systems. Extensions in Vulkan must be enabled explicitly before they can be used, and the extension needed for each platform is slightly different, 	as some of the functions take platform-specific parameters. Before you can perform any presentation-related operations, 	therefore, you need to enable the appropriate presentation-related extensions using the mechanisms described in Chapter 1, "Overview of Vulkan."Presentation in Vulkan is handled by a small suite of extensions. Functionality that is common to almost all platforms that support presenting graphical output to the user is supported by one extension, 	and functionality that is specific to each platform is supported by a number of smaller, platform-specific extensions.2. Presentation SurfacesThe object to which graphics data is rendered in order to be presented is known as a 'surface' and is represented by a VkSurfaceKHR handle. This special object is introduced by the 'VK_KHR_surface' extension. This extension adds general functionality for handling surface objects 	but is customized on a per-platform basis to provide the platform-specific interfaces to associate a surface with a window. Interfaces are defined for Microsoft Windows, Mir and Wayland, X Windows via either the XCB or Xlib interface, and Android. Further platforms may be added in the future.The prototypes and data types for the platform-specific parts of the extension are included in the main 'vulkan.h' header file 	but are protected behind platform-specific preprocessor guards. The code for this book supports the Windows platform and the Linux platform via the Xlib and Xcb interfaces. To enable the code for these platforms, before including vulkan.h, 	we must define one of the VK_USE_PLATFORM_WIN32_KHR, VK_USE_PLATFORM_XLIB_KHR, or VK_USE_PLATFORM_LIB_XCB_KHR defines. The build system for the book's source code does this for you using a compiler command-line option.Vulkan is also supported on a wide range of other operating systems and device types. In particular, many of Vulkan's features are geared to mobile and embedded devices. For example, Vulkan is the API of choice on the Android platform, and in addition to the interfaces covered here, 	the Android platform has full support through its own platform interfaces. Outside of initialization, though, using Vulkan on Android should be a fairly similar experience to using Vulkan on other platforms.3. Presentation on Microsoft WindowsBefore we can present, we need to determine whether any queues on a device support presentation operations. Presentation capability is a per-queue-family feature. On Windows platforms, call the vkGetPhysicalDeviceWin32PresentationSupportKHR() function to determine 	whether a particular queue family supports presentation. Its prototype is```VkBool32 vkPhysicalDeviceWin32PresentationSupportKHR(	VkPhysicalDevice		physicalDevice,	uint32_t						queueFamilyIndex);```The physical device being queried is passed in 'physicalDevice', and the queue family index is passed in 'queueFamilyIndex'. If at least one queue family supports presentation, then we can proceed to create presentable surfaces using the device. To create a surface, use the vkCreateWin32SurfaceKHR() function, whose prototype is```VkResult vkCreateWin32SurfaceKHR(	VkInstance													instance,	const VkWin32SurfaceCreateInfoKHR*		pCreateInfo,	const VkAllocationCallbacks*						pAllocator,	VkSurfaceKHR*											pSurface);```This function associates a Windows native window handle with a new surface object and returns the object in the variable pointed to by 'pSurface'. Only a Vulkan instance is required, and its handle is passed into 'instance'. The information describing the new surface is passed through 'pCreateInfo', which is a pointer to an instance of the VkWin32SurfaceCreateInfoKHR structure, the definition of which is```typedef struct VkWin32SurfaceCreateInfoKHR{	VkStructure											sType;	const void*											pNext;	VkWin32SurfaceCreateFlagsKHR		flags;	HINSTANCE										hinstance;	HWND													hwnd;} VkWin32SurfaceCreateInfoKHR;```The 'sType' field of VkWin32SurfaceCreateInfoKHR should be set to VK_STRUCTURE_TYPE_DISPLAY_SURFACE_CREATE_INFO_KHR.The 'pNext' should be set to nullptr unless another extension in use extends the structure. The 'flags' field is reserved for future use and should be set to zero.The 'hinstance' parameter should be set to the HINSTANCE of the application or module that was used to create the the native window. This is typically passed to the application in the first parameter of WinMain or can be obtained by calling the Win32 function GetModuleHandle with a null pointer. The 'hwnd' member is the handle to the native window with which to associate the Vulkan surface. This is the window in which the results of presentation to swap chains created for the surface will be displayed.4. Presentation on Xlib-Based PlatformsThe process for creating a surface on an Xlib-based system is similar. First, we need to determine whether the platform supports presentation to an Xlib surface on an X server. To do this, call vkGetPhysicalDeviceXlibPresentationSupportKHR(), whose prototype is```VkBool32 vkGetPhysicalDeviceXlibPresentationSupportKHR(	VkPhysicalDevice		physicalDevice,	uint32_t						queueFamilyIndex,	Display*						dpy,	VisualID						visualID);```For the physical device whose handle is specified in 'physicalDevice', and the queue family index specified in 'queueFamilyIndex'.The vkGetPhysicalDeviceXlibPresentationSupportKHR() reports whether queues in that family support presentation to Xlib surfaces for a given X server. The connection to the X server is represented by the 'dpy' parameter. Presentation is supported on a per-format basis. In Xlib, formats are represented by visual IDs, and the visual ID for the intended format of the surface is passed in 'visualID'.Assuming that at least one queue family on a device supports presentation to a format we'd like to use, 	we can then create a surface for an Xlib window by calling the vkCreateXlibSurfaceKHR() function, the prototype of which is```VkResult vkCreateXlibSurfaceKHR(	VkInstance												instance,	const VkXlibSurfaceCreateInfoKHR*		pCreateInfo,	const VkAllocationCallbacks*					pAllocator,	VkSurfaceKHR*										pSurface);```vkCreateXlibSurfaceKHR() creates a new surface associated with an Xlib window. The Vulkan instance should be passed in 'instance', and the remaining parameters controlling the creation of the surface are passed in 'pCreateInfo', 	which is a pointer to an instance of the VkXlibSurfaceCreateInfoKHR structure, the definition of which is```typedef struct VkXlibSurfaceCreateInfoKHR{	VkStructureType								sType;	const void*										pNext;	VkXlibSurfaceCreateFlagsKHR		flags;	Display*											dpy;	Window											window;} VkXlibSurfaceCreateInfoKHR;```The sType field of VkXlibSurfaceCreateInfoKHR should be set to VK_STRUCTURE_TYPE_XLIB_SURFACE_CREATE_INFO_KHR.The 'pNext' should be set to nullptr. The 'flags' field is reserved and should be set to zero.The 'dpy' field is the Xlib Display representing the connection to the X server.The 'window' is the Xlib Window handle to the window with which the new surface will be associated.If vkCreateXlibSurfaceKHR() requires any host memory, it will use the host memory allocator passed in 'pAllocator'. If 'pAllocator' is nullptr, then an internal allocator will be used.If surface creation is successful, the resulting VkSurface handle is written into the variable pointed to by 'pSurface'.5. Presentation with XcbXcb is a slightly lower-level interface to the X protocol than is provided by Xlib and may be a better choice for applications that wish to achieve lower latency. As with Xlib and the other platforms, before creating objects for presentation on an Xcb system, 	we need to determine whether any of the queues on a physical device support presentation. To do this, call vkGetPhysicalDeviceXcbPresentationSupportKHR(), the prototype of which is```VkBool32 vkGetPhysicalDeviceXcbPresentationSupportKHR(	VkPhysicalDevice		physicalDevice,	uint32_t						queueFamilyIndex,	xcb_connection_t*		connection,	xcb_visualid_t				visual_id);```The physical device being queried is passed in 'physicalDevice', and the index of the queue family is passed in 'queueFamilyIndex'. The connection to the X server is passed in 'connection'. Again, presentation capability is reported on a per-visual ID basis, and the visual ID being queried is passed in 'visual_id'.Once you have determined that at least one queue family on the device supports presentation in the visual ID of your choice, 	you can create a surface into which to render using vkCreateXcbSurfaceKHR(), the prototype of which is```VkResult vkCreateXcbSurfaceKHR(	VkInstance												instance,	const VkXcbSurfaceCreateInfoKHR*		pCreateInfo,	const VkAllocationCallbacks*					pAllocator,	VkSurfaceKHR*										pSurface);```The Vulkan instance is passed in 'instance', and the remaining parameters controlling creation of the surface 	are passed through an instance of the VkXcbSurfaceCreateInfoKHR structure pointed to by 'pCreateInfo'. The definition of VkXcbSurfaceCreateInfoKHR is```typedef struct VkXcbSurfaceCreateInfoKHR{	VkStructureType								sType;	const void*										pNext;	VkXcbSurfaceCreateFlagsKHR		flags;	xcb_connection_t *							connection;	xcb_window_t									window;} VkXcbSurfaceCreateInfoKHR;```The 'sType' field for VkXcbSurfaceCreateInfoKHR should be set to VK_STRUCTURE_TYPE_XCB_SURFACE_CREATE_INFO.The 'pNext' should be set to nullptr. The 'flags' field is reserved and should be set to zero. The connection to the X server is passed in the 'connection' field, and the handle to the window is passed in 'window'.If vkCreateXcbSurfaceKHR() is successful, it will write the handle to the new surface into the variable pointed to by 'pSurface'. If it needs any host memory to construct the handle and 'pAllocator' is not nullptr, then it will use your allocator to request that memory.6. Swap ChainsRegardless of which platform you're running on, the resulting VkSurfaceKHR handle refers to Vulkan's view of a window. In order to actually present anything to that surface, it's necessary to create a special image that can be used to store the data in the window. On most platforms, this type of image is either owned by or tightly integrated with the window system, 	so rather than creating a normal Vulkan image object, we use a second object called a swap chain to manage one or more image objects.Swap-chain objects are used to ask the native window system to create one or more images that can be used to present into a Vulkan surface. This is exposed using the VK_KHR_swapchain extension. Each swap-chain object manages a set of images, usually in some form of ring buffer. The application can ask the swap chain for the next available image, render into it, and then hand the image back to the swap chain ready for display. By managing presentable images in a ring or queue, one image can be presented to the display while another is being drawn to by the application, 	overlapping the operation of the window system and application.To create a swap-chain object, call vkCreateSwapchainKHR(), the prototype of which is```VkResult vkCreateSwapchainKHR(	VkDevice													device,	const VkSwapchainCreateInfoKHR*		pCreateInfo,	const VkAllocationCallbacks*					pAllocator,	VkSwapchainKHR*									pSwapchain);```The device with which the swap chain is to be associated is passed in 'device'. The resulting swap chain can be used with any of the queues on device that support presentation. The information about the swap chain is passed in an instance of the VkSwapchainCreateInfoKHR structure, the address of which is passed in 'pCreateInfo'. The definition of VkSwapchainCreateInfoKHR is```typedef struct VkSwapchainCreateInfoKHR{	VkStructureType								sType;	const void*										pNext;	VkSwapchainCreateFlagsKHR		flags;	VkSurfaceKHR								surface;	uint32_t											minImageCount;	VkFormat											imageFormat;	VkColorSpaceKHR							imageColorSpace;	VkExtent2D										imageExtent;	uint32_t											imageArrayLayers;	VkImageUsageFlags						imageUsage;	VkSharingMode								imageSharingMode;	uint32_t											queueFamilyIndexCount;	const uint32_t*									pQueueFamilyIndices;	VkSurfaceTransformFlagBitsKHR	preTransform;	VkCompositeAlphaFlagBitsKHR		compositeAlpha;	VkPresentModeKHR						presentMode;	VkBool32											clipped;	VkSwapchainKHR							oldSwapchain;} VkSwapchainCreateInfoKHR;```The 'sType' field for VkSwapchainCreateInfoKHR should be set to VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR.The 'pNext' should be set to nullptr. The 'flags' field is reserved for use in future versions of the VK_KHR_swapchain extension and should be set to zero.The surface to which the new swap chain will present is passed in 'surface'. This should be a surface created with one of the the platform-specific surface creation functions such as vkCreateWin32SurfaceKHR() or vkCreateXlibSurfaceKHR(). The number of images in the swap chain is passed in 'minImageCount'. For example, to enable double or triple buffering, set minImageCount to 2 or 3, respectively. Setting minImageCount to 1 represents a request to render to the front buffer or directly to the display. Some platforms don't support this (and may not even support double buffering). To determine the minimum and maximum number of images supported in a swap chain, 	call vkGetPhysicalDeviceSurfaceCapabilitiesKHR(), which is discussed later in this section.Note that setting 'minImageCount' to 2 means that you'll have a single front buffer and a single back buffer. After triggering presentation of a finished back buffer, you won't be able to begin rendering to the other buffer until the presentation has completed. For best performance, possibly at the price of some latency, you should set 'minImageCount' to at least 3 if the device supports it.The format and color space of the presentable images is specified in 'imageFormat' and 'imageColorSpace'. The format must be a Vulkan format for which the device reports the presentation capability. The 'imageColorSpace' is a member of the VkColorSpaceKHR enumeration, the only member of which is VK_COLORSPACE_SRGB_NONLINEAR_KHR, 	which means that the presentation engine can expect sRGB nonlinear data, if the imageFormat member indicates an sRGB format image.The 'imageExtent' field specifies the dimensions of the images in the swap chain, in pixels.The 'imageArrayLayers' field specifies the number of layers in each image. This can be used to render to a layered image and then present specific layers of it to the user. The 'imageUsage' field is a collection of the standard VkImageUsageFlags enumeration specifying how the images will be used (in addition to as present sources). For example, if you want to render to the image as a normal color attachment, you would include VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT, 	and if you want to write directly to it with a shader, you would include VK_IMAGE_USAGE_STORAGE_BIT.The set of usages that are included in 'imageUsage' must be selected from the usages supported for swap-chain images. This is determined by calling vkGetPhysicalDeviceSurfaceCapabilitiesKHR(). (???????????????????????????) The 'preTransform' field specifies how the images should be transformed prior to presentation to the user.  This allows images to be rotated or flipped (or both) to accommodate things like portrait displays and rear-projection systems.  It is a bitwise combination of a selection of members of the VkSurfaceTransformFlagBitsKHR enumeration. The 'compositeAlpha' field controls how alpha composition is handled by the window system.  This is a member of the VkCompositeAlphaFlagBitsKHR enumeration.  If this is set to VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR, 	then the alpha channel of the presentable image (if it exists) is ignored and treated as though it contains constant 1.0 values. Other values of compositeAlpha allow partially transparent images to be composited by the native window system.The 'presentMode' field controls synchronization with the window system and the rate at which the images are presented to the surface. The available modes are```1. VK_PRESENT_MODE_IMMEDIATE_KHR:	When presentation is scheduled, the image is presented to the user as soon as possible, without wating for any external events such as vertical blanking.	This provides the highest possible frame rate but can introduce tearing or other artifacts.2. VK_PRESENT_MODE_MAILBOX_KHR:	When a new image is presented, it is marked as the pending image, 		and at the next opportunity (probably after the next vertical refresh), the system will display it to the user. 	If a new image is presented before this happens, that image will be shown, and the previously presented image will be discarded.3. VK_PRESENT_MODE_FIFO_KHR:	Images to be presented are stored in an internal queue and shown to the user in order. 	A new image is taken from the queue at regular intervals (usually after each vertical refresh).4. VK_PRESENT_MODE_FIFO_RELAXED_KHR:	This mode behaves similarly to VK_PRESENT_MODE_FIFO_KHR, except that if the queue is empty and vertical refresh occurs, 		the next image posted to the queue will be displayed immediately, similarly to VK_PRESENT_MODE_IMMEDIATE_KHR. 	This allows an application running faster than the vertical refresh rate to avoid tearing while still going as fast as possible if it can't keep up in places.```As a general rule, if you want to run with vertical sync (vsync) on, select VK_PRESENT_MODE_FIFO_KHR, and 	if you want to run as fast as possible, select VK_PRESENT_MODE_IMMEDIATE_KHR or VK_PRESENT_MODE_MAILBOX_KHR. VK_PRESENT_MODE_IMMEDIATE_KHR will show visible tearing in most cases but provides the lowest possible latency. VK_PRESENT_MODE_MAILBOX_KHR continues to flip at regular intervals, producing a maximum latency of one vertical refresh, but will not exhibit tearing.The clipped member of VkSwapchainCreateInfoKHR is used to optimize cases where not all of the surface might be visible. For example, if the surface to which the images will be presented represents a window that might be covered or partially off the screen, 	it may be possible to avoid rendering the parts of it that the user will never see. When clipped is VK_TRUE, Vulkan can eliminate those parts of the image from rendering operations. When clipped is VK_FALSE, Vulkan will render the entire image, regardless of whether it's visible or not.Finally, the oldSwapchain field of VkSwapchainCreateInfoKHR may be used to pass an existing swap chain associated with the surface back to Vulkan for recycling. This is used when one swap chain is being replaced by another, such as when a window is resized and the swap chain needs to be reallocated with larger images.(????? I did not fully get it yet.)The parameters contained in the VkSwapchainCreateInfoKHR structure must all conform to the capabilities of the suface, 	which you can determine by calling vkGetPhysicalDeviceSurfaceCapabilitiesKHR(), the prototype of which is```VkResult vkGetPhysicalDeviceSurfaceCapabilitiesKHR(	VkPhysicalDevice						physicalDevice,	VkSurfaceKHR							surface,	VkSurfaceCapabilitiesKHR*		pSurfaceCapabilities);```The physical device that owns the surface is passed in 'physicalDevice', and the surface whose capabilies are being queried is passed in 'surface'. vkGetPhysicalDeviceSurfaceCapabilitiesKHR() then returns information about the surface in an instance of the VkSurfaceCapabilitiesKHR structure, 	a pointer to which is provided through the 'pSurfaceCapabilities' parameter. The definition of VkSurfaceCapabilitiesKHR is```typedef struct VkSurfaceCapabilitiesKHR{	uint32_t											minImageCount;	uint32_t											maxImageCount;	VkExtent2D										currentExtent;	VkExtent2D										minImageExtent;	VkExtent2D										maxImageExtent;	uint32_t											maxImageArrayLayers;	VkSurfaceTransformFlagsKHR		supportedTransforms;	VkSurfaceTransformFlagBitsKHR	currentTransform;	VkCompositeAlphaFlagsKHR			supportedCompositeAlpha;	VkImageUsageFlags						supportedUsageFlags;} VkSurfaceCapabilities;```The number of images in the swap chain must fall between the 'minImageCount' and 'maxImageCount' parameters of the surface's capabilities. The current size of the surface at the time of the query is returned in 'currentExtent'. If the surface is resizable (such as a sizeable window on a desktop), 	then the smallest and largest sizes that the surface can become are returned in 'minImageExtent' and 'maxImageExtent'. If the surface supports presentation from array images, the maximum number of layers in those images is returned in 'minArrayLayers'.Some surfaces support performing transformations on images as they are presented. For example, an image might be flipped or rotated to accommodate presentation to displays or other devices that are at nonstandard angles. The set of supported transforms is returned in the 'supportedTransforms' field of VkSurfaceCapabilitiesKHR and 	is a bitfield made up of a selection of members of the VkSurfaceTransformFlagBitsKHR enumeration. One of those bits is set in 'currentTransform', which contains the current transform applied when the query is made.If the surface supports composition, then the supported composition modes are contained as a combination of flags from 	the VkCompositeAlphaFlagBitsKHR enumeration in the supportedCompositeAlpha field.Finally, the allowed usage for the images created through a swap chain on this surface is returned in 'supportedUsageFlags'.Once you have a swap chain associated with a surface to which you want to present, you need to get handles to the images representing the items in the chain. (??)To do this, call vkGetSwapchainImagesKHR(), the prototype of which is```VkResult vkGetSwapchainImagesKHR(	VkDevice						device;	VkSwapchainKHR		swapchain;	uint32_t*						pSwapchainImageCount;	VkImage*						pSwapchainImages;);```The device that owns the swap chain should be passed in 'device', and the swap chain from which you are requesting images should be passed in 'swapchain'. 'pSwapchainImageCount' points to a variable that will contain the number of images received. If 'pSwapchainImages' is nullptr, then the initial value of 'pSwapchainImageCount' will be ignored, 	and the variable will instead be overwritten with the number of swap-chain images in the swap-chain object. If 'pSwapchainImages' is not nullptr, then it should be a pointer to an array of VkImage handles that will be filled with the images from the swap chain. The intial value of the variable pointed to by 'pSwapchainImageCount' is the length of the array, 	and it will be overwritten with the number of images actually placed in the array.Because when you create the swap chain, you get to specify only the 'minimum' number of images in the swap chain, not the exact number of images, 	you need to use vkGetSwapchainImagesKHR() to determine how many images there really are in a swap chain, even if you just created it. Listing 5.1 demonstrates how to create a swap chain for an existing surface, query the number of images in it, and then query the actual image handles.```// Listing 5.1void MyVulkan::CreateSwapChain(){	// First, we create the swap chain.	VkSwapchainCreateInfoKHR swapchainCreateInfo =	{		VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,		// sType		nullptr,																									// pNext		0,																											// flags		m_mainSurface,																					// surface		2, 																										// minImageCount		VK_FORMAT_R8G8B8A8_UNORM,													// imageFormat		VK_COLORSPACE_SRGB_NONLINEAR_KHR,								// imageColorSpace		{1024, 768},																							// imageExtent		1,																											// imageArrayLayers		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,							// imageUsage		VK_SHARING_MODE_EXCLUSIVE,													// imageSharingMode		0,																											// queueFamilyIndexCount		nullptr,																									// pQueueFamilyIndices		VK_SURFACE_TRANSFORM_INHERIT_BIT_KHR,							// preTransform		VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,								// compositeAlpha		VK_PRESENT_MODE_FIFO_KHR,													// presentMode		VK_TRUE,																							// clipped		m_swapChain																						// oldSwapchain	};	VulkanHelper::VkCheck(		vkCreateSwapchainKHR(		logicalDevices.front(),			&swapchainCreateInfo,			&myAllocator,			&m_swapChain		),		"vkCreateSwapchainKHR is failed!");	// Next, we query the swap chain for the number of images it actaully contains.	uint32_t swapchainImageCount = 0;	VulkanHelper::VkCheck(		vkGetSwapchainImagesKHR(			logicalDevices.front(),			m_swapChain,			&swapchainImageCount,			nullptr		),		"vkGetSwapchainImagesKHR is failed!"	);	// Now we resize our image array and retrieve the image handles from the swap chain.	m_swapChainImages.resize(swapchainImageCount);	VulkanHelper::VkCheck(		vkGetSwapchainImagesKHR(			logicalDevices.front(),			m_swapChain,			&swapchainImageCount,			m_swapChainImages.data()		),		"vkGetSwapchainImagesKHR is failed!"	);}```Note that the code in Listing 5.1 contains many hard-coded values. In a more robust application, you should call vkGetPhysicalDeviceSurfaceCapabilitiesKHR() to determine the capabilities of the device 	with respect to presenting the surface and the capabilities of the surface to support parameters 	such as the transform mode, number of images in the swap chain, and so on.In particular, the surface format chosen in the 'imageFormat' field of VkSwapchainCreateInfoKHR must be a format that is supported by the surface. To determine which formats can be used for swap chains associated with a surface, call vkGetPhysicalDeviceSurfaceFormatsKHR(), the prototype of which is```VKAPI_ATTR VkResult VKAPI_CALL vkGetPhysicalDeviceSurfaceFormatsKHR(	VkPhysicalDevice				physicalDevice,	VkSurfaceKHR					surface,	uint32_t*								pSurfaceFormatCount,	VkSurfaceFormatKHR*		pSurfaceFormats);```The physical device that you are querying is passed in 'physicalDevice', and the surface to which you want to present is passed in 'surface'. If 'pSurfaceFormats' is nullptr, then the variable pointed to by 'pSurfaceFormatCount' is overwritten with the number of formats supported by the surface. If 'pSurfaceFormats' is not nullptr, 	then it is a pointer to an array of VkSurfaceFormatKHR structures large enough to receive the number of formats supported by the surface. In this case, the number of elements in the array is passed as the initial value of the variable pointed to by pSurfaceFormats, 	and this is overwritten with the number of formats actually written to the array.The definition of VkSurfaceFormatKHR is```typedef struct VkSurfaceFormatKHR{	VkFormat						format;	VkColorSpaceKHR		colorSpace;} VkSurfaceFormatKHR;```The 'format' field of VkSurfaceFormatKHR is the format of pixels in memory for the surface, and 'colorSpace' is the supported color space. At present, the only defined color space is VK_COLORSPACE_SRGB_NONLINEAR_KHR.In some cases, devices will support presentation from almost any format. This is generally true of compositing systems that use the image you've rendered to as an input to some further processing. However, other devices may support presenting from a very limited set of surface formats - perhaps only a single format for a particular surface. This is likely to be the case when you are presenting directly to a display device.(?????????????????????????)The images you get back from a call to vkGetSwapchainImagesKHR() aren't immediately usable. Before you can write any data into them, you need to acquire the next available image by using a call to vkAcquireNextImageKHR(). This function retrieves the index of the next image in the swap chain that your application should render to. Its prototype is```VkResult vkAcquireNextImageKHR(	VkDevice						device,	VkSwapchainKHR		swapchain,	uint64_t						timeout,	VkSemaphore				semaphore,	VkFence						fence,	uint32_t*						pImageIndex);```The 'device' parameter is the device that owns the swap chain, and 'swapchain' is the handle to the swap chain to retrieve the next swap-chain image index from.vkAcquireNextImageKHR() waits for a new image to become available before returning to the application. 'timeout' specifies the time, in nanoseconds, that it will wait before returning. If the 'timeout' is exceeded, then vkAcquireNextImageKHR() will return VK_NOT_READY. By setting timeout to 0, you can implement nonblocking behavior whereby 	vkAcquireNextImageKHR() will either return a new image immediately or return VK_NOT_READY to indicate that it would block if called with a nonzero timeout.The index of the next image into which the application should render will be written into the variable pointed to by 'pImageIndex'. The presentation engine might still be reading data from the image, so in order to synchronize access to the image, 	the 'semaphore' parameter can be used to pass the handle of a semaphore that will become signaled when the image can be rendered to, 	or the 'fence' parameter can be used to pass the handle to a fence that will become signaled when it is safe to render to the image.Semaphores and fences are two of the synchronization primitives supported by Vulkan. We will cover synchronization primitives in more detail in Chapter 11, "Synchronization."7. Full-screen SurfacesThe platform-specific extensions mentioned in the previous section allow 	a VkSurface object to be created that represents a native window owned by the operating system or window system. These extensions are typically used to render into a window that is visible on a desktop. Although it is often possible to create a window with no border that covers an entire display, it is often more efficient to render directly to a display instead.This functionality is provided by the VK_KHR_display and VK_KHR_display_swapchain extensions. These extensions provide a platform-independent mechanism for discovering displays attached to a system, 	determining their properties and supported modes, and so on.If the Vulkan implementation supports VK_KHR_display, you can discover the number of display devices 	attached to a physical device by calling vkGetPhysicalDeviceDisplayPropertiesKHR().The prototype of which is```VkResult vkGetPhysicalDeviceDisplayPropertiesKHR(	VkPhysicalDevice					physicalDevice,	uint32_t*									pPropertyCount,	VkDisplayPropertiesKHR*		pProperties);```Displays are attached to physical devices, and the physical device whose displays you want information about is passed in the 'physicalDevice' parameter. The 'pPropertyCount' is a pointer to a variable that will be overwritten with the number of physical devices attached to the display. If 'pProperties' is nullptr, then the initial value of the variable pointed to by 'pPropertyCount' is ignored, 	and it is simply overwritten with the total number of displays attached to the device. However, if 'pPropertyCount' is not nullptr, then it is a pointer to an array of VkDisplayPropertiesKHR structures. The length of this array is passed as the initial value of the variable pointed to by 'pPropertyCount'. The definition of VkDisplayPropertiesKHR is```typedef struct VkDisplayPropertiesKHR{	VkDisplayKHR									display;	const char*										displayName;	VkExtent2D										physicalDimensions;	VkExtent2D										physicalResolution;	VkSurfaceTransformFlagsKHR		supportedTransforms;	VkBool32											planeReorderPossible;	VkBool32											persistentContent;} VkDisplayPropertiesKHR;```The 'display' member of each of the VkDisplayPropertiesKHR structures is a handle to the display that can be used to reference it later. The 'displayName' is a human-readable string describing the display. The 'physicalDimensions' field gives the dimensions of the display, in millimeters.The 'physicalResolution' field gives the native resolution of the display, in pixels.Some displays (or display controllers) support flipping or rotating images as they're displayed. If this is the case, those capabilities are reported in the 'supportedTransforms' field. This bitfield is made up of the members of the VkSurfaceTransformsFlagsKHR enumeration described earlier.If the display supports more than one plane, then 'planeReorderPossible' will be set to VK_TRUE if those planes can be reordered with respect to one another. If the planes can be shown only in a fixed order, then 'planeReorderPossible' will be set to VK_FALSE.Finally, some displays can accept partial or infrequent updates, which in many cases can improve power efficiency. If the display does support being updated in this manner, 'persistentContent' will be set to VK_TRUE; otherwise, it will be set to VK_FALSE.All devices will support at least one plane on each connected display. A plane can display images to the user. In some cases, a device will support more than one plane that it can mix in various other planes to produce a final image. These planes are sometimes known as 'overlay planes' because each plane can be overlaid on those logically beneath it. When a Vulkan application presents, it presents to one of the planes of the display. It's possible to present to multiple planes from the same application.The supported plane count is considered to be part of the device, 	as it is generally the device - not the physical display - that performs composition operations to merge information from the planes into a single image. The physical device can then display a subset of its supported planes on each connected display. To determine the number and type of planes supported by a device, call vkGetPhysicalDeviceDisplayPlanePropertiesKHR().The prototype of which is```VkResult VkGetPhysicalDeviceDisplayPlanePropertiesKHR(	VkPhysicalDevice							physicalDevice,	uint32_t*											pPropertyCount,	VkDIsplayPlanePropertiesKHR*		pProperties);```The physical device whose overlay capabilities to query is passed in 'physicalDevice'. If 'pProperties' is nullptr, then 'pPropertyCount' is a pointer to a variable that will be overwritten with the number of display planes supported by the device. If 'pProperties' is not nullptr, 	then it must be a pointer to an array of VkDisplayPlanePropertiesKHR structures large enough to hold information about the supported display planes. The number of elements in the array is determined from the initial value of the variable pointed to by 'pPropertyCount'. The definition of VkDisplayPlanePropertiesKHR is```typedef struct VkDisplayPlanePropertiesKHR{	VkDisplayKHR		currentDisplay;	uint32_t				currentStackIndex;} VkDisplayPlanePropertiesKHR;```For each display plane supported by the device, one entry is placed in the 'pProperties' array. Each plane appears on a single physical display, which is represented by the 'currentDisplay' member, 	and if the device supports more than one plane on each display, the 'currentStackIndex' indicates the order in which the planes are overlaid on one another.Some of the device's display planes may span multiple physical displays. To determine which display devices a display plane is visible on, you can call vkGetDisplayPlaneSupportedDisplaysKHR(), which is declared as```VkResult vkGetDisplayPlaneSupportedDisplaysKHR(	VkPhysicalDevice		physicalDevice,	uint32_t						planeIndex,	uint32_t*						pDisplayCount,	VkDisplayKHR*			pDisplays);```For a given physical display, specified in 'physicalDevice', and display plane, specified in 'planeIndex',	vkGetDisplayPlaneSupportedDisplaysKHR() writes the number of displays across which that plane is visible into the variable pointed to by 'pDisplayCount'. If 'pDisplays' is not nullptr, then the handles to those displays are written into the array to which it points.Each display plane has a set of capabilities such as maximum resolution and whether or not it supports various composition modes, 	and these capabilities will vary by display mode. To determine these capabilities, call vkGetDisplayPlaneCapabilitiesKHR(), the prototype of which is```VkResult vkGetDisplayPlaneCapabilitiesKHR(	VkPhysicalDevice								physicalDevice,	VkDisplayModeKHR							mode,	uint32_t												planeIndex	VkDisplayPlaneCapabilitiesKHR*		pCapabilities);```For a given device (passed in 'physicalDevice') and display mode (a handle to which is passed in 'mode'), 	the support for this mode supported by the plane specified in 'planeIndex' is written into an instance of the VkDisplayPlaneCapabilitiesKHR structure, 	the address of which is passed in 'pCapabilities'. The definition of VkDisplayPlaneCapabilitiesKHR is```typedef struct VkDisplayPlaneCapabilitiesKHR{	VkDisplayPlaneAlphaFlagsKHR		supportedAlpha;	VkOffset2D										minSrcPosition;	VkOffset2D										maxSrcPosition;	VkExtent2D										minSrcExtent;	VkExtent2D										maxSrcExtent;	VkOffset2D										minDstPosition;	VkOffset2D										maxDstPosition;	VkExtent2D										minDstExtent;	VkExtent2D										maxDstExtent;} VkDisplayPlaneCapabitlitiesKHR;```The supported composition modes for the display plane are reported in 'supportedAlpha'. This is a combination of the bits defined in VkDisplayPlaneAlphaFlagBitsKHR, which include```1.	VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR:	The plane does not support blended composition at all, and alll surfaces presented on that plane are considered to be fully opaque.2.	VK_DISPLAY_PLANE_ALPHA_GLOBAL_BIT_KHR:	The plane supports a single, global alpha value that is passed through the 'globalAlpha' member of the 		VkDisplaySurfaceCreateInfoKHR structure used to create the surface.3. VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR:	The plane supports per-pixel transparency that is sourced from the alpha channel of the images presented to the surfaces.```The 'minSrcPosition' and 'maxSrcPosition' fields specify the minimum and maximum offset of the displayable region 	within a presentable surface that can be displayed on the plane, and the 'minSrcExtent' and 'maxSrcExtent' fields specify its minimum and maximum size.The 'minDstPosition' and 'maxDstPosition' fields specify the minimum and maximum offset at 	which the plane may be placed on the corresponding physical display, and 'minDstExtent' and 'maxDstExtent' indicate its physical size, in pixels, on that display.(???????? Looks Dst is focused on 'output')Together, these fields allow a subset of a surface to be displayed in a window that may span one or more physical displays. This is considered to be a relatively advanced display capability, and in practice, most devices will report 	'minSrcPosition', 'minDstPosition', 'maxSrcPosition', and 'maxDstPosition' as the display origin and the maximum extents as the supported resolution of the display.Each physical display may support multiple display modes. Each mode is represented by a VkDisplayModeKHR handle and has a number of properties. Each display can report a list of predefined display modes, which can be retrieved by calling vkGetDisplayModePropertiesKHR(), the prototype of which is```VkResult vkGetDisplayModePropertiesKHR(	VkPhysicalDevice							physicalDevice,	VkDisplayKHR									display,	uint32_t*											pPropertyCount,	VkDisplayModePropertiesKHR*		pProperties);```The physical device to which the display is attached is passed in 'physicalDevice', and the display whose modes you want to query is passed in 'display'. Remember that multiple displays may be connected to a single physical device and each may support a different selection of display modes. The 'pPropertyCount' parameter points to a variable that will be overwritten with the number of supported display modes. The initial value of this variable is ignored if 'pProperties' is nullptr. If 'pProperties' is not nullptr, then it should point to an array of VkDisplayModePropertiesKHR structures that will be filled with information about the display modes. The definition of VkDisplayModePropertiesKHR is```typedef struct VkDisplayModePropertiesKHR{	VkDisplayModeKHR						displayMode;	VkDisplayModeParametersKHR		parameters;} VkDisplayModePropertiesKHR;```The first member of VkDisplayModePropertiesKHR, 'displayMode', is a VkDisplayModeKHR handle to the display mode that can be used to refer to it unambiguously. The second member is an instance of the VkDisplayModeParametersKHR structure containing the parameters of the display mode. The definition of this structure is```typedef struct VkDisplayModeParametersKHR{	VkExtent2D		visibleRegion;	uint32_t			refreshRate;} VkDisplayModeParametersKHR;```The parameters of the display mode are quite simple, containing only the extent of the display, in pixels, 	represented by the 'visibleRegion' member of VkDisplayModeParametersKHR and the refresh rate, measured in thousandths of a Hertz. Generally, an application will enumerate the display modes supported by the device to which it wishes to render and select the most appropriate one. If none of the preexisting display modes are suitable, it's also possible to create new ones by calling vkCreateDisplayModeKHR(), the prototype of which is```VkResult vkCreateDisplayModeKHR(VkPhysicalDisplayDevice							physicalDevice,VkDisplayKHR												display,const VkDisplayModeCreateInfoKHR*		pCreateInfo,const VkAllocationCallbacks*						pAlllocator,VkDisplayMdoeKHR*									pMode);```The physical device that will own the mode is passed in 'physicalDevice', and the display upon which the mode will be used is passed in 'display'. If creation of the new mode is successful, a handle to it will be written into the variable pointed to by 'pMode'. The parameters of the new mode are passed through a pointer to an instance of the VkDisplayModeCreateInfoKHR structure, the definition of which is```typedef struct VkDisplayModeCreateInfoKHR{	VkStructureType									sType;	const void*											pNext;	VkDisplayModeCreateFlagsKHR		flags;	VkDisplayModeParametersKHR			parameters;} VkDisplayModeCreateInfoKHR;```The 'sType' field of the VkDisplayModeCreateInfoKHR structure should be set to VK_STRUCTURE_TYPE_DISPLAY_MODE_CREATE_INFO_KHR.The 'pNext' should be set to nullptr. The 'flags' field is reserved for future use and should be set to zero. The remaining parameters of the new display mode are contained in an instance of the VkDisplayModeParametersKHR.Once you have determined the topology of the displays connected to the physical devices in the system, their supported planes, and their display modes, 	you can create a VkSurfaceKHR object referencing one of them, which you can use just like a surface referencing a window. To do this, call vkCreateDisplayPlaneSurfaceKHR(), the prototype of which is```VkResult VkDisplayModeParametersKHR (	VkInstance														instance,	const VkDIsplaySurfaceCreateInfoKHR*		pCreateInfo,	const VkAllocationCallbacks*							pAllocator,	VkSurfaceKHR*												pSurface);```vkCreateDisplayPlaneSurfaceKHR() is a function that operates at the instance level 	because a single display mode might span multiple planes across multiple displays, even being connected to to multiple physical devices. The parameters describing the surface are passed through an instance of the VkDisplaySurfaceCreateInfoKHR structure, 	the address of which is passed in 'pCreateInfo'. The definition of VkDisplaySurfaceCreateInfoKHR is```typedef struct VkDisplaySurfaceCreateInfoKHR{	VkStructureType									sType;	const void*											pNext;	VkDisplaySurfaceCreateFlagsKHR		flags;	VkDisplayModeKHR							displayMode;	uint32_t												planeIndex;	uint32_t												planeStackIndex;	VkSurfaceTransformFlagBitsKHR		transform;	float														globalAlpha;	VkDisplayPlaneAlphaFlagBitsKHR		alphaMode;	VkExtent2D											imageExtent;} VkDisplaySurfaceCreateInfoKHR;```The 'sType' field of VkDisplaySurfaceCreateInfoKHR should be set to VK_STRUCTURE_TYPE_DISPLAY_SURFACE_CREATE_INFO_KHR.The 'pNext' should be set to nullptr. The 'flags' field is reserved for future use and should be set to zero. The handle to the display mode that is to be used for the new surface is passed through the 'displayMode' field. This can be one of the predefined display modes returned from a call to vkGetDisplayModePropertiesKHR() 	or a user-created display mode produced from a call to vkCreateDisplayModeKHR().The plane to which the surface will be presented is passed in 'planeIndex', and 	the relative order in which the plane should appear when composited with other planes on the device should be passed in 'planeStackIndex'. At time of presentation, the image can be flipped or rotated, assuming that the operation is supported by the display. The operation to be performed is specified in 'transform', which is a single bit selected from the VkSurfaceTransformFlagBitsKHR enumeration. This must be a supported transform for the video mode.The transforms that can be applied to a surface during presentation depend on the device and surface capabilities, 	which can be retrieved by using a call to vkGetPhysicalDeviceSurfaceCapabilitiesKHR().If the image is to be composited on top of other planes, it is possible to set the transparency for the surface by using the 'globalAlpha' and 'alphaMode' fields. If alphaMode is VK_DISPLAY_PLANE_ALPHA_GLOBAL_BIT_KHR, then globalAlpha sets the global alpha value for composition. If alphaMode is VK_DISPLAY_PLANE_ALPHA_PER_PIXEL_BIT_KHR, then the alpha value for each pixel is taken from the presented image, 	the value of 'globalAlpha' is ignored. If alphaMode is VK_DISPLAY_PLANE_ALPHA_OPAQUE_BIT_KHR, then blended composition is disabled.The 'imageExtent' field specifies the size of the presentable surface. In general, for full-screen rendering, this should be the same as the extent of the display mode selected in 'displayMode'.8.  Performing PresentationPresentation is an operation that occurs in the context of a queue. Generally, commands executed inside command buffers submitted to a queue produce the images that are to be presented, 	so those images should be shown to the user only when the rendering operations that created them have completed. While a device in a system may support many queues, it is not required that all of them support presentation. Before you can use a queue for presentation to a surface, you must determine whether that queue supports presentation to that surface.To determine whether a queue supports presentation, 	pass the physical device, surface and queue family to a call to vkGetPhysicalDeviceSurfaceSupportKHR(), the prototype of which is```VkResult vkGetPhysicalDeviceSurfaceSupportKHR(	VkPhysicalDevice		physicalDevice,	uint32_t						queueFamilyIndex,	VkSurfaceKHR			surface,	VkBool32*					pSupported);```The physical device to query is passed in 'physicalDevice'. All queues are members of a queue family, and all members of a queue family are considered to have identical properties. Therefore, only the family of a queue is needed to determine whether that queue supports presentation. The queue - family index is passed in 'queueFamilyIndex'.The capability of a queue to present is dependent on the surface. For example, some queues may be able to present into windows owned by the operating system 	but have no direct access to physical hardware that controls full-screen surfaces. Therefore, the surface to which you want to present is passed in surface.If vkGetPhysicalDeviceSurfaceSupportKHR() is successful, the ability of queues in the specified family to present to the surface specified in surface 	is written into the variable pointed to by pSupported - VK_TRUE indicating support and VK_FALSE indicating lack of support. If something goes wrong, vkGetPhysicalDeviceSurfaceSupportKHR() will return a failure code, and the value of pSupported will not be overwritten.Before an image can be presented, it must be in the correct layout. This state is the VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout. Images are transitioned from layout to layout using image memory barriers, as discussed briefly in Chapter 2, "Memory and Resources." Listing 5.2 shows how to transition an image 	from VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL to VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout using an image memory barrier.```// Listing 5.2 Transitioning an Image to Present Sourcevoid MyVulkan::TransitionImageLayout(){	const VkImageMemoryBarrier barrier =	{		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,			//	sType		nullptr, 																							//	pNext		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,				//	srcAccessMask		VK_ACCESS_MEMORY_READ_BIT,										//	dstAccessMask		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		//	oldLayout		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,							//	newLayout		0,																									//	srcQueueFamilyIndex		0,																									//	dstQueueFamilyIndex		sourceImage,																				//	image		{																									//	subresourceRange			VK_IMAGE_ASPECT_COLOR_BIT,										//	aspectMask			0,																								//	baseMipLevel			1,																								//	levelCount			0,																								//	baseArrayLayer			1																								//	layerCount		}	};	vkCmdPipelineBarrier(		cmdBuffer,		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,		0,		0, nullptr,		0, nullptr,		1, &barrier		);}```Note that the image memory barrier is executed inside a command buffer and this command buffer should be submitted to a device queue for execution. Once the image is in VK_IMAGE_LAYOUT_PRESENT_SRC_KHR layout, 	it can be presented to the user by calling vkQueuePresentKHR(), the prototype of which is```VkResult vkQueuePresentKHR(	VkQueue									queue,	const VkPresentInfoKHR*		pPresentInfo);```The queue to which the image should be submitted for presentation is specified in 'queue'. The rest of the parameters to the command are passed through an instance of the VkPresentInfoKHR structure, the definition of which is```typedef struct VkPresentInfoKHR{	VkStructureType						sType;	const void*								pNext;	uint32_t									waitSemaphoreCount;	const VkSemaphore*				pWaitSemaphores;	uint32_t									swapchainCount;	const VkSwapchainKHR*		pSwapchains;	const uint32_t*							pImageIndices;	VkResult*									pResults;} VkPresentInfoKHR;```The 'sType' field of VkPresentInfoKHR should be set to VK_STRUCTURE_TYPE_PRESENT_INFO_KHR.The 'pNext' should be set to nullptr. Before the images are presented, 	Vulkan will optionally wait on one or more semaphores to enable rendering to the images to be synchronized with the presentation operation. The number of semaphores to wait on is passed in the 'waitSemaphoreCount' member.The 'pWaitSemaphores' member points to an array of this many semaphore handles to wait on.A single call to vkQueuePresentKHR() can actually present multiple images to multiple swap chains at the same time. This is useful, for example, in an application that is rendering to multiple windows at the same time. The number of images to preset is specified in 'swapchainCount'. 'pSwapchains' is an array of the swap-chain objects to present with.The images presented to each of the swap chains are not referenced by their VkImage handles 	but by the indices into their arrays of swap-chain images as retrieved from the swap-chain object. For each swap chain that will be presented to, one image index is passed through the corresponding element in the array pointed to by 'pImageIndices'.Each of the separate present operations triggered by the call to vkQueuePresentKHR() can produce its own result code. Remember that some values of VkResult indicate success. 'pResults' is a pointer to an array of swapchainCount VkResult variables that will be filled with the results of the present operations.9. Cleaning UpRegardless of the method of presentation you've used in your application, it is important to clean up correctly. First, you should destroy the swap chain to which you are presenting. To do this, call vkDestroySwapchainKHR(), the prototype of which is```void vkDestroySwapchainKHR(	VkDevice										device,	VkSwapchainKHR						swapchain,	const VkAllocationCallbacks*		pAllocator);```The device that owns the swap chain is passed in 'device', and the swap chain to destroy is passed in 'swapchain'. If a host memory allocator was used to create the swap chain, then a pointer to a compatible allocator is passed in 'pAllocator'.When the swap chain is destroyed, all of the presentable images associated with the swap chain are also destroyed. Therefore, before you destroy a swap chain, you should ensure that there is no pending work 	that might write to any of its surfaces and that there are no pending present operations that might read from them. The easiest way to do this is to call vkDeviceWaitIdle() on the device. While not normally recommended, destruction of a swap chain usually does not occur in a performance-critical part of an application, so in this case, simple is best.When images are acquired from a swap chain using vkAcquireNextImageKHR() or presented using vkQueuePresentKHR(), 	semaphores are passed to these functions to signal and wait on, resepectively. Care should be taken that the semaphores live long enough that the swap chain can complete any signaling operations on them before they are destroyed. To ensure this, it is best to destroy the swap chain before destroying any semaphores that might have been used with it.SUMMARYIn this chapter, you learned about the operations supported by Vulkan for getting images onto displays. We covered presenting to various window systems, the mechanism by which you determine which images to render into, 	and how to enumerate and control the physical display devices attached to a system. We briefly covered synchronization involved in presenting and will dig further into synchronization primitives later in the book. We also discussed methods for configuring display synchronization. With the information in this chapter, you should have a decent understanding of how Vulkan presents images to the user.

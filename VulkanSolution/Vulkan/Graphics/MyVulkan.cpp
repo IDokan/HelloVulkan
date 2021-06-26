@@ -43,6 +43,11 @@ namespace MyVulkan
 	void TransitionImageLayout();
 
 	void SavingPipelineCacheDataToFile(VkDevice device, VkPipelineCache cache, const char* fileName);
+
+	void CreateDescriptorSetLayout();
+
+	void CreatePipelineLayout();
+
 }
 
 void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
@@ -577,4 +582,103 @@ void MyVulkan::SavingPipelineCacheDataToFile(VkDevice device, VkPipelineCache ca
 	fclose(pOutputFile);
 
 	free(pData);
+}
+
+void MyVulkan::CreateDescriptorSetLayout()
+{
+	VkDescriptorSetLayoutCreateInfo createInfo;
+	VkDescriptorSetLayout layout;
+	vkCreateDescriptorSetLayout(logicalDevices.front(),
+		&createInfo,
+		&myAllocator,
+		&layout);
+}
+
+void MyVulkan::CreatePipelineLayout()
+{
+	// This describes our combined image-samplers.
+	// One set, two disjoint binding
+
+	static const VkDescriptorSetLayoutBinding samplers[] =
+	{
+		{
+			0,																										// Start from binding 0
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		// Combined image-sampler
+			1, 																									// Create One binding
+			VK_SHADER_STAGE_ALL,															// Usable in all stages
+			nullptr																								// No static samplers
+		},
+
+		{
+			2,																										// Start from binding 2
+			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		// Combined image-sampler
+			1,																										// Create one binding
+			VK_SHADER_STAGE_ALL,															// Usable in all stages
+			nullptr																								// No static samplers
+		}
+	};
+
+	static const VkDescriptorSetLayoutBinding uniformBlock =
+	{
+		0, 																										// Start from binding 0
+		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,								// Uniform block
+		1,																											// One binding
+		VK_SHADER_STAGE_ALL,																// All stages
+		nullptr																									// No static samplers
+	};
+
+	// Now create the two descriptor set layouts
+	static const VkDescriptorSetLayoutCreateInfo createInfoSamplers =
+	{
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		nullptr,
+		0,
+		2,
+		&samplers[0]
+	};
+
+	static const VkDescriptorSetLayoutCreateInfo createInfoUniforms =
+	{
+		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+		nullptr,
+		0,
+		1,
+		&uniformBlock
+	};
+
+	// This array holds the two set layouts
+	VkDescriptorSetLayout setLayouts[2];
+	vkCreateDescriptorSetLayout(
+		device,
+		&createInfoSamplers,
+		nullptr,
+		&setLayouts[0]
+	);
+	vkCreateDescriptorSetLayout(
+		device,
+		&createInfoUniforms,
+		nullptr,
+		&setLayouts[1]
+	);
+
+	// Now create the pipeline layout.
+	const VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,		// sType
+		nullptr,																									// pNext
+		0, 																										// flags
+		2,																											// setLayoutCount
+		setLayouts,																							// pSetLayouts
+		0,																											// pushConstantRangeCount
+		nullptr																									// pPushConstantRanges
+	};
+
+	VkPipelineLayout pipelineLayout;
+
+	vkCreatePipelineLayout(
+		device,
+		&pipelineLayoutCreateInfo,
+		nullptr,
+		pipelineLayout
+		)
 }

@@ -77,5 +77,8 @@
     <Text Include="Notes\Chp6.ShadersAndPipelines.txt">
       <Filter>Notes</Filter>
     </Text>
+    <Text Include="Notes\Chp7.GraphicsPipeline.txt">
+      <Filter>Notes</Filter>
+    </Text>
   </ItemGroup>
 </Project>

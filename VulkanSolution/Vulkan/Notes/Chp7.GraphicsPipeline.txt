@@ -1,0 +1,553 @@
+What You'll Learn in This Chapter
+```
+1. What the Vulkan graphics pipeline looks like.
+
+2. How to create a graphics pipeline object.
+
+3. How to draw graphical primitives with Vulkan.
+```
+
+Perhaps the most common use of Vulkan is as a graphics API. 
+Graphics are a fundamental part of Vulkan and drive the core of almost any visual application. 
+Graphics processing in Vulkan can be seen as a pipeline that takes graphics commands through the many stages required to produce a picture on a display. 
+This chapter covers the basics of graphics pipelines in Vulkan and introduces our first graphics example.
+
+1. The Logical Graphics Pipeline
+
+The graphics pipeline in Vulkan can be seen as a production line, where commands enter the front of the pipeline and are processed in stages. 
+Each stage performs some kind of transform, taking the commands and their associated data and turning them into something else. 
+By the end of the pipeline, the commands have been transformed into colorful pixels making up your output picture.
+
+Many parts of the graphics pipeline are optional and can be disabled or might not even be supported by a Vulkan implementation. 
+The only part of the pipeline that an application must enable is the vertex shader. 
+The full Vulkan graphics pipeline is shown in Figure 7.1. 
+However, don¡¯t be alarmed; we¡¯ll introduce each stage gently in this chapter and dig into more details in subsequent parts of the book.
+
+The following is a brief description of each stage of the pipeline and what it does.
+```
+1. Draw:
+	This is where your commands enter the Vulkan graphics pipeline. 
+	Typically, a small processor or dedicated piece of hardware inside the Vulkan device 
+		interprets the commands in the command buffer and directly interacts with the hardware to induce work.
+
+2. Input assembly:
+	This stage reads the 'index' and 'vertex' buffers that contain information about the vertices making up the draw you¡¯ve sent.
+
+3. Vertex shader:
+	This is where the vertex shader executes. 
+	It takes as input the properties of the vertex and prepares transformed and processed vertex data for the next stage.
+
+4. Tessellation control shader:
+	This programmable shading stage is responsible for 
+		producing tessellation factors and other per-patch data that is used by the fixed-function tessellation engine.
+
+5. Tessellation primitive generation:
+	Not shown in Figure 7.1, this fixed function stage uses the tessellation factors produced in the tessellation control shader 
+		to break patch primitives into many smaller, simpler primitives ready to be shaded by the tessellation evaluation shader.
+
+6. Tessellation evaluation shader:
+	This shading stage runs on each new vertex produced by the tessellation primitive generator. 
+	It operates similarly to a vertex shader except that the incoming vertices are generated rather than read from memory.
+
+7. Geometry shader:
+	This shading stage operates on full primiitves. 
+	The primitives might be points, lines or triangles, or special variations of them that include additional vertices surrounding them. 
+	This stage also has the ability to change the primitive type midpipeline.
+
+8. Primitive assembly:
+	This stage groups vertices produced by the vertex, tessellation, or geometry stage and groups them into primitives suitable for rasterization. 
+	It also culls and clips primitives and transforms them into the appropriate viewport.
+
+9. Clip and cull:
+	This fixed-function stage determines which parts of which primitives might contribute to the output image and discards parts of primitives that do not, 
+		forwarding potentially visible primitives to the rasterizer.
+
+10. Rasterizer:
+	Rasterization is the fundamental core of all graphics in Vulkan. 
+	The rasterizer takes assembled primitives that are still represented by a sequence of vertices and turns them into individual fragments, 
+		which may become the pixels that make up your image.
+
+11. Prefragment operations:
+	Several operations can be performed on fragments once their positions are known but before they are shaded. 
+	These prefragment operations include depth and stencil tests when they are enabled.
+
+12. Fragment assembly:
+	Not shown in the figure, the fragment assembly stage takes the output of the rasterizer along with any per-fragment data and sends it, as a group, 
+		into the fragment shading stage.
+
+13. Fragment shader:
+	This stage runs the final shader in the pipeline, 
+		which is responsible for computing the data that will be sent on to the final fixed-function processing stages that follow.
+
+14. Postfragment operations:
+	In some circumstances, the fragment shader modifies data that would normally be used in prefragment operations. 
+	In these cases, those prefragment operations move to the postfragment stage and are executed here.
+
+15. Color blending:
+	The color operations take the final results of the fragment shader and postfragment operations and use them to update the framebuffer. 
+	The color operations include blending and logic operations.
+```
+
+As you can tell, there are a lot of interrelated stages in the graphics pipeline. 
+Unlike the compute pipeline introduced in Chapter 6, ¡°Shaders and Pipelines,¡± 
+	the graphics pipeline contains not only the configuration of a wide selection of fixed functionality, but also up to five shader stages. 
+Further, depending on the implementation, 
+	some of the logically fixed-function stages are actually at least partially implemented in shader code generated by drivers.
+
+The purpose of representing the graphics pipeline as an object in Vulkan is to provide the implementation 
+	as much information as needed to move parts of the pipeline between fixed-function hardware and programmable shader cores. 
+If the information were not all available at the same time in the same object, 
+	it would mean that some implementations of Vulkan may need to recompile a shader based on configurable state. 
+The set of states contained in the graphics pipeline has been carefully chosen to prevent this, making switching states as fast as possible.
+
+The fundamental unit of drawing in Vulkan is a 'vertex'. 
+Vertices are grouped into primitives and processed by the Vulkan pipeline. 
+The simplest drawing command in Vulkan is vkCmdDraw(), whose prototype is
+```
+void vkCmdDraw(
+	VkCommandBuffer		commandBuffer,
+	uint32_t						vertexCount,
+	uint32_t						instanceCount,
+	uint32_t						firstVertex,
+	uint32_t						firstInstance
+);
+```
+
+Like other Vulkan commands, vkCmdDraw() appends a command to a command buffer that will later be executed by the device. 
+The command buffer to append to is specified in 'commandBuffer'. 
+The number of vertices to push into the pipeline is specified in 'vertexCount'. 
+If you want to draw the same set of vertices over and over with slightly different parameters, you can specify the number of instances in 'instanceCount'. 
+This is known as instancing, and we¡¯ll cover that later in this chapter. 
+For now, we can just set 'instanceCount' to 1. 
+It¡¯s also possible to start drawing from a vertex or instance other than 0. 
+To do this, we can use 'firstVertex' and 'firstInstance', respectively. 
+Again, we¡¯ll cover that later. 
+For the time being, we¡¯ll set both of these parameters to 0.
+
+Before you can draw anything, you must bind a graphics pipeline to the command buffer, and before that, you must create a graphics pipeline. 
+Undefined behavior (generally bad behavior) will occur if you try drawing without binding a pipeline first.
+
+When you call vkCmdDraw(), 'vertexCount' vertices are generated and pushed into the current Vulkan graphics pipeline. 
+For each vertex, input assembly is executed, followed by your vertex shader. 
+Declaring inputs beyond what is provided for you by Vulkan is optional, but having a vertex shader is not. 
+Thus, the simplest possible graphics pipeline consists only of a vertex shader.
+
+2. Renderpasses
+
+One of the things that distinguishes a Vulkan graphics pipeline from a compute pipeline is that, usually, 
+	you¡¯ll be using the graphics pipeline to render pixels into images that you will either further process or display to the user. 
+In complex graphics applications, the picture is built up over many passes where each pass is responsible for producing a different part of the scene, 
+	applying full-frame effects such as postprocessing or composition, rendering user interface elements, and so on.
+
+Such passes can be represented in Vulkan using a renderpass object. 
+A single renderpass object encapsulates multiple passes or rendering phases over a single set of output images. 
+Each pass within the renderpass is known as a 'subpass'. 
+Renderpass objects can contain many subpasses, but even in simple applications with only a single pass over a single output image, 
+	the renderpass object contains information about that output image.
+
+All drawing must be contained inside a renderpass. 
+Further, graphics pipelines need to know where they¡¯re rendering to; 
+	therefore, it¡¯s necessary to create a renderpass object before creating a graphics pipeline so that we can tell the pipeline about the images it¡¯ll be producing. 
+Renderpasses are covered in great depth in Chapter 13, ¡°Multipass Rendering.¡± 
+In this chapter, we¡¯ll create the simplest possible renderpass object that will allow us to render into an image.
+
+To create a renderpass object, call vkCreateRenderPass(), the prototype of which is
+```
+VkResult vkCreateRenderPass(
+	VkDevice											device,
+	const VkRenderPassCreateInfo*		pCreateInfo,
+	const VkAllocationCallbacks*			pAllocator,
+	VkRenderPass*								pRenderPass
+);
+```
+
+The 'device' parameter to vkCreateRenderPass() is the device that will create the renderpass object.
+The 'pCreateInfo' points to a structure defining the renderpass. 
+This is an instance of the VkRenderPassCreateInfo structure, whose definition is
+```
+typedef struct VkRenderPassCreateInfo
+{
+	VkStructureType								sType;
+	const void*										pNext;
+	VkRenderPassCreateFlags				flags;
+	uint32_t											attachmentCount;
+	const VkAttachmentDescription*		pAttachments;
+	uint32_t											subpassCount;
+	const VkSubpassDescription			pSubpasses;
+	uint32_t											dependencyCount;
+	const VkSubpassDependency*		pDependencies;
+} VkRenderPassCreateInfo;
+```
+
+The 'sType' field of VkRenderPassCreateInfo should be set to VK_STRUCTURE_TYPE_RENDERPASS_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved for future use and should be set to zero.
+
+'pAttachments' is a pointer to an array of 'attachmentCount' VkAttachmentDescription structures that define the attachments associated with the renderpass. 
+Each of these structures defines a single image that is to be used as an input, output, or both within one or more of the subpasses in the renderpass. 
+If there really are no attachments associated with the renderpass, you can set 'attachmentCount' to zero and 'pAttachments' to nullptr. 
+However, outside of some advanced use cases, almost all graphics rendering will use at least one attachment. 
+The definition of VkAttachmentDescription is
+```
+typedef struct VkAttachmentDescription
+{
+	VkAttachmentDescriptionFlags		flags;
+	VkFormat											format;
+	VkSampleCountFlagBits					samples;
+	VkAttachmentLoadOp						loadOp;
+	VkAttachmentStoreOp						storeOp;
+	VkAttachmentLoadOp						stencilLoadOp;
+	VkAttachmentStoreOp						stencilStoreOp;
+	VkImageLayout								initialLayout;
+	VkImageLayout								finalLayout;
+} VkAttachmentDescription;
+```
+
+The 'flags' field is used to give Vulkan additional information about the attachment. 
+The only defined bit is VK_ATTACHMENT_DESCRIPTION_MAY_ALIAS_BIT, 
+	which, if set, indicates that the attachment might be using the same memory as another attachment referenced by the same renderpass. 
+This tells Vulkan not to do anything that might make data in that attachment inconsistent. 
+This bit can be used in some advanced cases where memory is at a premium and you are trying to optimize its usage. 
+In most cases, flags can be set to zero.
+
+The 'format' field specifies the format of the attachment. 
+This is one of the VkFormat enumerations and should match the format of the image used as the attachment. 
+Likewise, 'samples' indicates the number of samples in the image and is used for multisampling. 
+When multisampling is not in use, set samples to VK_SAMPLE_COUNT_1_BIT.
+
+The next four fields specify what to do with the attachment at the beginning and end of the renderpass. 
+The load operations tell Vulkan what to do with the attachment when the renderpass begins. 
+This can be set to one of the following values:
+```
+1. VK_ATTACHMENT_LOAD_OP_LOAD:
+	It indicates that the attachment has data in it already and that you want to keep rendering to it. 
+	This causes Vulkan to treat the contents of the attachment as valid when the renderpass begins.
+
+2. VK_ATTACHMENT_LOAD_OP_CLEAR:
+	It indicates that you want Vulkan to clear the attachment for you when the renderpass begins. 
+	The color to which you want to clear the attachments is specified when the renderpass has begun.
+
+3. VK_ATTACHMENT_LOAD_OP_DONT_CARE:
+	It indicates that you don¡¯t care about the content of the attachment at the beginning of the renderpass and that Vulkan is free to do whatever it wishes with it. 
+	You can use this if you plan to explicitly clear the attachment or if you know that you¡¯ll replace the content of the attachment inside the renderpass.
+```
+
+Likewise, the store operations tell Vulkan what you want it to do with the contents of the attachments when the renderpass ends. 
+These can be set to one of the following values:
+```
+1. VK_ATTACHMENT_STORE_OP_STORE:
+	It indicates that you want Vulkan to keep the contents of the attachment for later use, which usually means that it should write them out into memory. 
+	This is usually the case for images you want to display to the user, read from later, or use as an attachment in another renderpass 
+	(with the VK_ATTACHMENT_LOAD_OP_LOAD load operation).
+
+2. VK_ATTACHMENT_STORE_OP_DONT_CARE:
+	It indicates that you don¡¯t need the content after the renderpass has ended. 
+	This is normally used for intermediate storage or for the depth or stencil buffers.
+```
+
+If the attachment is a combined depth-stencil attachment, then the 'stencilLoadOp' and 'stencilStoreOp' fields tell Vulkan 
+	what to do with the stencil part of the attachment (the regular loadOp and storeOp fields specify what should happen to the depth part of the attachment), which can be different from the depth part.
+
+The 'initialLayout' and 'finalLayout' fields tell Vulkan what layout to expect the image to be in 
+	when the renderpass begins and what layout to leave it in when the renderpass ends. 
+Note that renderpass objects do not automatically move images into the initial layout. 
+This is the layout that the image is expected to be in when the renderpass is used. 
+The renderpass does, however, move the image to the final layout when it¡¯s done.
+
+You can use barriers to explicitly move images from layout to layout, but where possible, it¡¯s best to try to move images from layout to layout inside renderpasses. 
+This gives Vulkan the best opportunity to choose the right layout for each part of the renderpass and 
+	even perform any operations required to move images between layouts in parallel with other rendering. 
+Advanced usage of these fields and renderpasses in general is covered in Chapter 13, ¡°Multipass Rendering.¡±
+
+After you define all of the attachments that are going to be used in the renderpass, you need to define all of the subpasses. 
+Each subpass references a number of attachments (from the array you passed in 'pAttachments') as inputs or outputs. 
+Those descriptions are specified in an array of VkSubpassDescription structures, one for each subpass in the renderpass. 
+The definition of VkSubpassDescription is
+```
+typedef struct VkSubpassDescription
+{
+	VkSubpassDescriptionFlags			flags;
+	VkPipelineBindPoint						pipelineBindPoint;
+	uint32_t											inputAttachmentCount;
+	const VkAttachmentReference*		pInputAttachments;
+	uint32_t											colorAttachmentCount;
+	const VkAttachmentReference*		pColorAttachments;
+	const VkAttachmentReference*		pResolveAttachments;
+	const VkAttachmentReference*		pDepthStencilAttachment;
+	uint32_t											preserveAttachmentCount;
+	const uint32_t*									pPreserveAttachments;
+} VkSubpassDescription;
+```
+
+The 'flags' field of VkSubpassDescription is reserved for future use and should be set to zero. 
+Also, the current version of Vulkan supports renderpasses only for graphics, so 'pipelineBindPoint' should be set to VK_PIPELINE_BIND_POINT_GRAPHICS. 
+The remaining fields describe the attachments used by the subpass. 
+Each subpass can have a number of input attachments, which are attachments from which it can read data; 
+	color attachments, which are attachments to which its outputs are written; 
+	and a depth-stencil attachment, which is used as a depth and stencil buffer. 
+These attachments are specified in the 'pInputAttachments', 'pColorAttachments', and 'pDepthStencilAttachment' fields, respectively. 
+The numbers of input and color attachments are specified in 'inputAttachmentCount' and 'colorAttachmentCount', respectively. 
+There is only one depth-stencil attachment, so this parameter is not an array and has no associated count.
+
+The maximum number of color attachments that a single subpass can render to can be determined by inspecting the 'maxColorAttachments' 
+	member of the device¡¯s VkPhysicalDeviceLimits structure, which you can retrieve by calling vkGetPhysicalDeviceProperties(). 
+'maxColorAttachments' is guaranteed to be at least 4, so if you never use more than this many color attachments, you don¡¯t need to query the limit. 
+However, many implementations support a higher limit than this, 
+	so you may be able to implement more advanced algorithms in fewer passes by writing to more outputs at once.
+
+Each of these arguments is a pointer to either a single VkAttachmentReference structure or 
+	an array of them and forms a reference to one of the attachments described in 'pAttachments'. The definition of VkAttachmentReference is
+```
+typedef struct VkAttachmentReference
+{
+	uint32_t					attachment;
+	VkImageLayout		layout;
+} VkAttachmentReference;
+```
+
+Each attachment reference is a simple structure containing an index into the array of attachments in attachment and the image layout 
+	that the attachment is expected to be in at this subpass. 
+In addition to the input and output attachment references, two further sets of references are provided to each subpass.
+
+First, the resolve attachments, which are specified through 'pResolveAttachments', are the attachments to which multisample image data is resolved. 
+These attachments correspond to the color attachments specified in 'pColorAttachments', and the number of resolve attachments is assumed to be the same, 
+	as specified in 'colorAttachmentCount'.
+
+If one of the elements of 'pColorAttachments' is a multisample image, but only the final, resolved image is needed after the renderpass is complete, 
+	you can ask Vulkan to resolve the image for you as part of the renderpass, and possibly disacard the original multisample data. 
+To do this, set the store operation for the multisample color attachment to VK_ATTACHMENT_STORE_OP_DONT_CARE, 
+	and set a corresponding single-sample attachment in the matching element of 'pResolveAttachments'. 
+The store operation for the resolve attachment should be set to VK_ATTACHMENT_STORE_OP_STORE, 
+	which will cause Vulkan to keep the single-sample data but throw out the original multisample data. (??????????????)
+
+Second, if there are attachments that you want to live across a subpass but that are not directly referenced by the subpass, 
+	you should reference them in the 'pPreserveAttachments' array. 
+This reference will prevent Vulkan from making any optimizations that might disturb the contents of those attachments.
+
+When there is more than one subpass in a renderpass, Vulkan can figure out which subpasses are dependent on one another by 
+	following the attachment references and looking for inputs and outputs that make subpasses dependent on one another. 
+However, there are cases in which dependencies cannot easily be represented by a simple input-to-output relationship. 
+This generally happens when a subpass writes directly to a resource such as an image or buffer and a subsequent subpass reads that data back. 
+Vulkan cannot figure this out automatically, so you must provide such dependency information explicitly. 
+This is done using the 'pDependencies' member of VkRenderPassCreateInfo, 
+	which is a pointer to an array of 'dependencyCount' VkSubpassDependency structures. 
+The definition of VkSubpassDependency is
+```
+typedef struct VkSubpassDependency
+{
+	uint32_t							srcSubpass;
+	uint32_t							dstSubpass;
+	VkPipelineStageFlags		srcStageMask;
+	VkPipelineStageFlags		dstStageMask;
+	VkAccessFlags				srcAccessMask;
+	VkAccessFlags				dstAccessMask;
+	VkDependencyFlags		dependencyFlags;
+} VkSubpassDependency;
+```
+
+Each dependency is a reference from a source subpass (the producer of data) and a destination subpass (the consumer of that data), 
+	specified in 'srcSubpass' and 'dstSubpass', respectively. 
+Both are indices into the array of subpasses that make up the renderpass. 
+The 'srcStageMask' is a bitfield specifying which pipeline stage(s) of the source subpass produced the data. 
+Likewise, 'dstStageMask' is a bitfield specifying which stages of the destination subpass will consume the data.
+
+The 'srcAccessMask' and 'dstAccessMask' fields are also bitfields. 
+They specify how each of the source and destination subpasses access the data. 
+For example, the source stage may perform image stores from its vertex shader or write to a color attachment through regular fragment shader outputs. 
+Meanwhile, the destination subpass may read through an input attachment or an image load.
+
+For the purpose of creating a simple renderpass with a single subpass, with a single output attachment and no external dependencies, 
+	the data structures are mostly empty. 
+Listing 7.1 demonstrates how to set up a simple renderpass in this configuration.
+```
+// Listing 7.1: Creating a Simple Renderpass
+void MyVulkan::CreatingSimpleRenderpass()
+{
+	// This is our color attachment. It's an R8G8B8A8_UNORM single sample image.
+	// We want to clear it at the start of the renderpass and save the contents when we are done.
+	// It starts in UNDEFINED layout, which is a key to Vulkan that it is allowed to throw the old content away,
+	// and we want to leave it in COLOR_ATTACHMENT_OPTIMAL state when we are done.	
+
+	static const VkAttachmentDescription attachments[] =
+	{
+		{
+			0,																										// flags
+			VK_FORMAT_R8G8B8A8_UNORM,												// format
+			VK_SAMPLE_COUNT_1_BIT,														// samples
+			VK_ATTACHMENT_LOAD_OP_CLEAR,										// loadOp
+			VK_ATTACHMENT_STORE_OP_STORE,										// storeOp
+			VK_ATTACHMENT_LOAD_OP_DONT_CARE,								// stencilLoadOp
+			VK_ATTACHMENT_STORE_OP_DONT_CARE,							// stencilStoreOp
+			VK_IMAGE_LAYOUT_UNDEFINED,												// initialLayout
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			// finalLayout
+		}
+	};
+
+	// This is the single reference to our single attachment.
+	static const VkAttachmentReference attachmentReferences[] =
+	{
+		{
+			0,																									// attachment
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL		// layout
+		}
+	};
+
+	// There is one subpass in this renderpass, with only a reference to the single output attachment.
+	static const VkSubpassDescription subpasses[] =
+	{
+		{
+			0,																		// flags
+			VK_PIPELINE_BIND_POINT_GRAPHICS,	// pipelineBindPoint
+			0,																		// inputAttachmentCount
+			nullptr,																// pInputAttachments
+			1,																		// colorAttachmentCount
+			&attachmentReferences[0],								// pColorAttachments
+			nullptr,																// pResolveAttachments
+			nullptr,																// pDepthStencilAttachment
+			0,																		// preserveAttachmentCount
+			nullptr																// pPreserveAttachments
+		}
+	};
+
+	// Finally, this is the information that Vulkan needs to create the render pass object.
+	static VkRenderPassCreateInfo renderpassCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,			// sType
+		nullptr,																									// pNext
+		0,																											// flags
+		1,																											// attachmentCount
+		&attachments[0],																					// pAttachments
+		1,																											// subpassCount
+		&subpasses[0],																					// pSubpasses
+		0,																											// dependencyCount
+		nullptr																									// pDependencies
+	};
+
+	VkRenderPass renderPass = VK_NULL_HANDLE;
+
+	// The only code that actually executes is this single call, which creates the renderpass object.
+	vkCreateRenderPass(
+		logicalDevices.front(),
+		&renderpassCreateInfo,
+		&myAllocator,
+		&renderPass);
+}
+```
+
+In Listing 7.1, we set up a simple renderpass 
+	with a single color attachment of format VK_FORMAT_R8G8B8A8_UNORM, no depth-stencil attachment, and no dependencies. 
+It looks like a lot of code, but that¡¯s because we need to specify full data structures even though we¡¯re not using most of the fields. 
+As your applications grow more complex, the amount of code you need to write doesn¡¯t actually grow correspondingly. 
+Further, because the structures are constant, the amount of code executed by Listing 7.1 is minimal.
+
+We¡¯ll use the renderpass created in Listing 7.1 to create a graphics pipeline in the next section.
+
+Of course, when we are done using the renderpass object, we should destroy it. 
+To do this, call vkDestroyRenderPass(), the prototype of which is
+```
+void vkDestroyRenderPass(
+	VkDevice										device,
+	VkRenderPass							renderPass,
+	const VkAllocationCallbacks*		pAllocator
+);
+```
+
+'device' is the device that created the renderpass, and 'renderPass' is the handle to the renderpass object to destroy. 
+If a host memory allocator was used to create the renderpass, 'pAllocator' should point to a compatible allocator; otherwise, 'pAllocator' should be nullptr.
+
+3. The Framebuffer
+
+The 'framebuffer' is an object that represents the set of images that graphics pipelines will render into. 
+These affect the last few stages in the pipeline: depth and stencil tests, blending, logic operations, multisampling, and so on. 
+A framebuffer object is created by using a reference to a renderpass and can be used with any renderpass that has a similar arrangement of attachments.
+
+To create a framebuffer object, call vkCreateFramebuffer(), the prototype of which is
+```
+VkResult vkCreateFramebuffer(
+	VkDevie											device,
+	const VkFramebufferCreateInfo*		pCreateInfo,
+	const VkAllocationCallbacks*			pAllocator,
+	VkFramebuffer*									pFramebuffer
+);
+```
+
+The device that will be used to create the framebuffer object is passed in 'device'
+The remaining parameters describing the new framebuffer object are 
+	passed through a pointer to an instance of the VkFramebufferCreateInfo structure in 'pCreateInfo'. 
+The definition of VkFramebufferCreateInfo is
+```
+typedef struct VkFramebufferCreateInfo
+{
+	VkStructureType						sType;
+	const void*								pNext;
+	VkFramebufferCreateFlags		flags;
+	VkRenderPass						renderPass;
+	uint32_t									attachmentCount;
+	const VkImageView*				pAttachments;
+	uint32_t									width;
+	uint32_t									height;
+	uint32_t									layers;
+} VkFramebufferCreateInfo;
+```
+
+The 'sType' field of VkFramebufferCreateInfo should be set to VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved and should be set to zero.
+
+A handle to a renderpass object that is compatible with the framebuffer being created should be passed in 'renderPass'.
+For the purposes of compatibility with framebuffer objects, two renderpasses are compatible if their attachment references are the same.
+
+The set of images that is to be bound into the framebuffer object is passed through an array of VkImageView handles, 
+	a pointer to which is passed in 'pAttachments'. 
+The number of images in pAttachments is specified in 'attachmentCount'. 
+The passes comprising the renderpass make references to the image attachments, 
+	and those references are specified as indices into the array specified in 'pAttachments'. 
+If you know that a particular renderpass doesn¡¯t use some of the attachments, 
+	but you want the framebuffer to be compatible with several renderpass objects or to keep a consistent layout of images in your application, 
+	some of the image handles in 'pAttachments' can be VkNullHandle.
+
+Although each of the images in the framebuffer has a native width, height, and (in the case of array images) layer count, 
+	you must still specify the dimensions of the framebuffer. 
+These dimensions are passed in the 'width', 'height', and 'layers' fields of the VkFramebufferCreateInfo structure. 
+Rendering to regions of the framebuffer that are outside some of the images results in no rendering to those parts of the attachment images 
+	that are outside the image while continuing to render to those parts of the images that are.
+
+The maximum supported size of a framebuffer is device-dependent. 
+To determine the supported dimensions of the framebuffer, 
+	check the 'maxFramebufferWidth', 'maxFramebufferHeight', and 'maxFramebufferLayers' fields of the device¡¯s VkPhysicalDeviceLimits structure. 
+These provide the maximum supported width, height, and layer count for framebuffers, respectively. 
+The supported width and height are guaranteed to be at least 4,096 pixels, and the number of supported layers is guaranteed to be at least 256. 
+However, most desktop-class hardware will support limits of 16,384 pixels in width and height and 2,048 layers.
+
+It¡¯s also possible to create a framebuffer with no attachments at all. 
+This is known as an attachmentless framebuffer. 
+In this case, the framebuffer¡¯s dimensions are solely defined by the 'width', 'height', and 'layers' fields. 
+This type of framebuffer is typically used with fragment shaders that have other side effects, such as performing image stores, or with occlusion queries, 
+	which can measure other aspects of rendering but don¡¯t necessarily require that the result of rendering be stored anywhere.
+
+If vkCreateFramebuffer() is successful, it will write the new VkFramebuffer handle into the variable pointed to by 'pFramebuffer'. 
+If it requires any host memory, it will use the allocator pointed to by 'pAllocator' to allocate it. 
+If 'pAllocator' is not nullptr, then a compatible allocator should be used when the framebuffer is destroyed.
+
+As you will see in Chapter 8, ¡°Drawing,¡± we will use the framebuffer object in conjunction with a renderpass 
+	in order to draw into the images attached to the framebuffer. 
+When you are done using a framebuffer, you should destroy it by calling vkDestroyFramebuffer(), the prototype of which is
+```
+void vkDestroyFramebuffer(
+	VkDevice										device,
+	VkFramebuffer								framebuffer,
+	const VkAllocationCallbacks*		pAllocator
+);
+```
+
+'device' is a handle to the device that created the framebuffer object.
+'framebuffer' is a handle to the framebuffer object being destroyed. 
+If a host memory allocator was used to allocate the framebuffer, a compatible allocator should be passed through the 'pAllocator' object.
+
+Destroying a framebuffer object does not affect any of the images attached to the framebuffer. 
+Images can be attached to multiple framebuffers at the same time and can be used in multiple ways at the same time as being attached to a framebuffer. 
+However, even if the images are not destroyed, the framebuffer should not be used - including any access in command buffers by the device. 
+You should ensure that any command buffers referencing the framebuffer have completed execution 
+	if they have been submitted or have not been submitted after the framebuffer object is destroyed.
+
+4. Creating a Simple Graphics Pipeline

@@ -38,6 +38,7 @@ namespace MyVulkan
 
 	void FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize length, const float value);
 
+	/*
 	void CreateSwapChain();
 
 	void TransitionImageLayout();
@@ -47,7 +48,9 @@ namespace MyVulkan
 	void CreateDescriptorSetLayout();
 
 	void CreatePipelineLayout();
+	*/
 
+	void CreatingSimpleRenderpass();
 }
 
 void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
@@ -442,7 +445,7 @@ void MyVulkan::FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffe
 {
 	vkCmdFillBuffer(cmdBuffer, dstBuffer, offset, size, *(const uint32_t*)&value);
 }
-
+/*
 void MyVulkan::CreateSwapChain()
 {
 	// First, we create the swap chain.
@@ -681,4 +684,77 @@ void MyVulkan::CreatePipelineLayout()
 		nullptr,
 		pipelineLayout
 		)
+}
+*/
+
+void MyVulkan::CreatingSimpleRenderpass()
+{
+	// This is our color attachment. It's an R8G8B8A8_UNORM single sample image.
+	// We want to clear it at the start of the renderpass and save the contents when we are done.
+	// It starts in UNDEFINED layout, which is a key to Vulkan that it is allowed to throw the old content away,
+	// and we want to leave it in COLOR_ATTACHMENT_OPTIMAL state when we are done.	
+
+	static const VkAttachmentDescription attachments[] =
+	{
+		{
+			0,																										// flags
+			VK_FORMAT_R8G8B8A8_UNORM,												// format
+			VK_SAMPLE_COUNT_1_BIT,														// samples
+			VK_ATTACHMENT_LOAD_OP_CLEAR,										// loadOp
+			VK_ATTACHMENT_STORE_OP_STORE,										// storeOp
+			VK_ATTACHMENT_LOAD_OP_DONT_CARE,								// stencilLoadOp
+			VK_ATTACHMENT_STORE_OP_DONT_CARE,							// stencilStoreOp
+			VK_IMAGE_LAYOUT_UNDEFINED,												// initialLayout
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			// finalLayout
+		}
+	};
+
+	// This is the single reference to our single attachment.
+	static const VkAttachmentReference attachmentReferences[] =
+	{
+		{
+			0,																									// attachment
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL		// layout
+		}
+	};
+
+	// There is one subpass in this renderpass, with only a reference to the single output attachment.
+	static const VkSubpassDescription subpasses[] =
+	{
+		{
+			0,																		// flags
+			VK_PIPELINE_BIND_POINT_GRAPHICS,	// pipelineBindPoint
+			0,																		// inputAttachmentCount
+			nullptr,																// pInputAttachments
+			1,																		// colorAttachmentCount
+			&attachmentReferences[0],								// pColorAttachments
+			nullptr,																// pResolveAttachments
+			nullptr,																// pDepthStencilAttachment
+			0,																		// preserveAttachmentCount
+			nullptr																// pPreserveAttachments
+		}
+	};
+
+	// Finally, this is the information that Vulkan needs to create the render pass object.
+	static VkRenderPassCreateInfo renderpassCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,			// sType
+		nullptr,																									// pNext
+		0,																											// flags
+		1,																											// attachmentCount
+		&attachments[0],																					// pAttachments
+		1,																											// subpassCount
+		&subpasses[0],																					// pSubpasses
+		0,																											// dependencyCount
+		nullptr																									// pDependencies
+	};
+
+	VkRenderPass renderPass = VK_NULL_HANDLE;
+
+	// The only code that actually executes is this single call, which creates the renderpass object.
+	vkCreateRenderPass(
+		logicalDevices.front(),
+		&renderpassCreateInfo,
+		&myAllocator,
+		&renderPass);
 }

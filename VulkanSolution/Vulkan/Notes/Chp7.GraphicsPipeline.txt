@@ -551,3 +551,438 @@ You should ensure that any command buffers referencing the framebuffer have comp
 	if they have been submitted or have not been submitted after the framebuffer object is destroyed.
 
 4. Creating a Simple Graphics Pipeline
+
+Creating a graphics pipeline is achieved using a method similar to the one for creating a compute pipeline, as described in Chapter 6, ¡°Shaders and Pipelines.¡± 
+However, as you have seen, the graphics pipeline includes many shading stages and fixed-function processing blocks, 
+	so the description of a graphics pipeline is correspondingly that much more complex. 
+Graphics pipelines are created by calling vkCreateGraphicsPipelines(), the prototype of which is
+```
+VkResult vkCreateGraphicsPipelines(
+	VkDevice													device,
+	VkPipelineCache										pipelineCache,
+	uint32_t													createInfoCount,
+	const VkGraphicsPipelineCreateInfo*		pCreateInfos,
+	const VkAllocationCallbacks*					pAllocator,
+	VkPipeline*												pPipelines
+);
+```
+
+As you can see, the prototype for vkCreateGraphicsPipelines() is similar to vkCreateComputePipelines(). 
+It takes a device ('device'), a handle to a pipeline cache ('pipelineCache'), 
+	and an array of createInfo structures along with the count of the number of structures in the array ('pCreateInfos' and 'createInfoCount', respectively). 
+This is where the real guts of the function are. 
+VkGraphicsPipelineCreateInfo is a large, complex structure, 
+	and it contains pointers to several other structures along with handles to other objects that you need to have created. 
+Take a deep breath: The definition of VkGraphicsPipelineCreateInfo is
+```
+typedef struct VkGraphicsPipelineCreateInfo
+{
+	VkStructureType															sType;
+	const void*																	pNext;
+	VkPipelineCreateFlags												flags;
+	uint32_t																		stageCount;
+	const VkPipelineShaderStageCreateInfo*					pStages;
+	const VkPipelineVertexInputStateCreateInfo*				pVertexInputState;
+	const VkPipelineInputAssemblyStateCreateInfo*		pInputAssemblyState;
+	const VkPipelineTessellationStateCreateInfo*			pTessellationState;
+	const VkPipelineViewportStateCreateInfo*					pViewportState;
+	const VkPipelineRasterizationStateCreateInfo*			pRasterizationState;
+	const VkPipelineMultisampleStateCreateInfo*			pMultisampleState;
+	const VkPipelineDepthStencilStateCreateInfo*			pDepthStencilState;
+	const VkPipelineColorBlendStateCreateInfo*				pColorBlendState;
+	const VkPipelineDynamicStateCreateInfo*					pDynamicState;
+	VkPipelineLayout															layout;
+	VkRenderPass															renderPass;
+	uint32_t																		subpass;
+	VkPipeline																	basePipelineHandle;
+	int32_t																			basePipelineIndex;
+} VkGraphicsPipelineCreateInfo;
+```
+
+As you were warned, VkGraphicsPipelineCreateInfo is a large structure with many substructures referenced by pointers. 
+However, it¡¯s easy enough to break down into blocks, and many of the additional creation info is optional and can be left as nullptr. 
+As with all other Vulkan creation info structures, VkGraphicsPipelineCreateInfo starts with an 'sType' field and a 'pNext' field. 
+The 'sType' for VkGraphicsPipelineCreateInfo is VK_GRAPHICS_PIPELINE_CREATE_INFO, and pNext can be left as nullptr unless extensions are in use.
+
+The flags field contains information about how the pipeline will be used. 
+Three flags are defined in the current version of Vulkan, and their meanings are as follows:
+```
+1. VK_PIPELINE_CREATE_SIABLE_OPTIMIZATION_BIT:
+	It tells Vulkan that this pipeline is not going to be used in performance-critical applications and that you would prefer to receive a ready-to-go pipeline object quickly 
+		rather than have Vulkan spend a lot of time optimizing the pipeline. 
+	You might use this for things like simple shaders for displaying splash screens or user interface elements that you want to display quickly.
+
+2. VK_PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT and VK_PIPELINE_CREATE_DERIVATIVE_BIT:
+	They are used with 'derivative' pipelines.
+	This is a feature whereby you can group similar pipelines and tell Vulkan that you¡¯ll switch rapidly among them. 
+	The VK_PIPELINE_CREATE_ALLOW_DERIVATIVES_BIT flag tells Vulkan that you will want to create derivatives of the new pipeline, 
+		and VK_PIPELINE_CREATE_DERIVATIVE_BIT tells Vulkan that this pipeline is a pipeline.
+```
+
+5. Graphics Shader Stages
+
+The next two fields in the VkGraphicsPipelineCreateInfo structure, 'stageCount' and 'pStages', are where you pass your shaders into the pipeline. 
+'pStages' is a pointer to an array of 'stageCount' VkPipelineShaderStageCreateInfo structures, each describing one of the shading stages. 
+These are the same structures that you saw in the definition of VkComputePipelineCreateInfo, except now you have an array of them. 
+The definition of VkPipelineShaderStageCreateInfo is
+```
+typedef struct VkPipelineShaderStageCreateInfo
+{
+	VkStructureType										sType;
+	const void*												pNext;
+	VkPipelineShaderStageCreateFlags		flags;
+	VkShaderStageFlagBits							stage;
+	VkShaderModule										module;
+	const char*												pName;
+	const VkSpecializationInfo*						pSpecializationInfo;
+} VkPipelineShaderStageCreateInfo;
+```
+
+All graphics pipelines must have at least a vertex shader, and the vertex shader is always the first shading stage in the pipeline. 
+Therefore, the pStages of VkGraphicsPipelineCreateInfo should point to a VkPipelineShaderStageCreateInfo describing a vertex shader. 
+The parameters in the VkPipelineShaderStageCreateInfo structure 
+	have the same meaning as they did when we created a compute pipeline in Chapter 6, ¡°Shaders and Pipelines.¡± 
+'module' should be a shader module that contains at least one vertex shader, and 'pName' should be the name of a vertex shader entry point in that module.
+
+Because in our simple pipeline we¡¯re not using most of the stages of the Vulkan graphics pipeline, 
+	we can leave most of the other fields of the VkGraphicsPipelineCreateInfo structure as their defaults or as nullptr for the pointers. 
+The 'layout' field is the same as the 'layout' field in the VkComputePipelineCreateInfo structure and specifies the pipeline layout used for resources by this pipeline.
+
+We can set the renderPass member of our structure to the handle of the renderpass object we created earlier in Listing 7.1. 
+There¡¯s only one subpass in this renderpass, so we can set subpass to zero.
+
+Listing 7.2 shows a minimal example of creating a graphics pipeline containing only a vertex shader. 
+It looks long, but most of it is setting up default values in structures that are not actually used by the pipeline. 
+These structures will be explained in the following few paragraphs.
+```
+// Listing 7.2: Creating a Simple Graphics Pipeline
+void MyVulkan::CreateSimpleRenderpass()
+{
+	// This is our color attachment. It's an R8G8B8A8_UNORM single sample image.
+	// We want to clear it at the start of the renderpass and save the contents when we are done.
+	// It starts in UNDEFINED layout, which is a key to Vulkan that it is allowed to throw the old content away,
+	// and we want to leave it in COLOR_ATTACHMENT_OPTIMAL state when we are done.	
+
+	static const VkAttachmentDescription attachments[] =
+	{
+		{
+			0,																										// flags
+			VK_FORMAT_R8G8B8A8_UNORM,												// format
+			VK_SAMPLE_COUNT_1_BIT,														// samples
+			VK_ATTACHMENT_LOAD_OP_CLEAR,										// loadOp
+			VK_ATTACHMENT_STORE_OP_STORE,										// storeOp
+			VK_ATTACHMENT_LOAD_OP_DONT_CARE,								// stencilLoadOp
+			VK_ATTACHMENT_STORE_OP_DONT_CARE,							// stencilStoreOp
+			VK_IMAGE_LAYOUT_UNDEFINED,												// initialLayout
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			// finalLayout
+		}
+	};
+
+	// This is the single reference to our single attachment.
+	static const VkAttachmentReference attachmentReferences[] =
+	{
+		{
+			0,																									// attachment
+			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL		// layout
+		}
+	};
+
+	// There is one subpass in this renderpass, with only a reference to the single output attachment.
+	static const VkSubpassDescription subpasses[] =
+	{
+		{
+			0,																		// flags
+			VK_PIPELINE_BIND_POINT_GRAPHICS,	// pipelineBindPoint
+			0,																		// inputAttachmentCount
+			nullptr,																// pInputAttachments
+			1,																		// colorAttachmentCount
+			&attachmentReferences[0],								// pColorAttachments
+			nullptr,																// pResolveAttachments
+			nullptr,																// pDepthStencilAttachment
+			0,																		// preserveAttachmentCount
+			nullptr																// pPreserveAttachments
+		}
+	};
+
+	// Finally, this is the information that Vulkan needs to create the render pass object.
+	static VkRenderPassCreateInfo renderpassCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,			// sType
+		nullptr,																									// pNext
+		0,																											// flags
+		1,																											// attachmentCount
+		&attachments[0],																					// pAttachments
+		1,																											// subpassCount
+		&subpasses[0],																					// pSubpasses
+		0,																											// dependencyCount
+		nullptr																									// pDependencies
+	};
+
+	VkRenderPass renderPass = VK_NULL_HANDLE;
+
+	// The only code that actually executes is this single call, which creates the renderpass object.
+	vkCreateRenderPass(
+		logicalDevices.front(),
+		&renderpassCreateInfo,
+		&myAllocator,
+		&renderPass);
+}
+
+void MyVulkan::CreateSimpleGraphicsPipeline()
+{
+	VkPipelineShaderStageCreateInfo shaderStageCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,		// sType
+		nullptr,																													// pNext
+		0,																															// flags
+		VK_SHADER_STAGE_VERTEX_BIT,																// stage
+		module,																												// module
+		"main",																													// pName
+		nullptr																													// pSpecializationInfo
+	};
+	
+	static const VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO	,		// sType
+		nullptr,																																// pNext
+		0,																																		// flags
+		0,																																		// vertexBindingDescriptionCount
+		nullptr,																																// pVertexBindingDescriptions
+		0,																																		// vertexAttributeDescriptionCount
+		nullptr																																// pVertexAttributeDescriptions
+	};
+
+	static const VkPipelineInputAssemblyStateCreateInfo inputAssemblyStateCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO,		// sType
+		nullptr,																																	// pNext
+		0,																																			// flags
+		VK_PRIMITIVE_TOPOLOGY_POINT_LIST,																		// topology
+		VK_FALSE																															// primitiveRestartEnable
+	};
+
+	static const VkViewport dummyViewport =
+	{
+		0.f, 0.f,						// x, y
+		1.f, 1.f,						// width, height
+		0.1f, 1000.f				// minDepth, maxDepth
+	};
+
+	static const VkRect2D dummyScissor =
+	{
+		{0, 0},						  // offset
+		{1, 1}						  // extent
+	};
+
+	static const VkPipelineViewportStateCreateInfo viewportStateCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO,			// sType
+		nullptr,																															// pNext
+		0,																																	// flags
+		1,																																	// viewportCount
+		&dummyViewport,																										// pViewports
+		1,																																	// scissorCount
+		&dummyScissor																											// pScissors
+	};
+
+	static const VkPipelineRasterizationStateCreateInfo rasterizationStateCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO,			// sType
+		nullptr,																																	// pNext
+		0,																																			// flags
+		VK_FALSE,																															// depthClampEnable
+		VK_TRUE,																															// rasterizerDiscardEnable
+		VK_POLYGON_MODE_FILL,																								// polygonMode
+		VK_CULL_MODE_NONE,																									// cullMode
+		VK_FRONT_FACE_COUNTER_CLOCKWISE,																	// frontFace
+		VK_FALSE,																															// depthBiasEnable
+		0.f,																																		// depthBiasConstantFactor
+		0.f,																																		// depthBiasClamp
+		0.f,																																		// depthBiasSlopeFactor
+		0.f																																		// lineWidth
+	};
+
+	static const VkGraphicsPipelineCreateInfo graphicsPipelineCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO,
+		nullptr,
+		0,
+		1,
+		&shaderStageCreateInfo,
+		&vertexInputStateCreateInfo,
+		&inputAssemblyStateCreateInfo,
+		nullptr,
+		&viewportStateCreateInfo,
+		&rasterizationStateCreateInfo,
+		nullptr,
+		nullptr,
+		nullptr,
+		nullptr,
+		VK_NULL_HANDLE,
+		renderpass,
+		0,
+		VK_NULL_HANDLE,
+		0
+	};
+
+	VkPipeline pipeline;
+
+	VulkanHelper::VkCheck(
+		vkCreateGraphicsPipelines(logicalDevices.front(),
+			VK_NULL_HANDLE,
+			1,
+			&graphicsPipelineCreateInfo,
+			&myAllocator,
+			&pipeline),
+		"vkCreateGraphicsPipelines is failed!"
+	);
+}
+
+```
+
+Of course, most of the time, you won¡¯t be using a graphics pipeline containing only a vertex shader. 
+Up to five shader stages make up the graphics pipeline, as introduced earlier in this chapter. 
+These stages include the following:
+```
+1. VK_SHADER_STAGE_VERTEX_BIT:
+	The vertex shader processes one vertex at a time and passes it to the next logical stage in the pipeline.
+
+2. VK_SHADER_STAGE_TESSELLATION_CONTROL_BIT:
+	The tessellation control shader processes one control point at a time but has access to all of the data that makes up the patch. 
+	It can be considered to be a patch shader, and it produces the tessellation factors and per-patch data associated with the patch.
+
+3. VK_SHADER_STAGE_TESSELLATION_EVALUATION_BIT:
+	The tessellation evaluation shader processes one tessellated vertex at a time. 
+	In many applications, it evaluates the patch function at each point - hence, the name. 
+	It also has access to the full patch data produced by the tessellation control shader.
+
+4. VK_SHADER_STAGE_GEOMETRY_BIT:
+	The geometry shader executes once for each primitive that passes through the pipeline: points, lines, or triangles. 
+	It can produce new primitives or throw them away rather than passing them on. 
+	It can also change the type of a primitive as it passes by.
+
+5. VK_SHADER_STAGE_FRAGMENT_BIT:
+	The fragment shader executes once per fragment, after rasterization. 
+	It is primarily responsible for computing the final color of each pixel.
+```
+
+Most straightforward rendering will include at least a vertex and a fragment shader. 
+Each shader stage can consume data from the previous stage or pass data on to the next, forming a pipeline. 
+In some cases, the inputs to a shader are supplied by fixed-function blocks, and sometimes the outputs from a shader are consumed by fixed-function blocks. 
+Regardless of the source or destination of data, the means of declaring the inputs and outputs to shaders are the same.
+
+To declare an input to a shader in SPIR-V, a variable must be decorated as 'Input' when it is declared. 
+Likewise, to create an output from the shader, decorate a variable as 'Output' when it is declared. 
+Unlike in GLSL, special-purpose inputs and outputs do not have predefined names in SPIR-V. 
+Rather, they are decorated with their purpose. 
+Then you write shaders in GLSL and compile them to SPIR-V using a GLSL compiler. 
+The compiler will recognize access to built-in variables and translate them into appropriately declared and decorated input and output variables 
+	in the resulting SPIR-V shader.
+
+6. Vertex Input State
+
+To render real geometry, you need to feed data into the front of the Vulkan pipeline. 
+You can use the vertex and instance indices that are provided by SPIR-V to programmatically generate geometry or explicitly fetch geometry data from a buffer. 
+Alternatively, you can describe the layout of geometric data in memory and Vulkan can fetch it for you, supplying it directly to your shader.
+
+To do this, we use the 'pVertexInputState' member of VkGraphicsPipelineCreateInfo, 
+	which is a pointer to an instance of the VkPipelineVertexInputStateCreateInfo structure, the definition of which is
+```
+typedef struct VkPipelineVertexInputStateCreateInfo
+{
+	VkStructureType												sType;
+	const void*														pNext;
+	VkPipelineVertexInputStateCreateFlags			flags;
+	uint32_t															vertexBindingDescriptionCount;
+	const VkVertexInputBindingDescription*			pVertexBindingDescriptions;
+	uint32_t															vertexAttributeDescriptionCount;
+	const VkVertexInputAttributeDescription*		pVertexAttributeDescriptions;
+} VkPipelineVertexInputStateCreateInfo;
+```
+
+The VkPipelineVertexInputStateCreateInfo structure begins with the familiar ''sType' and 'pNext' fields, 
+	which should be set to VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO and nullptr, respectively. 
+The 'flags' field of VkPipelineVertexInputStateCreateInfo is reserved for future use and should be set to zero.
+
+Vertex input state is divided into a set of vertex bindings to which you can bind buffers containing data 
+	and a set of vertex attributes that describe how vertex data is laid out in those buffers. 
+Buffers bound to the vertex buffer binding points are sometimes referred to as vertex buffers. 
+It should be noted, though, that there¡¯s not really any such thing as a ¡°vertex buffer¡± in the sense that any buffer can store vertex data, 
+	and a single buffer can store vertex data and other kinds of data as well. 
+The only requirement for a buffer to be used as storage for vertex data is that 
+	it must have been created with the VK_BUFFER_USAGE_VERTEX_BUFFER_BIT set.
+
+'vertexBindingDescriptionCount' is the number of vertex bindings used by the pipeline, 
+	and 'pVertexBindingDescriptions' is a pointer to an array of that many VkVertexInputBindingDescription structures, each describing one of the bindings. 
+The definition of VkVertexInputBindingDescription is
+```
+typedef struct VkVertexInputBindingDescription
+{
+	uint32_t						binding;
+	uint32_t						stride;
+	VkVertexInputRate		inputRate;
+} VkVertexInputBindingDescription;
+```
+
+The 'binding' field is the index of the binding described by this structure. 
+Each pipeline can address a number of vertex buffer bindings, and their indices do not need to be contiguous. 
+It is not necessary to describe every binding in a given pipeline so long as every binding that is used by that pipeline is described.
+
+The last binding index addressed by the array of VkVertexInputBindingDescription structures must be less than 
+	the maximum number of bindings supported by the device. 
+This limit is guaranteed to be at least 16, but for some devices, it could be higher. 
+If you don¡¯t need more than 16 bindings, then there¡¯s no reason to check the limit. 
+However, you can determine the highest binding index by checking the maxVertexInputBindings member of the device¡¯s VkPhysicalDeviceLimits structure, 
+	which is returned from a call to vkGetPhysicalDeviceProperties().
+
+Each binding can be seen as an array of structures located in a buffer object. 
+The stride of the array - that is, the distance between the start of each structure, measured in bytes - is specified in 'stride'. 
+If the vertex data is specified as an array of structures, 
+	the 'stride' parameter essentially contains the size of the structure, even if the shader doesn¡¯t use every member of it. 
+The maximum value of stride for any particular binding is implementation-dependent but is guaranteed to be at least 2,048 bytes. 
+If you want to use vertex data with a greater stride than this, you need to query the supported stride to make sure that the device can handle it.
+
+To determine the maximum supported stride, check the 'maxVertexInputBindingStride' field of the device¡¯s VkPhysicalDeviceLimits structure.
+
+Further, Vulkan can iterate through the array either as a function of the vertex index or as a function of the instance index when instancing is in use. 
+This is specified in the 'inputRate' field, which should be either VK_VERTEX_INPUT_RATE_VERTEX or VK_VERTEX_INPUT_RATE_INSTANCE.
+
+Each vertex attribute is essentially a member of one of the structures stored in the vertex buffer. 
+Each vertex attribute sourced from the vertex buffer shares the step rate and stride of the array but has its own data type and offset within that structure. 
+This is described using the VkVertexInputAttributeDescription structure. 
+The address of an array of these structures is passed in the 'pVertexAttributeDescriptions' field of VkPipelineVertexInputStateCreateInfo, 
+	and the number of elements in the array (which is the number of vertex attributes) is passed in 'vertexAttributeDescriptionCount'. 
+The definition of VkVertexInputAttributeDescription is
+```
+typedef struct VkVertexInputAttributeDescription
+{
+	uint32_t		location;
+	uint32_t		binding;
+	VkFormat		format;
+	uint32_t		offset;
+} VkVertexInputAttributeDescription;
+```
+
+Each attribute has a 'location' that is used to refer to it in the vertex shader. 
+Again, the vertex attribute locations don¡¯t need to be contiguous, 
+	and it¡¯s not necessary to describe every single vertex attribute location so long as all the attributes used by the pipeline are described. 
+The attribute¡¯s location is specified though the location member of VkVertexInputAttributeDescription.
+
+The binding to which the buffer is bound, and from which this attribute sources its data, is specified in 'binding' and 
+	should match one of the bindings specified in the array of VkVertexInputBindingDescription structures described earlier. 
+The format of the vertex data is specified in 'format', and the offset within each structure is specified in 'offset'.
+
+Just as the total size of the structure has an upper limit, 
+	there is an upper limit to the offset from the start of the structure for each attribute: the upper bound on 'offset'. 
+This is guaranteed to be at least 2,047 bytes, 
+	which is high enough to place a single byte right at the end of a structure of the maximum guaranteed size (2,048 bytes). 
+If you need to use bigger structures than this, you need to check the capability of the device to handle it. 
+The 'maxVertexInputAttributeOffset' field of the device¡¯s VkPhysicalDeviceLimits structure contains the maximum value that can be used in 'offset'. 
+You can retrieve this structure by calling vkGetPhysicalDeviceProperties().
+
+Listing 7.3 shows how to create a structure in C++ and describe it using the VkVertexInputBindingDescription and VkVertexInputAttributeDescription 
+	such that you can use it to hand vertex data to Vulkan.
+```
+// Listing 7.3: Describing Vertex Input Data
+
+```

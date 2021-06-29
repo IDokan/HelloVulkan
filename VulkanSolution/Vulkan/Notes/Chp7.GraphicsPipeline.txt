@@ -985,4 +985,449 @@ Listing 7.3 shows how to create a structure in C++ and describe it using the VkV
 ```
 // Listing 7.3: Describing Vertex Input Data
 
+void MyVulkan::DescribeVertexInputData()
+{
+	typedef struct vertex_t
+	{
+		glm::vec4 position;
+		glm::vec3 normal;
+		glm::vec2 texcoord;
+	} vertex;
+
+	static const VkVertexInputBindingDescription vertexInputBindings[] =
+	{
+		{ 0, sizeof(vertex), VK_VERTEX_INPUT_RATE_VERTEX }		// Buffer
+	};
+
+	// need to improve to use comfortably
+	static const VkVertexInputAttributeDescription vertexAttributes[] =
+	{
+		{ 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 0 },																	// position
+		{ 1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(vertex, normal) },								// normal
+		{ 2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(vertex, texcoord) }								// texcoord
+	};
+
+	static const VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		nullptr,
+		0,
+		sizeof(vertexInputBindings) / sizeof(vertexInputBindings[0]),
+		vertexInputBindings,
+		sizeof(vertexAttributes) / sizeof(vertexAttributes[0]),
+		vertexAttributes
+	};
+}
+
 ```
+
+The maximum number of input attributes that can be used in a single vertex shader is implementation-dependent but is guaranteed to be at least 16. 
+This is the upper limit on the number of VkVertexInputAttributeDescription structures in the 'pVertexInputAttributeDescriptions' array. 
+Some implementations may support more inputs than this. 
+To determine the maximum number of vertex shader inputs that you can use, 
+	check the 'maxVertexInputAttributes' field of the device¡¯s VkPhysicalDeviceLimits structure.
+
+Vertex data is read from the vertex buffers that you bind to the command buffer and then passed to the vertex shader. 
+For the vertex shader to be able to interpret that vertex data, it must declare inputs corresponding to the vertex attributes you have defined. 
+To do this, create a variable in your SPIR-V vertex shader with the Input storage class. 
+In a GLSL shader, this can be expressed using an in variable.
+
+Each input must have an assigned location. 
+This is specified in GLSL using the 'location' layout qualifier, which is then translated into a SPIR-V 'Location' decoration applied to the input. 
+Listing 7.4 shows a fragment of a GLSL vertex shader that declares a number of inputs. 
+The resulting SPIR-V produced by glslangvalidator is shown in Listing 7.5.
+
+The shader shown in Listing 7.5 is incomplete, as it has been edited to make the declared inputs clearer.
+
+```
+// Listing 7.4: Declaring Inputs to a Vertex Shader
+#version 450 core
+
+layout (location = 0) in vec3 i_position;
+layout (location = 1) in vec2 i_uv;
+
+void main(void)
+{
+	gl_Position = vec4(i_position, 1.f);
+}
+```
+
+```
+// Listing 7.5: Declaring Inputs to a Vertex Shader (SPIR-V)
+; SPIR-V
+
+; Version: 1.0
+
+; Generator: Khronos Glslang Reference Front End; 1
+
+; Bound: 30
+
+; Schema: 0
+
+		OpCapability Shader
+
+	%1 = OpExtInstImport "GLSL.std.450"
+
+		OpMemoryModel Logical GLSL450
+		
+		OpEntryPoint Vertex %4 "main" %13 %18 %29
+		
+		OpSource GLSL 450
+		
+		OpName %18 "i_position"      ;; Name of i_position
+		
+		OpName %29 "i_uv"            ;; Name of i_uv
+		
+		OpDecorate %18 Location 0    ;; Location of i_position
+		
+		OpDecorate %29 Location 1    ;; Location of i_uv
+
+...
+
+	%6 = OpTypeFloat 32           ;; %6 is 32-bit floating-point type
+	
+	%16 = OpTypeVector %6 3        ;; %16 is a vector of 3 32-bit floats (vec3)
+	
+	%17 = OpTypePointer Input %16
+	
+	%18 = OpVariable %17 Input     ;; %18 is i _position - input pointer to vec3
+	
+	%27 = OpTypeVector %6 2        ;; %27 is a vector of 2 32-bit floats
+	
+	%28 = OpTypePointer Input %27
+	
+	%29 = OpVariable %28 Input     ;; %29 is i _uv - input pointer to vec2
+
+...
+```
+
+It is also possible to declare a vertex shader input that corresponds only to certain components of the vertex attribute. 
+Again, the attribute is the data supplied by your application through vertex buffers, 
+	and the vertex shader input is the variable in the vertex shader corresponding to the data read by Vulkan on your behalf.
+
+To create a vertex shader input that corresponds to a subset of the components of an input vector, use the GLSL 'component' layout qualifier, 
+	which is translated into a SPIR-V Component decoration applied to the vertex shader input. 
+Each vertex shader input can begin at a component numbered 0 through 3, corresponding to the x, y, z, and w channels of the source data. 
+Each input consumes as many consecutive components as it requires. 
+That is, a scalar consumes a single component, a vec2 consumes 2, a vec3 consumes 3, and so on.
+
+Vertex shaders can also declare matrices as inputs. 
+In GLSL, this is as simple as using the in storage qualifier on a variable in the vertex shader. 
+In SPIR-V, a matrix is effectively declared as a special type of vector consisting of vector types. 
+The matrix is considered to be column primary by default. 
+Therefore, each set of contiguous data fills a single column of the matrix.
+
+7. Input Assembly
+
+The input assembly phase of the graphics pipeline 
+	takes the vertex data and groups it into primitives ready for processing by the rest of the pipeline. 
+It is described by an instance of the VkPipelineInputAssemblyStateCreateInfo structure that is passed through 
+	the 'pInputAssemblyState' member of the VkGraphicsPipelineCreateInfo structure. 
+The definition of VkPipelineInputAssemblyStateCreateInfo is
+```
+typedef struct VkPipelineInputAssemblyStateCreateInfo
+{
+	VkStructureType													sType;
+	const void*															pNext;
+	VkPipelineInputAssemblyStateCreateFlags		flags;
+	VkPrimitiveTopology											topology;
+	VkBool32																primitiveRestartEnable;
+} VkPipelineInputAssemblyStateCreateInfo;
+```
+
+The 'sType' field should be set to VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved for future use and should be set to zero.
+
+The primitive topology is specified in 'topology', which should be one of the primitive topologies supported by Vulkan. 
+These are members of the VkPrimitiveTopology enumeration. 
+The simplest members of this enumeration are the 'list' topologies, which are
+```
+1. VK_PRIMITIVE_TOPOLOGY_POINT_LIST:
+	Each vertex is used to construct an independent point.
+
+2. VK_PRIMITIVE_TOPOLOGY_LINE_LIST:
+	Vertices are grouped into pairs, each pair forming a line segment from the first to the second vertex.
+
+3. VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST:
+	Vertices are grouped into triplets forming triangles.
+```
+
+Next are the strip and fan primitives. 
+These are groupings of vertices into primitives (lines or triangles) in which each line or triangle shares one or two vertices with the previous one. 
+The strip and fan primitives are as follows:
+```
+1. VK_PRIMITIVE_TOPOLOGY_LINE_STRIP:
+	The first two vertices in a draw form a single line segment. 
+	Each new vertex after them forms a new line segment from the last processed vertex. 
+	The result is a connected sequence of lines.
+
+2. VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP:
+	The first three vertices in a draw form a single triangle. 
+	Each subsequent vertex forms a new triangle along with the last two vertices. 
+	The result is a connected row of triangles, each sharing an edge with the last.
+
+3. VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN:
+	The first three vertices in a draw form a single triangle. 
+	Each subsequent vertex forms a new triangle along with the last vertex and the first vertex in the draw.
+```
+
+Strip and fan topologies are not complex but can be difficult to visualize if you are not familiar with them. 
+Figure 7.2 shows these topologies laid out graphically.
+
+Next are the adjacency primitives, which are typically used only when a geometry shader 
+	is enabled and are able to convey additional information about primitives next to them in an original mesh. 
+The adjacency primitive topologies are
+```
+1. VK_PRIMITIVE_TOPOLOGY_LINE_LIST_WITH_ADJACENCY:
+	Every four vertices in the draw form a single primitive, with the center two vertices 
+		forming a line and the first and last vertex in each group of four being presented to the geometry shader, when present.
+
+2. VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY:
+	The first four vertices in the draw form a single primitive, 
+		with the center two vertices forming a line segment and the first and last being presented to the geometry shader as adjacency information. 
+	Each subsequent vertex essentially slides this window of four vertices along by one, 
+		forming a new line segment and presenting the new vertex as adjacency information.
+
+3. VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY:
+	Similar to lines with adjacency, each group of six vertices is formed into a single primitive, 
+		with the first, third, and fifth in each group constructing a triangle and 
+		the second, fourth, and sixth being presented to the geometry shader as adjacency information.
+
+4. VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY:
+	This is perhaps the most confusing primitive topology and certainly needs a diagram to visualize. 
+	Essentially, the strip begins with the first six vertices forming a triangle with adjacency information as in the list case. 
+	For every two new vertices, a new triangle is formed, 
+		with the odd-numbered vertices forming the triangle and the even-numbered vertices providing adjacency information.
+```
+
+Again, adjacency topologies can be quite difficult to visualize - 
+	especially the VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY topology. 
+Figure 7.3 illustrates the layout of vertices within the VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST_WITH_ADJACENCY topology. 
+In the figure you can see that there are two triangles formed from a total of 12 vertices. 
+The vertices wrap around the outside of each triangle, with the odd-numbered vertices forming the center triangles (A and B) and 
+	the even-numbered vertices forming virtual triangles that are not rendered, but carry adjacency information. 
+This concept carries on to the triangle strip primitive.
+
+Figure 7.4 shows how it is applied to the VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY. (?????????)
+
+Adjacency topologies are typically used only when a geometry shader is present, 
+	as the geometry shader is the only stage that really sees the adjacency vertices. 
+However, it¡¯s possible to use adjacency primitives without a geometry shader; the adjacency vertices will simply be discarded.
+
+The last primitive topology is VK_PRIMITIVE_TOPOLOGY_PATCH_LIST. 
+This topology is used when tessellation is enabled, which requires additional information to be passed to pipeline construction.
+
+The last field in VkPipelineInputAssemblyStateCreateInfo is 'primitiveRestartEnable'. 
+This is a flag that is used to allow strip and fan primitive topologies to be cut and restarted. 
+Without this, each strip or fan would need to be a separate draw. 
+When you use restarts, many strips or fans can be combined into a single draw. 
+Restarts take effect only when indexed draws are used 
+	because the point at which to restart the strip is marked using a special, reserved value in the index buffer. 
+This is covered in more detail in Chapter 8, ¡°Drawing.¡±
+
+8. Tessellation State
+
+Tessellation is the process of breaking a large, complex primitive into a large number of smaller primitives approximating the original. 
+Vulkan can tessellate a patch primitive into many smaller point, line, or triangle primitives prior to geometry shading and rasterization. 
+Most of the state related to tessellation is configured using the tessellation control shader and tessellation evaluation shader. 
+However, because these shading stages don¡¯t run until vertex data has already been fetched and processed by the vertex shader, 
+	some information is needed up front to configure this stage of the pipeline.
+
+This information is provided through an instance of the VkPipelineTessellationStateCreateInfo structure, 
+	pointed to by the 'pTessellationState' member of VkGraphicsPipelineCreateInfo. 
+The definition of VkPipelineTessellationStateCreateInfo is
+```
+typedef struct VkPipelineTessellationStateCreateInfo
+{
+	VkStructureType											sType;
+	const void*													pNext;
+	VkPipelineTessellationStateCreateFlags		flags;
+	uint32_t														patchControlPoints;
+} VkPipelineTessellationStateCreateInfo;
+```
+
+When the 'topology' field of the VkPipelineInputAssemblyStateCreateInfo structure is set to VK_PRIMITIVE_TOPOLOGY_PATCH_LIST, (¡Ú¡Ú¡Ú) 
+	'pTessellationState' must be a pointer to a VkPipelineTessellationStateCreateInfo structure; otherwise, 'pTessellationState' can be nullptr.
+
+'sType' for VkPipelineTessellationStateCreateInfo is VK_STRUCTURE_TYPE_PIPELINE_TESSELLATION_STATE_CREATE_INFO. 
+'pNext' should be set to nullptr, and 'flags' is reserved for use in future versions of Vulkan and should be set to zero. 
+The only field of significance in VkPipelineTessellationStateCreateInfo is 'patchControlPoints', 
+	which sets the number of control points that will be grouped into a single primitive (patch). 
+Tessellation is a somewhat advanced topic and will be covered in more detail in Chapter 9, ¡°Geometry Processing.¡±
+
+9. Viewport State
+
+Viewport transformation is the final coordinate transform in the Vulkan pipeline before rasterization occurs. 
+It transforms vertices from normalized device coordinates into window coordinates. 
+Multiple viewports can be in use simultaneously. 
+The state of these viewports, including the number of active viewports and their parameters, 
+	is set through an instance of the VkPipelineViewportStateCreateInfo structure, 
+	the address of which is passed through the 'pViewportState' member of VkGraphicsPipelineCreateInfo. 
+The definition of VkPipelineViewportStateCreateInfo is
+```
+typedef struct VkPipelineViewportStateCreateInfo
+{
+	VkStructureType										sType;
+	const void*												pNext;
+	VkPipelineViewportStateCreateFlags		flags;
+	uint32_t													viewportCount;
+	const VkViewport*									pViewports;
+	uint32_t													scissorCount;
+	const VkRect2D*										pScissors;
+} VkPipelineViewportStateCreateInfo;
+```
+
+The 'sType' field of VkPipelineViewportStateCreateInfo should be set to VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved for use in a future version of Vulkan and should be set to zero.
+
+The number of viewports that will be available to the pipeline is set in 'viewportCount', 
+	and the dimensions of each viewport are passed in an array of VkViewport structures, the address of which is specified in 'pViewports'. 
+The definition of VkViewport is
+```
+typedef struct VkViewport
+{
+	float x;
+	float y;
+	float width;
+	float height;
+	float minDepth;
+	float maxDepth;
+} VkViewport;
+```
+
+The VkPipelineViewportStateCreateInfo structure is also used to set the scissor rectangles for the pipeline. 
+As with viewports, a single pipeline can define multiple scissor rectangles, and they are passed through an array of VkRect2D structures. 
+The number of scissor rectangles is specified in 'scissorCount'. 
+Note that the index used for the viewport and scissor rectangles when drawing is the same, 
+	so you must set 'scissorCount' to the same value as 'viewportCount'. 
+VkRect2D is a simple structure defining a rectangle in 2D and is used for many things in Vulkan. 
+Its definition is
+```
+typedef struct VkRect2D
+{
+	VkOffset2D		offset;
+	VkExtent2D		extent;
+} VkRect2D;
+```
+
+Support for multiple viewports is optional. 
+When multiple viewports are supported, then at least 16 are available. 
+The maximum number of viewports that can be enabled in a single graphics pipeline can be determined by 
+	inspecting the 'maxViewports' member of the VkPhysicalDeviceLimits structure returned from a call to vkGetPhysicalDeviceProperties(). 
+If multiple viewports are supported, then this limit will be at least 16. 
+Otherwise, this field will contain the value 1.
+
+More information about how the viewport transformation works and how to utilize multiple viewports in your application 
+	is given in Chapter 9, ¡°Geometry Processing.¡± 
+Further information about scissor testing is contained in Chapter 10, ¡°Fragment Processing.¡± 
+In order to simply render to the full framebuffer, 
+	disable the scissor test and create a single viewport with the same dimensions as the framebuffer¡¯s color attachments.
+
+9. Rasterization State
+
+Rasterization is the fundamental process 
+	whereby primitives represented by vertices are turned into streams of fragments ready to be shaded by your fragment shader. 
+The state of the rasterizer controls how this process occurs and is set using an instance of the 
+	VkPipelineRasterizationStateCreateInfo passed through the 'pRasterizationState' member of VkGraphicsPipelineCreateInfo. 
+The definition of VkPipelineRasterizationStateCreateInfo is
+```
+typedef struct VkPipelineRasterizationStateCreateInfo
+{
+	VkStructureType												sType;
+	const void*														pNext;
+	VkPipelineRasterizationStateCreateFlags		flags;
+	VkBool32															depthClampEnable;
+	VkBool32															rasterizerDiscardEnable;
+	VkPolygonMode												polygonMode;
+	VkCullModeFlags											cullMode;
+	VkFrontFace													frontFace;
+	VkBool32															depthBiasEnable;
+	float																	depthBiasConstantFactor;
+	float																	depthBiasClamp;
+	float																	depthBiasSlopeFactor;
+	float																	lineWidth;
+} VkPipelineRasterizationStateCreateInfo;
+```
+
+The 'sType' field of VkPipelineRasterizationStateCreateInfo should be set to 
+	VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved and should be set to zero.
+
+The 'depthClampEnable' field is used to turn depth clamping on or off. 
+Depth clamping causes fragments that would have been clipped away by the near or far planes to 
+	instead be projected onto those planes and can be used to fill holes in geometry that would be caused by clipping.
+
+'rasterizerDiscardEnable' is used to turn off rasterization altogether. 
+When this flag is set, the rasterizer will not run, and no fragments will be produced.
+
+The 'polygonMode' field can be used to get Vulkan to turn triangles into points or lines automatically. 
+The possible values for polygonMode are
+```
+1. VK_POLYGON_MODE_FILL:
+	This is the normal mode that is used to fill in triangles. 
+	Triangles will be drawn solid, and every point inside the triangle will create a fragment.
+
+2. VK_POLYGON_MODE_LINE:
+	This mode turns the triangles into lines, with each edge of each triangle becoming a line. 
+	This is useful for drawing geometry in wireframe mode.
+
+3. VK_POLYGON_MODE_POINT:
+	This mode turns the triangles into lines, with each edge of each triangle becoming a line. 
+	This is useful for drawing geometry in wireframe mode.
+```
+
+The advantage of using the polygon mode to turn geometry into wireframe or point clouds over simply drawing lines or points 
+	is that operations that operate only on complete triangles, such as back-face culling, are still performed. 
+Thus, lines that would have encompassed a culled triangle are not drawn, whereas they would be if the geometry were simply drawn as lines.
+
+Culling is controlled with cullMode, which can be zero or a bitwise combination of either of the following:
+```
+1. VK_CULL_MODE_FRONT_BIT:
+	Polygons (triangles) that are considered to face the viewer are discarded.
+
+2. VK_CULL_MODE_BACK_BIT:
+	Polygons that are considered to face away from the viewer are discarded.
+```
+
+For convenience, Vulkan defines VK_CULL_MODE_FRONT_AND_BACK as the bitwise OR of 
+	both VK_CULL_MODE_FRONT_BIT and VK_CULL_MODE_BACK_BIT. 
+Setting 'cullMode' to this value will result in all triangles being dicarded. 
+Note that culling doesn¡¯t affect lines or points because they don¡¯t have a facing direction.
+
+Which direction a triangle is facing is determined from the winding order of its vertices
+	- whether they proceed clockwise or counterclockwise in window space. 
+Which of clockwise or counterclockwise is considered front - facing is determined by the 'frontFace' field. 
+This is a member of the VkFrontFace enumeration and can be either 
+	VK_FRONT_FACE_COUNTER_CLOCKWISE or VK_FRONT_FACE_CLOCKWISE.
+
+The next four parameters - 'depthBiasEnable', 'depthBiasConstantFactor', 'depthBiasClamp', and 'depthBiasSlopeFactor' - 
+	control the depth bias feature. 
+This feature allows fragments to be offset in depth before the depth test and can be used to prevent depth fighting. 
+This feature is discussed in some detail in Chapter 10, ¡°Fragment Processing.¡±
+
+Finally, 'lineWidth' sets the width of line primitives, in pixels. 
+This applies to all lines rasterized with the pipeline. 
+This includes pipelines in which the primitive topology is one of the line primitives, 
+	the geometry or tessellation shaders turn the input primitives into lines, and the polygon mode (set by 'polygonMode') is 
+	VK_POLYGON_MODE_LINE. 
+Note that some Vulkan implementations don¡¯t support wide lines and will ignore this field. 
+Others may run very slowly when this field is not 1.0; 
+	still others may honor this field completely and throw away all your lines if you set lineWidth to 0.0. 
+Therefore, you should always set this field to 1.0 unless you¡¯re sure you want something else.
+
+Even when wide lines are supported, the maximum width of a line is device-dependent. 
+It is guaranteed to be at least 8 pixels but could be much higher. 
+To determine the maximum line width supported by a device, check the 'lineWidthRange' field of its VkPhysicalDeviceLimits structure. 
+This is an array of two floating-point values, 
+	the first being the minimum width of a line (which will be at most 1 pixel; its purpose is for drawing lines that are less than a pixel wide) and 
+	the second being the maximum width of a line. 
+If variable line width is not supported, then both elements of the array will be 1.0.
+
+Further, as line width is changed, a device may snap the width you specify into fixed-size increments. 
+For example, it may support only whole-pixel size changes. 
+This is the line width granularity, which can be determined by inspecting the 'lineWidthGranularity' field of the VkPhysicalDeviceLimits structure.
+
+10. Multisample State

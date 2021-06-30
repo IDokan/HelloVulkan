@@ -1431,3 +1431,246 @@ For example, it may support only whole-pixel size changes.
 This is the line width granularity, which can be determined by inspecting the 'lineWidthGranularity' field of the VkPhysicalDeviceLimits structure.
 
 10. Multisample State
+
+Multisampling is the process of generating multiple samples for each pixel in an image. 
+It is used to combat aliasing and can greatly improve image quality when used effectively. 
+When you use multisampling, the color and depth-stencil attachments must be multisample images, 
+	and the multisample state of the pipeline should be set appropriately through the 'pMultisampleState' member of VkGraphicsPipelineCreateInfo. 
+This is a pointer to an instance of the VkPipelineMultisampleStateCreateInfo structure, the definition of which is
+```
+typedef struct VkPipelineMultisampleStateCreateInfo
+{
+	VkStructureType												sType;
+	const void*														pNext;
+	VkPipelineMultisampleStateCreateFlags		flags;
+	VkSampleCountFlagBits									rasterizationSamples;
+	VkBool32															sampleShadingEnable;
+	float																	minSampleShading;
+	const VkSampleMask*									pSampleMask;
+	VkBool32															alphaToCoverageEnable;
+	VkBool32															alphaToOneEnable;
+} VkPipelineMultisampleStateCreateInfo;
+```
+
+The 'sType' field of VkPipelineMultisampleStateCreateInfo should be set to VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved and should be set to zero.
+
+11. Depth and Stencil State
+
+The depth-stencil state controls how the depth and stencil tests are conducted and 
+	what happens to a fragment should it pass or fail either of those tests. 
+The depth and stencil tests can be performed either before or after the fragment shader runs. 
+By default, the tests occur after the fragment shader.
+(Most implementations will only keep up the appearance that the depth and stencil tests are running after the fragment shader and, 
+	if possible, run the tests before running the shader to avoid running shader code when the test would fail.)
+
+To run the fragment shader before the depth test, 
+	we can apply the SPIR-V 'EarlyFragmentTests' execution mode to the entry point of our fragment shader.
+
+The depth-stencil state is configured through the 'pDepthStencilState' member of VkGraphicsPipelineCreateInfo, 
+	which is a pointer to an instance of the VkPipelineDepthStencilStateCreateInfo structure. 
+The definition of VkPipelineDepthStencilStateCreateInfo is
+```
+typedef struct VkPipelineDepthStencilStateCreateInfo
+{
+	VkStructureType												sType;
+	const void*														pNext;
+	VkPipelineDepthStencilStateCreateFlags		flags;
+	VkBool32															depthTestEnable;
+	VkBool32															depthWriteEnable;
+	VkCompareOp													depthCompareOp;
+	VkBool32															depthBoundsTestEnable;
+	VkBool32															stencilTestEnable;
+	VkStencilOpState											front;
+	VkStencilOpState											back;
+	float																	minDepthBounds;
+	float																	maxDepthBounds;
+} VkPipelineDepthStencilStateCreateInfo;
+```
+
+The 'sType' field for VkPipelineDepthStencilStateCreateInfo should be set to 
+	VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved and should be set to zero.
+
+The depth test is enabled if 'depthTestEnable' is set to VK_TRUE. 
+If the depth test is enabled, then the test to use is selected using 'depthCompareOp', which is one of the VkCompareOp enumerant values. 
+The available depth testing operations are discussed in more detail in Chapter 10, ¡°Fragment Processing.¡± 
+If 'depthTestEnable' is set to VK_FALSE, then the depth test is enabled. 
+The value of depthCompareOp is enabled, and all fragments are considered to have passed the depth test. 
+It should be noted, however, that when the depth test is disabled, no writes to the depth buffer occur.
+
+If the depth test passes (or if the depth test is disabled), then the fragment passes on to the stencil test. 
+The stencil test is enabled if the 'stencilTestEnable' field of VkPipelineDepthStencilCreateInfo is set to VK_TRUE and disabled otherwise. 
+When stencil testing is enabled, a separate state is provided for front- and back-facing primitives in the front and back members, respectively. 
+If stencil test is disabled, all fragments are considered to have passed the stencil test.
+
+The details of depth and stencil testing are covered in more depth in Chapter 10, ¡°Fragment Processing.¡±
+
+12. Color Blend State
+
+The final stage in the Vulkan graphics pipeline is the color blend stage. 
+This stage is responsible for writing fragments into the color attachments. 
+In many cases, this is a simple operation that simply overwrites the existing content of the attachment with value(s) output from the fragment shader. 
+However, the color blender is capable of mixing (blending) those values with the values already in the framebuffer and performing simple logical 
+	operations between the output of the fragment shader and the current content of the framebuffer.
+
+The state of the color blender is specified using the 'pColorBlendState' member of the VkGraphicsPipelineCreateInfo structure. 
+This is a pointer to an instance of the VkPipelineColorBlendStateCreateInfo structure, the definition of which is
+```
+typedef struct VkPipelineColorBlendStateCreateInfo
+{
+	VkStructureType														sType;
+	const void*																pNext;
+	VkPipelineColorBlendStateCreateFlags					flags;
+	VkBool32																	logicOpEnable;
+	VkLogicOp																logicOp;
+	uint32_t																	attachmentCount;
+	const VkPipelineColorBlendAttachmentState*		pAttachments;
+	float																			blendConstants[4];
+} VkPipelineColorBlendStateCreateInfo;
+```
+
+The 'sType' field of VkPipelineColorBlendStateCreateInfo should be set to VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved for future use and should be set to zero.
+
+The 'logicOpEnable' field specifies whether to perform logical operations 
+	between the output of the fragment shader and the content of the color attachments. 
+When 'logicOpEnable' is VK_FALSE, 
+	then logical operations are disabled and values produced by the fragment shader are written into the color attachment unmodified. 
+When 'logicOpEnable' is VK_TRUE, 
+	logic operations are enabled for the attachments that support them. 
+The logic operation to apply is the same for every attachment and is a member of the VkLogicOp numeration. 
+The meaning of each of the enumerants and more information about logical operations is given in Chapter 10, ¡°Fragment Processing.¡±
+
+Each attachment can have a different format, and can support different blending operations. 
+These are specified with an array of VkPipelineColorBlendAttachmentState structures, 
+	the address of which is passed through the 'pAttachments' member of VkPipelineColorBlendStateCreateInfo. 
+The number of attachments is set in 'attachmentCount'. 
+The definition of VkPipelineColorBlendAttachmentState is
+```
+typedef struct VkPipelineColorBlendAttachmentState
+{
+	VkBool32									blendEnable;
+	VkBlendFactor							srcColorBlendFactor;
+	VkBlendFactor							dstColorBlendFactor;
+	VkBlendOp								colorBlendOp;
+	VkBlendFactor							srcAlphaBlendFactor;
+	VkBlendFactor							dstAlphaBlendFactor;
+	VkBlendOp								alphaBlendOp;
+	VkColorComponentFlags		colorWriteMask;
+} VkPipelineColorBlendAttachmentState;
+```
+
+For each color attachment, the members of VkPipelineColorBlendAttachmentState control whether blending is enabled, 
+	what the source and destination factors are, what the blending operation is (for both the color and alpha channels separately), 
+	and which channels in the output image are to be updated.
+
+If the 'colorBlendEnable' field of VkPipelineColorBlendAttachmentState is VK_TRUE, 
+	then the remaining parameters control the state of blending. 
+Blending will be covered in more detail in Chapter 10, ¡°Fragment Processing.¡± 
+When 'colorBlendEnable' is VK_FALSE, the blending parameters in VkPipelineColorBlendAttachmentState are ignored, 
+	and blending is disabled for that attachment.
+
+Regardless of the state of 'colorBlendEnable', the final field, 'colorWriteMask', 
+	controls which channels of the output image are written in this attachment. 
+It is a bitfield made up of bits from the VkColorComponentFlagBits enumeration. 
+The four channels, represented by 
+	VK_COLOR_COMPONENT_R_BIT, VK_COLOR_COMPONENT_G_BIT, 
+	VK_COLOR_COMPONENT_B_BIT, and VK_COLOR_COMPONENT_A_BIT, can be individually masked out for writing. 
+If the flag corresponding to a particular channel is not included in 'colorWriteMask', then that channel will not be modified. 
+Only the channels included in colorWriteMask will be updated through rendering to the attachment.
+
+13. Dynamic State
+
+As you have seen, the graphics pipeline object is large and complex, and contains a lot of state. 
+In many graphics applications, it is often desirable to be able to change some states at a relatively high frequency. 
+If every change in every state required that you created a new graphics pipeline object, 
+	then the number of objects your application would have to manage would quickly become very large.
+
+To make fine-grained state changes more manageable, Vulkan provides the ability to mark particular parts of the graphics pipeline as dynamic, 
+	which means that they can be updated on the fly using commands directly inside the command buffer rather than using an object. 
+Because this reduces the opportunity for Vulkan to optimize or absorb parts of state, 
+	it¡¯s necessary to specify exactly what state you want to make dynamic. 
+This is done through the 'pDynamicState' member of the VkGraphicsPipelineCreateInfo structure, 
+	which is a pointer to an instance of the VkPipelineDynamicStateCreateInfo structure, the definition of which is
+```
+typedef struct VkPipelineDynamicStateCreateInfo
+{
+	VkStructureType										sType;
+	const void*												pNext;
+	VkPipelineDynamicStateCreateFlags		flags;
+	uint32_t													dynamicStateCount;
+	const VkDynamicState*							pDynamicStates;
+} VkPipelineDynamicStateCreateInfo;
+```
+
+The 'sType' for VkPipelineDynamicStateCreateInfo should be set to VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO.
+The 'pNext' should be set to nullptr. 
+The 'flags' field is reserved and should be set to zero.
+
+The number of states that you wish to be dynamic is specified in 'dynamicStateCount'. 
+This is the length of the array pointed to by 'pDynamicStates', which is an array of elements from the VkDynamicState enumeration. 
+Including a member of this enumeration in the 'pDynamicStates' array tells 
+	Vulkan that you want to be able to change that state using the corresponding dynamic state setting commands. 
+The members of VkDynamicState and their meanings are as follows:
+```
+1. VK_DYNAMIC_STATE_VIEWPORT:
+	The viewport rectangle is dynamic and will be updated using vkCmdSetViewport().
+
+2. VK_DYNAMIC_STATE_SCISSOR:
+	The scissor rectangle is dynamic and will be updated using vkCmdSetScissor().
+
+3. VK_DYNAMIC_STATE_LINE_WIDTH:
+	The line width is dynamic and will be updated using vkCmdSetLineWidth().
+
+4. VK_DYNAMIC_STATE_DEPTH_BIAS:
+	The depth bias parameters are dynamic and will be updated using vkCmdSetDepthBias().
+
+5. VK_DYNAMIC_STATE_BLEND_CONSTANTS:
+	The color blend constants are dynamic and will be updated using vkCmdSetBlendConstants().
+
+6. VK_DYNAMIC_STATE_DEPTH_BOUNDS:
+	The depth bounds parameters are dynamic and will be updated using vkCmdSetDepthBounds().
+
+7. VK_DYNAMIC_STATE_STENCIL_COMPARE_MASK,
+	VK_DYNAMIC_STATE_SETNCIL_WRITE_MASK, and
+	VK_DYNAMIC_STATE_STENCIL_REFERENCE:
+	The corresponding stencil parameters are dynamic and will be updated using 
+		vkCmdSetStencilCompareMask(), vkCmdSetStencilWriteMask(), and vkCmdSetStencilReference(), respectively.
+```
+
+If a state is specified as being dynamic, then it becomes your responsibility to set that state when binding the pipeline. 
+If the state is not marked as dynamic, then it is considered static and is set when the pipeline is bound. 
+Binding a pipeline with static state makes the dynamic state undefined. 
+The reason for this is that Vulkan implementations might optimize static states into the pipeline object and 
+	not actually program them into hardware if they¡¯re not used or if it can otherwise be determined that this is valid. 
+When a pipeline with that state marked dynamic is subsequently bound, it¡¯s not defined whether the dynamic state is consistent in hardware.
+
+When you are switching between pipelines that mark the same state as dynamic, however, then the state remains persistent across binds. 
+Table 7.1 illustrates this.
+
+As you can see in Table 7.1, the only case in which state becomes undefined occurs 
+	when switching from a pipeline with that state marked as static to one in which the same state is marked as dynamic. 
+In all other cases, the state is well defined and comes from either the pipeline¡¯s state or the dynamic state set with the appropriate command.
+
+If you set a dynamic state when a pipeline with that state set as static is currently bound, 
+	the results are undefined if you then draw with that pipeline. 
+The effect could be to ignore the state-setting command and continue to use the static version of the state from the pipeline, 
+	honor the state-setting command and use the new dynamic state, or corrupt state altogether and break your application entirely. 
+The effect will be different across implementations and will likely depend on which state is erroneously overridden.
+
+Setting dynamic state and then binding a pipeline with that state marked as dynamic should cause the dynamic state to be used. 
+However, it¡¯s good practice to bind the pipeline first and then bind any related state simply to avert the possibility of undefined behavior.
+
+SUMMARY
+
+This chapter provided a whirlwind tour of the Vulkan graphics pipeline. 
+The pipeline consists of multiple stages, some of which are configurable but fixed-function, 
+	and some of which are made up of extremely powerful shaders. 
+Building on the concept of the pipeline object introduced in Chapter 6, ¡°Shaders and Pipelines,¡± the graphics pipeline object was introduced. 
+This object includes a large amount of fixed function state. 
+Although the pipelines built in this chapter were simple, 
+	a solid foundation was laid upon which to build more complex and expressive pipelines in later chapters.

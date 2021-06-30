@@ -1,28 +1,10 @@
 #include <iostream>
-#include <memory>
 
-class MyClass
-{
-public:
-	MyClass();
-	~MyClass();
-
-public:
-	int n;
-	double d;
-	float f;
-};
-
-MyClass::MyClass()
-	:n(0), d(0.0), f(0.f)
-{
-}
-
-MyClass::~MyClass()
-{
-}
+#define ARRAYSIZE(ARR) sizeof(ARR) / sizeof(ARR ## [0])
 
 int main()
 {
-	std::cout << sizeof(int) << ", " << sizeof(float) << std::endl;
+	int arr[32];
+
+	std::cout << ARRAYSIZE(arr) << std::endl;
 }

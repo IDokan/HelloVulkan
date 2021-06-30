@@ -28,4 +28,6 @@ namespace VulkanHelper
 		}
 #endif
 	}
+
+#define ARRAYSIZE(ARR) sizeof(ARR) / sizeof(ARR ## [0])
 }

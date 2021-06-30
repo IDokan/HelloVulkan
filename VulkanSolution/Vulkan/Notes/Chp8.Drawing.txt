@@ -1,0 +1,351 @@
+What You'll Learn in This Chapter
+```
+1. The details of the different drawing commands in Vulkan.
+
+2. How to draw many copies of data through instancing.
+
+3. How to pass drawing parameters thorugh buffers.
+```
+
+Drawing is the fundamental operation in Vulkan that triggers work to be performed by a graphics pipeline. 
+Vulkan includes several drawing commands, each generating graphics work in slightly different ways. 
+This chapter delves deep into the drawing commands supported by Vulkan. 
+First, we reintroduce the basic drawing command first discussed in Chapter 7, ¡°Graphics Pipelines¡±; 
+	then we explore 'indexed' and 'instanced' drawing commands. 
+Finally, we discuss a method to retrieve the parameters for a drawing command from device memory and 
+	even generate them on the device itself.
+
+Back in Chapter 7, ¡°Graphics Pipelines,¡± you were introduced to your first drawing command, vkCmdDraw(). 
+This command simply pushes vertices into the Vulkan graphics pipeline. 
+When we introduced the command, we glossed over some of its parameters. 
+We also hinted at the existence of other drawing commands. 
+For reference, here is the prototype for vkCmdDraw() again:
+```
+void vkCmdDraw(
+	VkCommandBuffer		commandBuffer,
+	uint32_t						vertexCount,
+	uint32_t						instanceCount,
+	uint32_t						firstVertex,
+	uint32_t						firstInstance
+);
+```
+
+As with all commands that execute on the device, the first parameter is a VkCommandBuffer handle. 
+The number of vertices in each draw is specified in 'vertexCount', and the vertex index from which the vertices start is specified in 'firstVertex'. 
+The vertices that are sent down the pipeline have indices starting from 'firstVertex' and proceed through 'vertexCount' contiguous vertices. 
+If you¡¯re using vertex buffers and attributes to automatically feed data into your vertex shader, 
+	then the shader will see data fetched from that contiguous section of the arrays. 
+If you¡¯re using the vertex index directly in your shader, you will see it count monotonically from 'firstVertex' upward.
+
+A. GETTING READY TO DRAW
+
+As we mentioned back in Chapter 7, ¡°Graphics Pipelines,¡± all drawing is contained inside a renderpass. 
+Although renderpass objects can encapsulate many subpasses, 
+	even simple rendering that draws into a single output image must be part of a renderpass. 
+The renderpass is created by calling vkCreateRenderPass() as described in Chapter 7. 
+To prepare for rendering, we need to call vkCmdBeginRenderPass(), 
+	which sets the current renderpass object and, perhaps more important, configures the set of output images that will be drawn into. 
+The prototype of vkCmdBeginRenderPass() is
+```
+void vkCmdBeginRenderPass(
+	VkCommandBuffer							commandBuffer,
+	const VkRederPassBeginInfo*		pRenderPassBegin,
+	VkSubpassContents						contents
+);
+```
+
+The command buffer that will contain the commands issued inside the renderpass is passed in 'commandBuffer'. 
+The bulk of the parameters describing the renderpass are passed through a pointer to an instance of the 
+	VkRenderPassBeginInfo structure in 'pRenderPassBegin'. 
+The definition of VkRenderPassBeginInfo is
+```
+typedef struct VkRenderPassBegingInfo
+{
+	VkStructureType				sType;
+	const void*						pNext;
+	VkRenderPass				renderPass;
+	VkFramebuffer					framebuffer;
+	VkRect2D						renderArea;
+	uint32_t							clearValueCount;
+	const VkClearValue*		pClearValues;
+} VkRenderPassBeginInfo;
+```
+
+The 'sType' field of the VkRenderPassBeginInfo structure should be set to VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO.
+The 'pNext' should be set to nullptr. 
+The renderpass that is begun is specified in 'renderPass', and the framebuffer that we¡¯re going to render into is specified in 'framebuffer'. 
+As discussed in Chapter 7, ¡°Graphics Pipelines,¡± the framebuffer is the collection of images that will be rendered to by graphics commands.
+
+Within any particular use of a renderpass, we can choose to render only into a small area of the attached images. 
+To do this, use the 'renderArea' member of the VkRenderPassBeginInfo structure to specify the rectangle in which all rendering will be contained. 
+Simply setting 'renderArea.offset.x' and 'renderArea.offset.y' to 0 and 'renderArea.extent.width' and 'renderArea.extent.height' 
+	to the width and height of the images in the framebuffer tells Vulkan that you¡¯re going to render into the whole rendering area of the framebuffer.
+
+If any of the attachments in the renderpass have a load operation of VK_ATTACHMENT_LOAD_OP_CLEAR, 
+	then the colors or values that you want to clear them to are specified in an array of VkClearValue unions, 
+	a pointer to which is passed in 'pClearValues'. 
+The number of elements in 'pClearValues' is passed in 'clearValueCount'. 
+The definition of VkClearValue is
+```
+typedef struct VkClearValue
+{
+	VkClearColorValue					color;
+	VkClearDepthStencilValue		depthStencil;
+} VkClearValue;
+```
+If the attachment is a color attachment, then the values stored in the 'color' member of the VkClearValue union are used, 
+	and if the attachment is a depth, stencil, or depth-stencil attachment, then the values stored in the 'depthStencil' member are used. 
+'color' and 'depthStencil' are instances of the VkClearColorValue and VkClearDepthStencilValue structures, respectively, 
+	the definitions of which are
+```
+typedef union VkClearColorValue
+{
+	float				float32[4];
+	int32_t			int32[4];
+	uint32_t		uint32[4];
+} VkClearColorValue;
+```
+
+and
+```
+typedef struct VkClearDepthStencilValue
+{
+	float depth;
+	uint32_t		stencil;
+} VkClearDepthStencilValue;
+```
+
+The index of each attachment is used to index into the array of VkClearValue unions. 
+This means that if only some of the attachments have a load operation of VK_ATTACHMENT_LOAD_OP_CLEAR, 
+	then there could be unused entries in the array. 
+There must be at least as many entries in the 'pClearValues' array as the highest-indexed attachment with 
+	a load operation of VK_ATTACHMENT_LOAD_OP_CLEAR.
+
+For each attachment with a load operation of VK_ATTACHMENT_LOAD_OP_CLEAR, if it is a color attachment, 
+	then the values of the 'float32', 'int32', or 'uint32' arrays are used to clear the attachment, 
+	depending on whether it is a floating-point or normalized format, a signed integer format, or an unsigned integer format, respectively. 
+If the attachment is a depth, stencil, or depth-stencil attachment, 
+	then the values of the 'depth' and 'stencil' members of the 'depthStencil' member of the VkClearValue union 
+	are used to clear the appropriate aspect of the attachment.
+
+Once the renderpass has begun, you can place drawing commands (which are discussed in the next section) in the command buffer. 
+All rendering will be directed into the framebuffer specified in the VkRenderPassBeginInfo structure passed to vkCmdBeginRenderPass(). 
+To finalize rendering contained in the renderpass, you need to end it by calling vkCmdEndRenderPass(), the prototype of which is
+```
+void vkCmdEndRenderPass(
+	VkCommandBuffer			commandBuffer
+);
+```
+
+After vkCmdEndRenderPass() has executed, any rendering directed through the renderpass is completed, 
+	and the content of the framebuffer is updated. 
+Until then, the framebuffer¡¯s content is undefined. 
+Only attachments with a store operation of VK_ATTACHMENT_STORE_OP_STORE will reflect 
+	the new content produced by the rendering inside the renderpass. 
+If an attachment has a store operation of VK_ATTACHMENT_STORE_OP_DONT_CARE, 
+	then its content is undefined after the renderpass has completed.
+
+B. VERTEX DATA
+
+If the graphics pipeline you¡¯re going to use requires vertex data, before performing any drawing commands, 
+	you need to bind buffers to source the data from. 
+When buffers are in use as the sources of vertex data, they are sometimes known as vertex buffers. 
+The command to buffers for use as vertex data is vkCmdBindVertexBuffers(), and its prototype is
+```
+void vkCmdBindVertexBuffers(
+	VkCommandBuffer			commandBuffer,
+	uint32_t							firstBinding,
+	uint32_t							bindingCount,
+	const VkBuffer*				pBuffers,
+	const VkDeviceSize*		pOffsets
+);
+```
+
+The command buffer to which to bind the buffers is specified in 'commandBuffer'. 
+A given pipeline may reference many vertex buffers, 
+	and vkCmdBindVertexBuffers() is capable of updating a subset of the bindings on a particular command buffer. 
+The index of the first binding to update is passed in 'firstBinding', and the number of contiguous bindings to update is passed in 'bindingCount'. 
+To update noncontiguous ranges of vertex buffer bindings, you need to call vkCmdBindVertexBuffers() multiple times.
+
+The 'pBuffers' parameter is a pointer to an array of 'bindingCount' VkBuffer handles to the buffer objects to be bound, 
+	and 'pOffsets' is a pointer to an array of 'bindingCount' offsets into the buffer objects at which the data for each binding starts. 
+The values in 'pOffsets' are specified in bytes. 
+It is perfectly reasonable to bind the same buffer object with different offsets (or even the same offset, if that¡¯s what¡¯s required) to a command buffer; 
+	simply include the same VkBuffer handle multiple times in the 'pBuffers' array.
+
+The layout and format of the data in the buffers are defined by the graphics pipeline that will consume the vertex data. 
+Therefore, the format of the data is not specified here, 
+	but in the VkPipelineVertexInputStateCreateInfo structure passed via the VkGraphicsPipelineCreateInfo used to create the graphics pipeline. 
+Back in Chapter 7, ¡°Graphics Pipelines,¡± we showed an example of setting up interleaved vertex data as a C++ structure in Listing 7.3. 
+Listing 8.1 shows a slightly more advanced example 
+	that uses one buffer to store position data alone and a second buffer that stores a per-vertex normal and texture coordinate.
+```
+// Listing 8.1: Separate Vertex Attribute Setup
+
+
+void MyVulkan::SetupSeparateVertexAttribute()
+{
+	typedef struct vertex_t
+	{
+		glm::vec3 normal;
+		glm::vec2 texcoord;
+	} vertex;
+
+	static const VkVertexInputBindingDescription vertexInputBindings[] =
+	{
+		{0, sizeof(glm::vec4), VK_VERTEX_INPUT_RATE_VERTEX},		// Buffer 1
+		{1, sizeof(vertex), VK_VERTEX_INPUT_RATE_VERTEX}				// Buffer 2
+	};
+
+	static const VkVertexInputAttributeDescription vertexAttributes[] =
+	{
+		{ 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 0 },					// Position
+		{ 1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0 },						// Normal
+		{ 2, 1, VK_FORMAT_R32G32_SFLOAT, sizeof(glm::vec3) }		// Tex Coord
+	};
+
+	static const VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo =
+	{
+		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
+		nullptr,
+		0,
+		RTL_NUMBER_OF_V2(vertexInputBindings),
+		vertexInputBindings,
+		RTL_NUMBER_OF_V2(vertexAttributes),
+		vertexAttributes
+	};
+
+}
+
+```
+
+In Listing 8.1, we have defined three vertex attributes spread across two buffers. 
+In the first buffer, only a single vec4 variable is stored, and this is used for position. 
+The stride for this buffer is therefore the size of a vec4, which is 16 bytes. 
+In the second buffer, we store the interleaved normal and texture coordinates for the vertex. 
+We represent this as the vertex structure, allowing the compiler to compute the stride for us.
+
+C. INDEXED DRAWS
+
+Simply pushing contiguous runs of vertices into the pipeline isn¡¯t always what you want. 
+In most geometric meshes, many vertices are used more than once. 
+A fully connected mesh may share a single vertex among many triangles. 
+Even a simple cube shares each vertex among three adjacent triangles. 
+It is extremely wasteful to have to specify each vertex three times in your vertex buffers. 
+Besides this, some Vulkan implementations are smart enough that if they see a vertex with the same input parameters more than once, 
+	they can skip processing it a second time and subsequent times, and instead reuse the results of the first vertex shader invocation.
+
+To enable this, Vulkan allows indexed draws. 
+The indexed equivalent of vkCmdDraw() is vkCmdDrawIndexed(), the prototype of which is
+```
+void vkCmdDrawIndexed(
+	VkCommandBuffer		commandBuffer,
+	uint32_t						indexCount,
+	uint32_t						instanceCount,
+	uint32_t						firstIndex,
+	int32_t							vertexOffset,
+	uint32_t						firstInstance
+);
+```
+
+Again, the first parameter to vkCmdDrawIndexed() is the handle to the command buffer in which the draw will be executed. 
+Rather than simply starting from zero and counting upward, however, vkCmdDrawIndexed() fetches indices from an index buffer. 
+The index buffer is a regular buffer object that you bind to the command buffer by calling vkCmdBindIndexBuffer(), the prototype of which is
+```
+void vkCmdBindIndexBuffer(
+	VkCommandBuffer		commandBuffer,
+	VkBuffer						buffer,
+	VkDeviceSize				offset,
+	VkIndexType				indexType
+);
+```
+
+The command buffer to which to bind the index buffer is specified in 'commandBuffer', 
+	and the handle to the buffer object containing indexed data is specified in 'buffer'. 
+A section of a buffer object can be bound to the command buffer starting from 'offset'. 
+The bound section always extends to the end of the buffer object. 
+There is no bounds checking on the index buffer; Vulkan will read as many indices from the buffer as you tell it to. 
+However, it will never read past the end of the buffer object.
+
+The data type of the indices in the buffer is specified in indexType. 
+This is a member of the VkIndexType enumeration, the members of which are
+```
+1. VK_INDEX_TYPE_UINT16:
+	Unsigned 16-bit integers
+
+2. VK_INDEX_TYPE_UINT32:
+	Unsigned 32-bit integers
+```
+
+When you call vkCmdDrawIndexed(), Vulkan will start fetching data from the currently bound index buffer at an offset of
+```
+offset + fistIndex * sizeof(index)
+```
+
+where sizeof(index) is 2 for VK_INDEX_TYPE_UINT16 and 4 for VK_INDEX_TYPE_UINT32. 
+The code will fetch 'indexCount' contiguous integers from the index buffer and then add 'vertexOffset' to them. 
+This addition is always performed in 32 bits, regardless of the index type for the currently bound index buffer. 
+It is not defined what would happen if this addition overflowed the 32-bit unsigned integer range, so you should avoid that.
+
+A schematic illustrating the data flow is shown in Figure 8.1.
+
+Note that when the index type is VK_INDEX_TYPE_UINT32, the maximum range of index values may not be supported. 
+To check this, look at the 'maxDrawIndexedIndexValue' field of the device¡¯s VkPhysicalDeviceLimits structure, 
+	which you can retrieve by calling vkGetPhysicalDeviceProperties(). 
+This value will always be at least 2^24-1 and may be as high as 2^32-1.
+
+To demonstrate the effectiveness of the use of index data, 
+	Listing 8.2 shows the difference between the data required for drawing a simple cube using indexed and nonindexed data.
+```
+// Listing 8.2: Indexed Cube Data
+
+// Raw, non-indexed data
+static const float vertex_positions[] =
+{
+...
+};
+
+static const uint32_t vertex_count = sizeof(vertex_positions) / (3 * sizeof(float));
+
+// Indexed vertex data
+static const float indexed_vertex_positions[] =
+{
+...
+};
+
+// Index buffer
+static const uint16_t vertex_indices[] =
+{
+    0, 1, 2,
+    2, 1, 3,
+    2, 3, 4,
+    4, 3, 5,
+    4, 5, 6,
+    6, 5, 7,
+    6, 7, 0,
+    0, 7, 1,
+    6, 0, 2,
+    2, 4, 6,
+    7, 5, 3,
+    7, 3, 1
+};
+
+static const uint32_t index_count = vkcore::utils::arraysize(vertex_indices);
+```
+
+As you can see in Listing 8.2, the amount of data used to draw the cube is quite small. 
+Only the vertex data for the 8 unique vertices is stored, along with 36 indices used to reference them. 
+As geometry sizes go up with scene complexity, the savings can be quite large. 
+In this simple example, the nonindexed vertex data is 36 vertices, each consisting of 3 elements of 4 bytes, which is a total of 432 bytes of data. 
+Meanwhile, the indexed data is 12 vertices, again each of 3 elements of 4 bytes, plus 36 indices, each consuming 2 bytes of storage. 
+This produces a total 168 bytes of data for the indexed cube.
+
+In addition to the space savings provided by using indexed data, 
+	many Vulkan implementations include a vertex cache that can reuse the results of computations performed on vertex data. 
+If the vertices are nonindexed, then the pipeline must assume that they are all unique. 
+However, when the vertices are indexed, two vertices with the same index 'are' the same. 
+In any closed mesh, the same vertex will appear more than once, as it is shared among multiple primitives. 
+This reuse can save quite a bit of work.
+
+	1. Index-Only Rendering
+		

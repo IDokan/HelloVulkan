@@ -348,4 +348,347 @@ In any closed mesh, the same vertex will appear more than once, as it is shared 
 This reuse can save quite a bit of work.
 
 	1. Index-Only Rendering
-		
+		The raw index of the current vertex is available to your vertex shaders. 
+		This index appears in the variable decorated with 'VertexIndex' in a SPIR-V shader, 
+			which is generated using the 'gl_VertexIndex' built-in variable in GLSL. 
+		This contains the content of the index buffer (or the automatically generated vertex index) 
+			plus the value of 'vertexOffset' passed to vkCmdDrawIndexed().
+
+		You can use this index to fetch data from a buffer, for example. 
+		This allows you to pump geometry into the pipeline without worrying about vertex attributes. 
+		However, in some scenarios, a single 32-bit value might be all you need. 
+		In these cases, you can use the vertex index directly as data. 
+		Vulkan doesn¡¯t actually care what the values in the index buffer are so long as you don¡¯t use them to address into vertex buffers.
+
+		The object local vertex position for many pieces of geometry can be represented by 16-, 10-, or even 8-bit data with sufficient precision. 
+		Three 10-bit values can be packed inside a single 32-bit word. 
+		In fact, this is exactly what the VK_FORMAT_A2R10G10B10_SNORM_PACK32 format (and its unsigned counterpart) represent. 
+		Although the vertex data is not usable directly as an index buffer, 
+			it¡¯s possible to manually unpack the vertex data in the shader as though it had that format. 
+		As such, by simply unpacking the index in our shader, we can draw simple geometry without anything more than an index buffer.
+
+		Listing 8.3 shows the GLSL shader you use to do this unpacking operation.
+		```
+		// Listing 8.3: Using the Vertex Index in a Shader
+		#version 450 core
+
+		vec3 unpackA2R10G10B10_snorm(uint value)
+		{
+			int val_signed = int(value);
+			vec3 result;
+			const float scale = (1.f / 512.f);
+
+			result.x = float(bitfieldExtract(val_signed, 20, 10));
+			result.y = float(bitfieldExtract(val_signed, 10, 10));
+			result.z = float(bitfieldExtract(val_signed, 0, 10));
+
+			return result * scale;
+		}
+
+		void main(void)
+		{
+			gl_Position = vec4(unpackA2R10G10B10_snorm(gl_VertexIndex), 1.f);
+		}
+		```
+
+		The vertex shader shown in Listing 8.3 simply unpacks the incoming vertex index by using the unpackA2R10G10B10_snorm function. 
+		The resulting value is written to 'gl_Position'. 
+		The 10 bits of precision in each of the x, y, and z coordinates effectively snap our vertices to a 1,024 ¡¿ 1,024 ¡¿ 1,024 grid of positions. 
+		This is sufficient in many cases. 
+		If an additional scale is applied, this can be passed to the shader via a push constant, 
+			and if the vertex is to undergo other transforms via matrix multiplications, for example, those transforms still proceed at full precision.
+
+	2. Reset Indices
+	
+	Another subfeature of indexed draws allows you to use the primitive restart index. 
+	This special index value can be stored in the index buffer that can be used to signal the start of a new primitive. 
+	It is most useful when the primitive topology is one of the long, continuous primitives, including 
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP, VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN, and 
+		VK_PRIMITIVE_TOPOLOGY_LINE_STRIP, 
+		along with the adjacency versions of those topologies, 
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP_WITH_ADJACENCY, and 
+		VK_PRIMITIVE_TOPOLOGY_LINE_STRIP_WITH_ADJACENCY.
+
+	The primitive restart feature is enabled using the VkPipelineInputAssemblyStateCreateInfo structure passed through 
+		the 'pInputAssemblyState' member of the VkGraphicsPipelineCreateInfo structure used to create a graphics pipeline. 
+	Again, the definition of this structure is
+	```
+	typedef struct VkPipelineInputAssemblyStateCreateInfo
+	{
+		VkStructureType													sType;
+		const void*															pNext;
+		VkPipelineInputAssemblyStateCreateFlags		flags;
+		VkPrimitiveTopology											topology;
+		VkBool32																primitiveRestartEnable;
+	} VkPipelineInputAssemblyStateCreateInfo;
+	```
+
+	The topology field has to be set to one of the primitive topologies that supports primitive restarts (the list and fan topologies mentioned earlier), 
+		and the primitiveRestartEnable field is set to VK_TRUE. 
+	When primitive restart is enabled, the special value of the maximum possible value for the index type 
+		(0xFFFF for VK_INDEX_TYPE_UINT16 and 0xFFFFFFFF for VK_INDEX_TYPE_UINT32) is used as the special restart marker.
+
+	If primitive restart is not enabled, the special reset marker is treated as a normal vertex index. 
+	While using 32-bit indices, it¡¯s unlikely that you¡¯ll ever need to use this value, because that would mean you had more than 4 billion vertices. 
+	However, the index value can still be passed to the vertex shader. 
+	It¡¯s not valid to enable the reset for primitive topologies other than the strip and fan topologies mentioned earlier.
+
+	When Vulkan encounters the reset value in the index buffer, 
+		it ends the current strip or fan and starts a new one beginning with the vertex addressed by the next index in the index buffer. 
+	If the reset value appears multiple times in a row, Vulkan simply skips them, looking for the next nonreset index value. 
+	If there aren¡¯t enough vertices to form a complete primitive 
+		(for example, if the reset index appears before three nonreset vertices are seen when the primitive topology is 
+		VK_PRIMITIVE_TOPOLOGY_TRIANGLE_STRIP or VK_PRIMITIVE_TOPOLOGY_TRIANGLE_FAN), 
+		then Vulkan will throw out all the vertices used so far and start a new primitive.
+
+	The reset index is useful for cutting a very large draw using strips or fans into many smaller pieces. 
+	There comes a cut-off point in usefulness when the number of subdraws (individual strips or fans) decreases and their size increases, 
+		at which point it¡¯s probably best to simply produce two separate draws. 
+	This is especially true if it means switching pipelines between one with primitive restart enabled and one with it disabled.
+
+	If your model consists of hundreds or thousands of short strips, it might be a good idea to use primitive restart. 
+	If your model consists of a handful of very long strips, just make multiple drawing commands. 
+	Also, in some architectures, using the reset index can affect performance, 
+		and it may be better to simply use list topologies and unroll the index buffer rather than try to use strips.
+	(¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú¡Ú)
+
+D. INSTANCING
+There are two parameters to vkCmdDraw() and vkCmdDrawIndexed() that we have thus far glossed over. 
+These are the 'firstInstance' and 'instanceCount' parameters, and they are used to control instancing. 
+This is a technique whereby many copies of the same geometry can be sent into the graphics pipeline. 
+Each copy is known as an instance. 
+At first, this seems like it wouldn¡¯t be much use, 
+	but there are two ways that your application can apply variation to each of the instances of the geometry:
+```
+1. Use the InstanceIndex built-in decoration on a vertex shader input to receive the index of the current instance as an input to the shader. 
+	This input variable can then be used to fetch parameters from a uniform buffer or programmatically compute per-instance variation, for example.
+
+2. Use 'instanced' vertex attributes to have Vulkan feed your vertex shader with unique data for each instance.
+```
+
+Listing 8.4 shows an example of using the instance index through the 'gl_InstanceIndex' built-in variable in GLSL. 
+The example draws many different cubes using instancing where each instance of the cube has a different color and transformation applied. 
+The transformation matrix and color of each cube are placed in arrays that are stored in a pair of uniform buffers. 
+The shader then indexes into these arrays with the 'gl_InstanceIndex' built-in variable. 
+The result of rendering with this shader is shown in Figure 8.3.
+```
+// Listing 8.4: Using the Instance Index in a Shader
+#version 450 core
+
+layout (set = 0, binding = 0) uniform matrix_uniforms_b
+{
+	mat4 mvp_matrix[1024];
+};
+
+layout (set = 0, binding = 1) uniform color_uniforms_b
+{
+	vec4 cube_colors[1024];
+};
+
+layout (location = 0) in vec3 i_position;
+
+out vs_fs
+{
+	flat vec4 color;
+};
+
+void main(void)
+{
+	float f = float(gl_VertexIndex / 6) / 6.f;
+	vec4 color1 = cube_colors[gl_InstanceIndex];
+	vec4 color2 = cube_colors[gl_InstanceIndex & 512];
+
+	color = mix(color1, color2, f);
+	
+	gl_Position = mvp_matrix[gl_InstanceIndex] * vec4(i_position, 1.f);
+}
+```
+
+E. INDIRECT DRAWS
+
+In the vkCmdDraw() and vkCmdDrawIndexed() commands, the parameters to the command (vertexCount, vertexOffset, and so on) 
+	are passed as immediate parameters directly to the commands themselves. 
+This means that you need to know the exact parameters of each draw call at the time that your application builds its command buffers. 
+In most cases, having access to the parameters of drawing commands is a natural part of the application. 
+However, in some situations, you don¡¯t know the exact parameters for each and every draw. Examples include the following:
+```
+1. The overall structure of the geometry is known, but the exact number of vertices and locations of data in the vertex buffers is not known, 
+	such as when an object is always rendered the same way but its level of detail may change over time.
+
+2. The drawing commands are to be generated by the device, rather than the host. 
+	In this situation, the total number and layout of vertex data may never be known to the host.
+```
+
+In these cases, you can use an indirect draw, which is a drawing command that sources its parameters from device-accessible memory 
+	rather than embedding them in the command buffer along with the command. 
+The first indirect draw command is vkCmdDrawIndirect(), which performs a nonindexed draw using parameters contained in a buffer. 
+Its prototype is
+```
+void vkCmdDrawIndirect(
+	VkCommandBuffer		commandBuffer,
+	VkBuffer						buffer,
+	VkDeviceSize				offset,
+	uint32_t						drawCount,
+	uint32_t						stride
+);
+```
+
+The command itself is still placed into the command buffer, just as with vkCmdDraw(). 
+'commandBuffer' is the command buffer into which the command is placed. 
+However, the parameters of the command are sourced from the buffer specified in 'buffer' at the offset specified in 'offset', 
+	which is measured in bytes. 
+At this offset in the buffer, an instance of the VkDrawIndirectCommand structure should appear, containing the actual parameters of the command. 
+Its definition is
+```
+typedef struct VkDrawIndirectCommand
+{
+	uint32_t		vertexCount;
+	uint32_t		instanceCount;
+	uint32_t		firstVertex;
+	uint32_t		firstInstance;
+} VkDrawIndirectCommand;
+```
+
+The members of VkDrawIndirectCommand have the same meanings as the similarly named parameters of vkCmdDraw(). 
+'vertexCount' and 'instanceCount' are the numbers of vertices and indices to invoke, respectively, and 
+	'firstVertex' and 'firstInstance' are the starting values for the vertex and instance indices, respectively.
+
+vkCmdDrawIndirect() performs a nonindexed, indirect draw using parameters from a buffer object. 
+It¡¯s also possible to perform an indexed indirect draw using vkCmdDrawIndexedIndirect(). 
+The prototype of this function is
+```
+void vkCmdDrawIndexedIndirect(
+	VkCommandBuffer		commandBuffer,
+	VkBuffer						buffer,
+	VkDeviceSize				offset,
+	uint32_t						drawCount,
+	uint32_t						stride
+);
+```
+
+The parameters of vkCmdDrawIndexedIndirect() are identical to those of vkCmdDrawIndirect(). 
+'commandBuffer' is the command buffer into which the command is written, 'buffer' is the buffer containing the parameters; 
+	and 'offset' is the offset, in bytes, at which the parameters are located in that buffer. 
+However, the data structure containing the parameters of vkCmdDrawIndexedIndirect() is different. 
+It is an instance of the VkDrawIndexedIndirectCommand structure, the definition of which is
+```
+typedef struct VkDrawIndexedIndirectCommand
+{
+	uint32_t		indexCount;
+	uint32_t		instanceCount;
+	uint32_t		firstIndex;
+	int32_t			vertexOffset;
+	uint32_t		firstInstance;
+} VkDrawIndexedIndirectCommand;
+```
+
+Again, the members of VkDrawIndexedIndirectCommand have the same meanings as the similarly named parameters of vkCmdDrawIndexed(). 
+'indexCount' and 'instanceCount' are the numbers of vertex indices and instances to push into the pipeline; 
+	the 'firstIndex' member specifies where to start fetching indices from the index buffer; 
+	'vertexOffset' specifies the offset value to be added to the index data; 
+	and 'firstInstance' specifies the value from which the instance counter should start counting.
+
+What is important to remember about indirect drawing commands is that 
+	while the buffer object and the offset into it are baked into the command buffer, 
+	the parameters for the draw don¡¯t need to be in the sourced buffer object until the command buffer is executed by the device. 
+As the device executes the command buffer, when it reaches the command, 
+	it will read whatever parameters are in the buffer and execute the drawing command as though those parameters 
+	had been specified directly to a regular drawing command. 
+As far as the rest of the pipeline is concerned, there is no difference between a direct and an indirect draw.
+
+This means several things:
+```
+1. You can build command buffers with indirect draws long before they¡¯re needed, filling in the final parameters for the draw 
+		(in the buffer object rather than the command buffer) before the command buffer is submitted for execution.
+
+2. You can create a command buffer containing an indirect draw, submit it, overwrite the parameters in the buffer object, 
+		and submit the same command buffer again. 
+	This effectively patches new parameters into what could be a long, complex command buffer.
+
+3. You can write parameters into a buffer object by using stores from a shader object, 
+		or by using a command such as vkCmdFillBuffer() or vkCmdCopyBuffer() to generate drawing parameters on the device itself
+		- either in the same command buffer or in another submitted just before the one containing the draw commands.
+```
+
+You may have noticed that both vkCmdDrawIndirect() and vkCmdDrawIndexedIndirect() take a 'drawCount' and a 'stride' parameter. 
+These parameters allow you to pass arrays of drawing commands to Vulkan. 
+A single call to vkCmdDrawIndirect() or vkCmdDrawIndexedIndirect() will kick off 'drawCount' separate draws, 
+	each sourcing its parameters from a VkDrawIndirectCommand or VkDrawIndexedIndirectCommand structure, respectively.
+
+The array of structures still begins at 'offset' bytes into the buffer object, and each of these structures is separated from the previous by 'stride' bytes. 
+If 'stride' is zero, then the same parameter structure will be used for every draw.
+	(Note that this behavior differs from OpenGL, in which a stride of zero causes the device to assume a tightly packed array, 
+		and it is impossible to source the same parameters over and over.)
+
+The number of draws is still baked into the command buffer, 
+	but draws whose 'indexCount' or 'instanceCount' parameters are zero will be skipped by the device. 
+While this doesn¡¯t mean that you can truly produce a fully dynamic draw count, 
+	by using a fixed upper limit on the number of draws and ensuring that all unused entries in the array of parameters 
+	have at least one of 'vertexCount', 'indexCount', or 'instanceCount', set to zero, 
+	you can generate a variable number of draws by using a single command. (???????????????????)
+
+Note that support for counts other than one (and zero) is optional. 
+To check whether the device supports a count greater than one, 
+	check the 'multiDrawIndirect' field of the device¡¯s VkPhysicalDeviceFeatures structure as returned from a call to vkGetPhysicalDeviceFeatures(), 
+	and remember to enable the feature in the set of enabled features passed to vkCreateDevice() when creating the logical device.
+
+When indirect counts are supported, the maximum number of draws that can be passed to a single call to 
+	vkCmdDrawIndirect() or vkCmdDrawIndexedIndirect() may still be limited. 
+To check the supported count, inspect the 'maxDrawIndirectCount' field of the device¡¯s VkPhysicalDeviceLimits structure. 
+When 'multiDrawIndirect' is not supported, this field will be 1. 
+If it is supported, then it is guaranteed to be at least 65,535. 
+If the number of draws you¡¯re pushing through each of these commands is less than this amount, then there¡¯s no need to directly check the limit.
+
+Drawing many pieces of geometry back to back with the same pipeline and graphics state can sometimes be limiting. 
+However, in many cases, all that is different between draws is parameters passed to shaders. 
+This is especially true when applications use uber shaders or physically based rendering techniques. 
+There is no direct way to pass parameters to the individual draws that make up a single call to 
+	vkCmdDrawIndirect() or vkCmdDrawIndexedIndirect() with a 'drawCount' greater than one. 
+However, what is available in the shader is the SPIR-V decoration 'DrawIndex' decoration on an input to the vertex shader. 
+This is produced by using the 'gl_DrawIDARB' input in GLSL.
+
+When decorated with 'DrawIndex', the shader input will contain the index of the draw, 
+	starting from zero and counting upward as the draws are generated by the device. 
+This can then be used to index into arrays of data stored in uniform or shader storage blocks. 
+Listing 8.5 shows a GLSL shader that uses gl_DrawIDARB to retrieve per-draw parameters from a shader storage block.
+```
+// Listing 8.5: Draw Index Used in a Shader
+
+#version 450 core
+
+// Enable the GL_ARB_shader_draw_parameters extensions.
+#extension GL_ARB_shader_draw_parameters : require
+
+layout (location = 0) in vec3 position_3;
+
+layout (set = 0, binding = 0) uniform FRAME_DATA
+{
+	mat4 view_matrix;
+	mat4 proj_matrix;
+	mat4 viewproj_matrix;
+};
+
+layout (set = 0, binding = 1) readonly buffer OBJECT_TRANSFORMS
+{
+	mat4 model_matrix[];
+};
+
+void main(void)
+{
+	// Extend input position to vec4.
+	vec4 position = vec4(position_3, 1.0);
+
+	// Compute per-object model-view matrix.
+	mat4 mv_matrix = view_matrix * model_matrix[gl_DrawIDARB];
+
+	// Output position using global projection matrix.
+	gl_Position = proj_matrix * P;
+}
+```
+
+The shader in Listing 8.5 uses a single uniform block to store per-frame constants and a single shader storage block to store a large array of per-object transformation matrices.2 The gl_DrawIDARB built-in variable is used to index into the model_matrix array stored in the shader storage block. The result is that each subdraw in the single vkCmdDrawIndirect() call uses its own model transformation matrix.
+(At the time of writing, the reference GLSL compiler does not contain support for the GL_ARB_draw_parameters extension that exposes gl_DrawID. This shader was developed in an OpenGL test environment and then edited to suit Vulkan. It is expected to work once support for GL_ARB_draw_parameters lands in the reference compiler.)
+
+SUMMARY
+
+This chapter covered the various drawing commands supported by Vulkan. You were reintroduced to vkCmdDraw(), which was first mentioned in Chapter 7, ¡°Graphics Pipelines,¡± and which produces nonindexed draws. Indexed draws were covered, and then we explored instancing, which is a technique for drawing many copies of the same geometry with varying parameters driven by the instance index. Finally, we looked at indirect draws, which allow the parameters for drawing commands to be sourced from device memory rather than specified at command-buffer construction time. Together, instancing and indirect draws are powerful tools that allow complex scenes to be built up with very few drawing commands.

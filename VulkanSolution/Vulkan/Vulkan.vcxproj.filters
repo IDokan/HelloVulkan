@@ -83,5 +83,8 @@
     <Text Include="Notes\Chp8.Drawing.txt">
       <Filter>Notes</Filter>
     </Text>
+    <Text Include="Notes\Chp9.GeometryProcessing.txt">
+      <Filter>Notes</Filter>
+    </Text>
   </ItemGroup>
 </Project>

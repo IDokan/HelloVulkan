@@ -1,0 +1,567 @@
+What You'll Learn in This Chapter
+```
+1. Using tessellation to increase the geometric detail of your scene.
+
+2. Using geometry shaders to process whole primitives.
+
+3. Clipping geometry against user-specified planes.
+```
+
+While many Vulkan programs will stick to vertex and fragment shaders, 
+	two optional pieces of functionality can be used to increase the geometric detail of the rendered images. 
+These functions are tessellation and geometry shading. 
+Although these concepts were briefly introduced earlier, this chapter digs deeper into the details of both tessellation and geometry shader 
+	functionality and discusses how to make effective use of these powerful sections of the geometry processing pipeline.
+
+A. TESSELLATION
+
+Tessellation is controlled by a collection of stages that appear near the front of the graphics pipeline, 
+	immediately after vertex shading. 
+We briefly introduced tessellation in Chapter 7, ¡°Graphics Pipelines.¡± 
+However, because tessellation is an optional stage in the pipeline, we mostly glossed over it in order to cover the remaining stages. 
+This section covers it in more detail.
+
+Tessellation takes as input patches, which are really just collections of control points represented as vertices, 
+	and breaks them down into many smaller, simpler primitives - such as points, lines, or triangles - that can be rendered by 
+	the rest of the pipeline in the normal manner. 
+Tessellation is an optional feature in Vulkan. 
+Presence of support can be determined by checking the 'tessellationShader' member of the device¡¯s VkPhysicalDeviceFeatures structure. 
+If this is VK_FALSE, then pipelines containing tessellation shaders cannot be created or used in your application.
+
+	1. Tessellation Configuration
+	
+	From the application¡¯s perspective, the tessellation engine is a fixed-function, though highly configurable, 
+		block of functionality surrounded by two shader stages. 
+	The first stage, the tessellation control shader, is responsible for processing the control points of a patch, setting up some per-patch parameters, 
+		and handing control to the fixed-function tessellation block. 
+	This block takes the patch and breaks it up into the fundamental point, line, or triangle primitives, 
+		finally passing the resulting generated vertex data to a second shading stage: the tessellation evaluation shader. 
+	This shader appears much like a vertex shader except that it runs for each generated vertex.
+
+	Tessellation is controlled and configured through a combination of two sources of information. 
+	The first source is the VkPipelineTessellationStateCreateInfo structure passed through the VkGraphicsPipelineCreateInfo structure 
+		used to create the graphics pipeline. 
+	Introduced in Chapter 7, ¡°Graphics Pipelines,¡± VkPipelineTessellationStateCreateInfo is defined as
+	```
+	typedef struct VkPipelineTessellationStateCreateInfo
+	{
+		VkStructureType											sType;
+		const void*													pNext;
+		VkPipelineTessellationStateCreateFlags		flags;
+		uint32_t														patchControlPoints;
+	} VkPipelineTessellationStateCreateInfo;
+	```
+
+	The only member that affects tessellation state in this structure is 'patchControlPoints', 
+		which sets the number of control points that make up a patch. 
+	The remaining state of the tessellation system is set by using the two shaders.
+
+	The maximum number of control points that can be used to construct a patch is implementation-dependent but is guaranteed to be at least 32. 
+	If tessellation is supported, then the Vulkan implementation will support at least 32 control points per patch, 
+		so if you never use patches larger than this, there is no reason to query the upper limit. 
+	If you need to use patches larger than 32 control points,
+		you can determine the supported maximum by inspecting the 'maxTessellationPatchSize' member of the device¡¯s 
+		VkPhysicalDeviceLimits structure as returned from a call to vkGetPhysicalDeviceProperties().
+
+	2. Tessellation Modes
+	
+	The fundamental operation of the tessellation engine is to take the patch and, 
+		given a set of tessellation levels, subdivide each edge according to its level. 
+	The distance of each subdivided point along each edge is assigned a value between 0.0 and 1.0. 
+	The two main modes of tessellation treat the patch as either a rectangle or a triangle. 
+	When the patch is tessellated as a rectangle, the subdivided coordinates form a 2D barycentric coordinate, 
+		and when the patch is tessellated as a triangle, the generated vertices have 3D barycentric coordinates.
+
+	Each patch has a set both of inner and of outer tessellation levels. 
+	The outer tessellation levels control the level of tessellation along the outer edge of the patch. 
+	If you set this level the same as that calculated for adjacent patches in a larger geometry, you can form seamless joins. 
+	The inner tessellation modes control the level of tessellation in the center of the patch. 
+	Figure 9.1 shows how the inner and outer levels are assigned to edges within quad patches and 
+		how barycentric coordinates are assigned to points within each patch.
+
+	As you can see from the figure, the four outer tessellation factors control the level of tessellation along each of the four outer edges of the quad. 
+	The u and v directions in barycentric coordinate space are marked in the figure. 
+	For triangle tessellation, the principle is similar, but the assignment of the 3D barycentric coordinate within the triangle is a little different. 
+	Figure 9.2 demonstrates.
+
+	As you can see in Figure 9.2, for triangle tessellation modes, 
+		the three outer tessellation factors control the level of tessellation along the outer edge of the triangular patch. 
+	Unlike with quad tessellation, triangle tessellation mode uses just a single tessellation factor, 
+		which is applied to the entire patch besides the outermost ring of triangles around its edge.
+
+	In addition to the quad and triangle tessellation modes, 
+		a special mode known as 'isoline' mode allows a patch to be broken down into a series of straight lines. 
+	This can be considered to be a special case of quad tessellation mode. 
+	In isoline mode, the barycentric coordinates of generated points within the patch are still 2D, but there is no inner tessellation level, 
+		and there are only two outer tessellation levels. 
+	Figure 9.3 shows how this mode works.
+
+	When you set the tessellation mode, one (or both) of the tessellation control or evaluation shaders must include 
+		the 'OpExecutionMode' instruction with the 'Triangles', 'Quads', or 'IsoLines' argument. 
+	To generate such a shader from GLSL, use an input layout qualifier in the tessellation evaluation shader, as shown in Table 9.1.
+
+	In the table, '%n' represents the index given to the main entry point. 
+	As SPIR-V modules can have multiple entry points, it¡¯s possible to create a tessellation evaluation shader with an entry point for each mode. 
+	Note, however, that the tessellation mode affects the definition of the barycentric coordinate, so care must be taken to interpret it correctly.
+
+	In SPIR-V, the tessellation mode instruction can appear in 
+		the tessellation control shader, the tessellation evaluation shader, or both, so long as both shaders agree.
+
+	In addition to the 'Quads' and 'Triangles' tessellation modes, which produce triangles, 
+		and the 'IsoLines' tessellation mode, which produces lines, a special fourth mode, 'PointMode', is supported. 
+	As its name suggests, this mode allows the tessellation engine to produce points. 
+	To enable this mode, use the 'OpExecutionMode' instruction with the 'PointMode' argument. 
+	Again, this mode can appear in the tessellation evaluation shader, the tessellation control shader, or both, so long as they agree. 
+	In GLSL, this mode appears in the tessellation evaluation shader as an input layout qualifier, so that
+	```
+	layout (point_mode) in;
+	```
+
+	becomes
+	```
+	OpExecutionMode &n PointMode
+	```
+
+	'PointMode' applies on top of other tessellation modes such as 'Quads' or 'Triangles'. 
+	In this mode, the patch is tessellated as normal, but rather than being joined, 
+		the resulting vertices are sent into the remainder of the pipeline as though they were points. 
+	Note that this is subtly different from simply setting the 'polygonMode' field of 
+		the VkPipelineRasterizationStateCreateInfo structure to VK_POLYGON_MODE_POINT. 
+	In particular, points produced by the tessellator in this mode appear to the geometry shader (if enabled) 
+		to be points and are rasterized exactly once, rather than once for each generated primitive in which they appear, as they would be otherwise.
+
+	3. Controlling Subdivision
+
+	When subdividing the edges of the patches, the tessellator can use one of three strategies to place the split points, 
+		which eventually become vertices in the resulting tessellated mesh. 
+	This feature allows you to control the appearance of the tessellated patch and particularly to control how the edges of adjacent patches line up. 
+	The available modes are
+	```
+	1. SpacingEqual:
+		The tessellation level assigned to each edge is clamped to the range [1, maxLevel] and then rounded to the next higher integer n. 
+		The edge is then divided into n segments of equal length in barycentric space.
+
+	2. SpacingFractionalEven:
+		The tessellation level assigned to each edge is clamped to the range [2, maxLevel] and then rounded to the nearest even integer n. 
+		The edge is then subdivided into n - 2 segements of equal length, with two additional, shorter segments filling the center region of the edge.
+
+	3. SpacingFractionalOdd:
+		The tessellation level assigned to each edge is clamped to the range [1, maxLevel - 1] and then rounded to the nearest odd integer n. 
+		The edge is then subdivided into n - 2 segements of equal length, with two additional, shorter segments filling the center region of the edge.
+	```
+
+	For both 'SpacingFractionalEven' and 'SpacingFractionalOdd', the edge is not tessellated at all if the clamped tessellation level is equal to 1. 
+	At levels over 1, the modes produce different visual effects. 
+	These effects are shown in Figure 9.4.
+
+	In the top-left image of Figure 9.4, the tessellation mode is set to 'SpacingEqual'. 
+	As you can see, each outer edge of the tessellated triangle is divided into a number of equal-length segments. 
+	The tessellation level in all three images is set to 7.3. 
+	This level has been rounded up to 8, and the edge has been divided into that number of segments.
+
+	In the top-right image of Figure 9.4, the tessellation mode is 'SpacingFractionalEven'. 
+	The tessellation level (7.3) has been rounded down to the next-lower even integer (6), 
+		and the outer edges of the triangle have been divided into this many equal-length segments. 
+	The remaining section of the edge is then divided into two equal-size pieces, producing two shorter segments in the center of the edge. 
+	This is most easily seen on the long diagonal edge of the triangle.
+
+	Finally, in the bottom image of Figure 9.4, the tessellation mode is set to 'SpacingFractionalOdd'. 
+	Here, the tessellation level has been rounded down to the next-lower odd number (7). 
+	The outer edges of the tessellated triangle are then divided into this many equal-length segments, 
+		with the remaining space made up from two smaller segments inserted on either side of the central large segment. 
+	Again, this is easiest to see on the long, diagonal edge of the triangle. 
+	However, here we see the effect of the two small segments as they produce lines of higher tessellation leading into 
+		the center of the tessellated region.
+
+	Again, the tessellation spacing mode is set using the 'OpExecutionMode' instruction in SPIR-V in the tessellation control shader, 
+		the evalaution shader, or both, so long as they agree. 
+	In GLSL, this instruction is also generated by using an input layout qualifier.
+
+	When the tessellation mode is either 'Triangles' or 'Quads', the tessellation engine will produce triangles as outputs. 
+	The order in which the resulting vertices are processed by 
+		the remainder of the pipeline determines which way the triangles face relative to the original patch. 
+	The vertices of a triangle are said to appear either in clockwise or counterclockwise order, which is the order in which 
+		you would encounter them when traversing the triangle edges in the specified direction while viewing the triangle from the front.
+
+	Again, the tessellation winding order is set by using the 'OpExecutionMode' instruction in the tessellation control shader, the evaluation shaders, 
+		or both, and the equivalent GLSL declaration is an input layout qualifier specified in the tessellation evaluation shader. 
+	The GLSL layout qualifier declarations and resulting SPIR-V 'OpExecutionMode' instructions are shown in Table 9.2. 
+	Once again, in the table, the SPIR-V notation of '%n' indicates the index of the entry point to which the 'OpExecutionMode' instruction applies.
+
+	4. Tessellation Variables
+
+	Each patch processed by the tessellation control shader has a fixed number of control points. 
+	This number is set by using the 'patchControlPoints' member of the VkPipelineTessellationStateCreateInfo structure used to create the pipeline, 
+		as discussed earlier. 
+	Each control point is represented as a vertex passed into the pipeline by one of the drawing commands. 
+	The vertex shader processes the vertices one at a time before they are passed in groups to the tessellation control shader, 
+		which has access to all of the vertices making up a patch.
+
+	The tessellation evaluation shader also has access to all of the control points making up a patch, 
+		but the number of control points in the patch can be changed between the tessellation control shader and the tessellation evaluation shader. 
+	The number of control points that are passed from the tessellation control shader to the tessellation evaluation shader 
+		is set by using a SPIR-V 'OutputVertices' argument to the OpExecutionMode instruction applied to the entry point. 
+	Again, this can appear in the tessellation control shader, the tessellation evaluation shader, or both, so long as they agree. 
+	This operation takes an integer constant (or specialization constant).
+
+	In GLSL, the number of control points passed from the tessellation control shader to the tessellation evaluation shader 
+		is specified by using an output layout qualifier in the tessellation control shader. 
+	For example, the GLSL declaration
+	```
+	layout (vertices = 9) out;
+	```
+
+	becomes
+	```
+	OpExecutionMode %n OutputVertices 9}
+	```
+
+	The inner and outer tessellation levels are set by using the tessellation control shader. 
+	This is accomplished in SPIR-V by decorating variables in the tessellation control shader with the 
+		'TessLevelInner' and 'TessLevelOuter' decorations, respectively.
+
+	The variable representing the outer tessellation levels is an array of four floating-point values, all of which are used for 'Quads' tessellation mode, 
+		the first three of which are used in 'Triangles' tessellation mode, and only the first two of which are significant in 'IsoLines' tessellation mode.
+
+	The variable representing the inner tessellation levels is an array of two floating-point values. 
+	In 'Quads' tessellation mode, the two values control the inner tessellation level in the 'u' and 'v' domains. 
+	In 'Triangles' tessellation mode, the first element of the array sets the tessellation mode for the center patch, and the second is ignored. 
+	In 'IsoLines' mode, there is no inner tessellation level.
+
+	The inner and outer tessellation levels appear in GLSL as the 'gl_TessLevelInner' and 'gl_TessLevelOuter' built-in variables, respectively. 
+	When you are using these variables in a GLSL tessellation control shader, 
+		the compiler will generate the appropriate SPIR-V variable declaration and decorate it accordingly.
+
+	The maximum tessellation level that can be used in a Vulkan pipeline is device-dependent. 
+	You can determine the maximum tessellation level that the device supports by checking the 'maxTessellationGenerationLevel' field of 
+		the device¡¯s VkPhysicalDeviceLimits structure, which can be retrieved by calling vkGetPhysicalDeviceProperties(). 
+	The minimum guaranteed limit for 'maxTessellationGenerationLevel' is 64, but some devices may support higher levels. 
+	However, most applications will not need higher levels of tessellation than this, and in this case, there is no reason to query the limit.
+
+	Consider the GLSL tessellation control shader shown in Listing 9.1, 
+		which simply sets the inner and outer tessellation levels of a patch to some hard-coded constants. 
+	This is not a complete tessellation control shader, 
+		but it is sufficient to demonstrate how tessellation assignments are translated from GLSL to SPIR-V.
+	```
+	// Listing 9.1: Trivial Tessellation Control Shader (GLSL)
+
+	#version 450 core
+
+	layout (vertices = 1) out;
+
+	void main(void)
+	{
+		gl_TessLevelInner[0] = 7.f;
+		gl_TessLevelInner[1] = 8.f;
+		
+		gl_TessLevelOuter[0] = 3.f;
+		gl_TessLevelOuter[1] = 4.f;
+		gl_TessLevelOuter[2] = 5.f;
+		gl_TessLevelOuter[3] = 6.f;
+	}
+	```
+
+	After compilation into SPIR-V, the shader shown in Listing 9.1 becomes the (substantially longer) SPIR-V shader shown in Listing 9.2. 
+	This listing is the raw output of the SPIR-V disassembler with comments added by hand.
+	```
+	// Listing 9.2: Trivial Tessellation Control Shader (SPIR-V)
+	
+	;; Require tessellation capability; import GLSL450 constructs.
+
+           OpCapability Tessellation
+
+      %1 = OpExtInstImport "GLSL.std.450"
+
+           OpMemoryModel Logical GLSL450
+
+;; Define "main" as the entry point for a tessellation control shader.
+
+           OpEntryPoint TessellationControl %5663 "main" %3290 %5448
+
+;; Number of patch output vertices = 1
+
+           OpExecutionMode %5663 OutputVertices 1
+
+;; Decorate the tessellation level variables appropriately.
+
+           OpDecorate %3290 Patch
+
+           OpDecorate %3290 BuiltIn TessLevelInner
+
+           OpDecorate %5448 Patch
+
+           OpDecorate %5448 BuiltIn TessLevelOuter
+
+;; Declare types used in this shader.
+
+      %8 = OpTypeVoid
+
+   %1282 = OpTypeFunction %8
+
+     %13 = OpTypeFloat 32
+
+     %11 = OpTypeInt 32 0
+
+;; This is the declaration of the gl_TessLevelInner[2] variable.
+
+   %2576 = OpConstant %11 2
+
+    %549 = OpTypeArray %13 %2576
+
+   %1186 = OpTypePointer Output %549
+
+   %3290 = OpVariable %1186 Output
+
+     %12 = OpTypeInt 32 1
+
+   %2571 = OpConstant %12 0
+
+   %1330 = OpConstant %13 7
+
+    %650 = OpTypePointer Output %13
+
+   %2574 = OpConstant %12 1
+
+   %2807 = OpConstant %13 8
+
+;; Declare the gl_TessLevelOuter[4] variable.
+
+   %2582 = OpConstant %11 4
+
+    %609 = OpTypeArray %13 %2582
+
+   %1246 = OpTypePointer Output %609
+
+   %5448 = OpVariable %1246 Output
+
+;; Declare constants used for indexing into our output arrays and the
+
+;; values written into those arrays.
+
+   %2978 = OpConstant %13 3
+
+   %2921 = OpConstant %13 4
+
+   %2577 = OpConstant %12 2
+
+   %1387 = OpConstant %13 5
+
+   %2580 = OpConstant %12 3
+
+   %2864 = OpConstant %13 6
+
+;; Start of the main function
+
+   %5663 = OpFunction %8 None %1282
+
+  %23934 = OpLabel
+
+;; Declare references to elements of the output arrays and write constants
+
+;; into them.
+
+   %6956 = OpAccessChain %650 %3290 %2571
+
+           OpStore %6956 %1330
+
+  %19732 = OpAccessChain %650 %3290 %2574
+
+           OpStore %19732 %2807
+
+  %19733 = OpAccessChain %650 %5448 %2571
+
+           OpStore %19733 %2978
+
+  %19734 = OpAccessChain %650 %5448 %2574
+
+           OpStore %19734 %2921
+
+  %19735 = OpAccessChain %650 %5448 %2577
+
+           OpStore %19735 %1387
+
+  %23304 = OpAccessChain %650 %5448 %2580
+
+           OpStore %23304 %2864
+
+;; End of main
+
+           OpReturn
+
+           OpFunctionEnd
+	```
+
+	Tessellation control shaders execute a single invocation for each output control point defined in the patch. 
+	All of those invocations have access to all of the data associated with the input control points for the patch. 
+	As a result, the input variables to the tessellation control shader are defined as arrays. 
+	As discussed, the number of input and output control points in a patch do not have to be equal. 
+	In addition to the tessellation level outputs, the tessellation shader can define more outputs to be used for per-control point and per-patch data.
+
+	The per-control-point output from the tessellation control shader is declared as arrays 
+		whose sizes match the number of output control points in the patch. 
+	There is one tessellation control shader invocation per output control point, 
+		so there is one entry in each of the output arrays that corresponds to each of those invocations. 
+	The per-control-point outputs can only be written by the corresponding invocation. 
+	The index of the shader invocation within the patch is available as a built-in variable, 
+		which can be accessed by declaring an integer variable decorated by the SPIR-V 'InvocationId' built-in. 
+	In GLSL, this variable is declared as the 'gl_InvocationID' built-in variable. 
+	This variable must be used to index into the output arrays.
+
+	Listing 9.3 shows how to declare output variables in a GLSL tessellation control shader, 
+		and Listing 9.4 shows how that shader is translated into SPIR-V. 
+	Again, Listing 9.3 is not a complete tessellation control shader and, while legal, will not produce any useful output. 
+	Also, the SPIR-V shader shown in Listing 9.4 has been commented by hand.
+	```
+	// Listing 9.3: Declaring Outputs in Tessellation Control Shaders (GLSL)
+
+	#version 450 core
+
+	layout(vertices = 4) out;
+	out float o_outputData[4];
+
+	void main(void)
+	{
+		o_outputData[gl_InvocationId] = 19.f;
+	}
+	```
+
+	```
+	// Listing 9.4: Declaring Outputs in Tessellation Control Shaders (SPIR-V)
+
+	;; Declare a tessellation control shader.
+
+           OpCapability Tessellation
+
+      %1 = OpExtInstImport "GLSL.std.450"
+
+           OpMemoryModel Logical GLSL450
+
+           OpEntryPoint TessellationControl %5663 "main" %3227 %4585
+
+;; 4 output vertices per patch, declare InvocationId built-in
+
+           OpExecutionMode %5663 OutputVertices 4
+
+           OpDecorate %4585 BuiltIn InvocationId
+
+      %8 = OpTypeVoid
+
+   %1282 = OpTypeFunction %8
+
+     %13 = OpTypeFloat 32
+
+     %11 = OpTypeInt 32 0
+
+   %2582 = OpConstant %11 4
+
+    %549 = OpTypeArray %13 %2582
+
+   %1186 = OpTypePointer Output %549
+
+   %3227 = OpVariable %1186 Output
+
+     %12 = OpTypeInt 32 1
+
+;; This declares the InvocationId input.
+
+    %649 = OpTypePointer Input %12
+
+   %4585 = OpVariable %649 Input
+
+     %37 = OpConstant %13 19
+
+    %650 = OpTypePointer Output %13
+
+;; Beginning of main
+
+   %5663 = OpFunction %8 None %1282
+
+  %24683 = OpLabel
+
+;; Load the invocation ID.
+
+  %20081 = OpLoad %12 %4585
+
+;; Define a reference to output variable.
+
+  %13546 = OpAccessChain %650 %3227 %20081
+
+;; Store into it at invocation ID.
+
+           OpStore %13546 %37
+
+;; End of main
+
+           OpReturn
+
+           OpFunctionEnd
+	```
+
+	The output variables declared in the tessellation control shader are made available in the tessellation evaluation shader as inputs. 
+	The total number of components that can be produced per output vertex by a tessellation control shader 
+		is device-dependent and is determined by inspecting the 'maxTessellationControlTotalOutputComponents' member of 
+		the device¡¯s VkPhysicalDeviceLimits structure, which you can obtain by calling vkGetPhysicalDeviceProperties(). 
+	This is guaranteed to be at least 2,048 components. 
+	Some of these components may be used per vertex, and some may be applied to the patch, as discussed in the next section.
+
+	Of course, the per-vertex limit is the limit that applies to variables passed for each vertex from tessellation control to tessellation evaluation shader. 
+	The total number of components that a tessellation evaluation shader can receive as input from the tessellation control shader 
+		is contained in the 'maxTessellationEvaluationInputComponents' field of the VkPhysicalDeviceLimits structure. 
+	This limit is at least 64 but could be higher, depending on the device.
+
+	5. Patch Variables
+
+	Although normal output variables in tessellation control shaders are instantiated as arrays corresponding to the output control points, 
+		sometimes specific pieces of data are needed that apply everywhere in the patch. 
+	These pieces of data can be declared as patch outputs. 
+	Patch outputs serve two purposes:
+	```
+	1. They store per-patch data and pass it from tessellation control shader to tessellation evaluation shader.
+
+	2. They allow data sharing between tessellation control shader invocations within a single patch.
+	```
+
+	Within the group of tessellation control shader invocations corresponding to a single patch, patch outputs are actually readable as well as writable. 
+	If other invocations in the same patch have written to a patch output, it is possible to read the data they have placed there.
+
+	To declare a patch output variable in GLSL, use the patch qualifier on the variable declaration. 
+	This declaration is translated into the Patch decoration on the variable subsequently declared in the SPIR-V shader. 
+	For example,
+	```
+	patch out myVariable;
+	```
+
+	becomes
+	```
+	OpName %n "myVariable"
+	OpDecorate %n Patch
+	```
+
+	where %n is the identifier assigned to the myVariable variable.
+
+	Because all of the tessellation control shader invocations corresponding to a single patch may be running in parallel, 
+		perhaps at different rates, simply writing to one patch variable and then reading from another patch variable won¡¯t produce well-defined results. 
+	If some invocations get ahead of others while processing a patch, 
+		the invocations that are behind won¡¯t ¡°see¡± the results of writes performed by the other invocations that haven¡¯t reached the write yet.
+
+	To synchronize the invocations within a patch and ensure that they all reach the same place at the same time, 
+		we can use the 'OpControlBarrier' instruction, which can synchronize control flow of invocations within the tessellation control shader. 
+	Further, to ensure that the write to the patch variable is made visible to other invocations within the same patch, 
+		we also need to include either an 'OpMemoryBarrier' instruction or further memory semantics in the 'OpControlBarrier' instruction.
+
+	In GLSL, these instructions can be generated by calling the barrier() built-in function inside the tessellation control shader. 
+	When called, the GLSL compiler generates an 'OpMemoryBarrier' instruction to force memory coherency across 
+		the set of tessellation control shader invocations, and then it generates an OpControlBarrier instruction to synchronize their control flow. 
+	After these instructions have executed, 
+		tessellation control shader invocations can read data written to patch variables by other invocations in the same patch.
+
+	If any one of the tessellation levels written by the tessellation control shader is 0.0 or a floating-point NaN, then the entire patch is discarded. 
+	This provides a mechanism for the tessellation control shader to programmatically throw out patches 
+		that it determines will not contribute to the output image. 
+	For example, if the maximum deviation from a plane for a displacement map is known, then the tessellation control shader can inspect a patch, 
+		determine whether all of the geomery that would result from tessellating that patch would face away from the viewer, and cull the patch. 
+	If such a patch were to be passed through by the tessellation control shader, then it would be tessellated, 
+		the tessellation evaluation shader would run, and all the resulting triangles would individually be culled by subsequent stages in the pipeline. 
+	This would be very inefficient.
+
+	6. 

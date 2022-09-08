@@ -16,7 +16,7 @@ Creation Date: 06.08.2021
 #include "Engines/Window.h"
 #include "Timer.h"
 #include "Graphics/MyVulkan.h"
-#include "Vulkan/vulkan.h"
+#include "vulkan/vulkan_core.h"
 
 Engine::Engine()
 	: isUpdate(true), window(new Window())

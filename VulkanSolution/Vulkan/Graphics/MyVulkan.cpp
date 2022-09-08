@@ -11,7 +11,6 @@ Creation Date: 06.12.2021
 #include <iostream>
 #include <fstream>
 #include <vector>
-#include <winnt.h>
 #include "Graphics/MyVulkan.h"
 #include "Vulkan/vulkan.h"
 #include "Helper/VulkanHelper.h"
@@ -876,7 +875,7 @@ void MyVulkan::CreateSimpleRenderpass()
 //		"vkCreateGraphicsPipelines is failed!"
 //	);
 //}
-
+/*
 void MyVulkan::DescribeVertexInputData()
 {
 	typedef struct vertex_t
@@ -945,3 +944,4 @@ void MyVulkan::SetupSeparateVertexAttribute()
 
 }
 
+*/

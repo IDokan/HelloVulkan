@@ -15,6 +15,11 @@ Creation Date: 06.08.2021
 
 namespace CallbackFuncs
 {
+	void onError(int error, const char* description)
+	{
+		printf("GLFW Error %d: %s\n", error, description);
+	}
+
 	void WindowClose(GLFWwindow* window)
 	{
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -34,6 +39,7 @@ bool Window::CreateWindow(const int& width, const int& height, const char* title
 	}
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwSetErrorCallback(CallbackFuncs::onError);
 
 	window = glfwCreateWindow(width, height, title, monitor, share);
 

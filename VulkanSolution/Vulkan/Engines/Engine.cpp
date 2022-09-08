@@ -9,6 +9,7 @@ Creation Date: 06.08.2021
 	Source file for engine.
 	Contains main game loop and control windows.
 ******************************************************************************/
+#define _CRT_SECURE_NO_WARNINGS
 #include <string>
 #include <iostream>
 
@@ -35,7 +36,7 @@ bool Engine::Init()
 
 	window->CreateWindow(800, 600, "Vulkan Window", nullptr, nullptr);
 
-	
+
 
 	return true;
 }
@@ -45,19 +46,17 @@ void Engine::Update()
 	// Calculate dt, and FPS to show up on window's title bar
 	Timer* timer = Timer::GetTimer();
 	float dt = static_cast<float>(timer->GetDeltaTime());
-	(dt);
 	int frame = timer->GetFPSFrame();
 	if (frame >= 0)
 	{
-		window->SetWindowTitle(std::string("Vulkan Window, FPS : " + frame));
+		char buf[32];
+		_itoa(frame, buf, 10);
+		window->SetWindowTitle(std::string("Vulkan Window, FPS : ") + std::string(buf));
 	}
 	Timer::GetTimer()->Reset();
 
-	// Update window when it is alive.
-	while (window->ShouldWindowClose() == false)
-	{
-		window->PollWindowEvents();
-	}
+	// Update window
+	window->PollWindowEvents();
 }
 
 void Engine::Clean()

@@ -32,7 +32,7 @@ Engine::~Engine()
 bool Engine::Init()
 {
 	// Vulkan Init
-	MyVulkan::InitVulkan("Sinil's Hello Vulkan", VK_MAKE_VERSION(1, 0, 0));
+	VK->InitVulkan("Sinil's Hello Vulkan", VK_MAKE_VERSION(1, 0, 0));
 
 	window->CreateWindow(800, 600, "Vulkan Window", nullptr, nullptr);
 
@@ -63,7 +63,7 @@ void Engine::Clean()
 {
 	window->ShutWindowDown();
 
-	MyVulkan::CleanVulkan();
+	VK->CleanVulkan();
 }
 
 bool Engine::IsUpdate()

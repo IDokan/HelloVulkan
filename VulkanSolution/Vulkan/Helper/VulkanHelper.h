@@ -15,10 +15,10 @@ enum VkResult;
 
 namespace VulkanHelper
 {
-	void VkCheck(VkResult result, const char* errorMsg);
+	VkResult VkCheck(VkResult result, const char* errorMsg);
 
 
-	inline void VulkanHelper::VkCheck(VkResult result, const char* errorMsg)
+	inline VkResult VulkanHelper::VkCheck(VkResult result, const char* errorMsg)
 	{
 #ifdef _DEBUG
 		if (result != VK_SUCCESS)
@@ -27,6 +27,7 @@ namespace VulkanHelper
 			abort();
 		}
 #endif
+		return result;
 	}
 
 #define ARRAYSIZE(ARR) sizeof(ARR) / sizeof(ARR ## [0])

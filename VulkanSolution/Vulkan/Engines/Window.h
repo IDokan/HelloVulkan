@@ -12,12 +12,15 @@ Creation Date: 06.08.2021
 
 struct GLFWwindow;
 struct GLFWmonitor;
+class MyVulkan;
 
 class Window
 {
 public:
+	friend MyVulkan;
+public:
 	Window()
-		: window(nullptr)
+		: glfwWindow(nullptr)
 	{}
 
 	bool CreateWindow(const int& width, const int& height, const char* title, GLFWmonitor* monitor, GLFWwindow* share);
@@ -30,5 +33,5 @@ public:
 	void SetWindowTitle(const std::string& newTitle);
 
 private:
-	GLFWwindow* window;
+	GLFWwindow* glfwWindow;
 };

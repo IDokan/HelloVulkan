@@ -1,0 +1,14 @@
+Layers
+	- Layers are features of Vulkan that allow its behavior to be modified. Layers generally intercept all or part of Vulkan and add functionality such as logging, tracing, providing diagnostics, profiling, and so on. A layer can be added at the instance level, in which case it affects the whole Vulkan instance and possibly every device created by it. Alternatively, the layer can be added at the device level, in which case it affects only the device for which it is enabled.
+
+
+
+Create Instance -> Choose physical device -> Create logical device -> look queue family
+
+
+About queue flags
+	VK_QUEUE_GRAPHICS_BIT - queues in this family support graphics operations such as drawing points, line,s and triangles.
+	VK_QUEUE_COMPUTE_BIT - queues in this family support compute operations such as dispatching compute shaders.
+	VK_QUEUE_TRANSFER_BIT - queues in this family support transfer operations such as copying buffer and image contents.
+	VK_QUEUE_SPARSE_BINDING_BIT - queues in this family support memory binding operations used to update sparse resources.
+

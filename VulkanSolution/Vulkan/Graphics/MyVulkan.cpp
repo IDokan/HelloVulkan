@@ -8,224 +8,62 @@ Author
 Creation Date: 06.12.2021
 	Source file for my vulkan.
 ******************************************************************************/
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>
 #include <iostream>
 #include <fstream>
 #include <vector>
 #include "Graphics/MyVulkan.h"
 #include "Helper/VulkanHelper.h"
-#include "Graphics/Allocator/Allocator.h"
 #include "GLMath.h"
+#include "Engines/Window.h"
 
-void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
+MyVulkan::MyVulkan(const Window* window)
+	: windowHolder(window)
 {
-	std::ofstream resultFile;
 
-	//A generic application info structure
-	VkApplicationInfo applicationInfo{};
-	applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	applicationInfo.pNext = nullptr;
-	applicationInfo.pApplicationName = appName;
-	applicationInfo.applicationVersion = appVersion;
-	applicationInfo.pEngineName = "Sinil Engine";
-	applicationInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-	applicationInfo.apiVersion = VK_API_VERSION_1_0;
-	// application.Info.apiVersion = ; it contains the version of Vulkan API that my application is expecting to run on. This should be set to the absolute minimum version
+}
 
-
-	// Create an instance
-	VkInstanceCreateInfo instanceCreateInfo{};
-	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	instanceCreateInfo.pNext = nullptr;
-	instanceCreateInfo.flags = 0;
-	instanceCreateInfo.pApplicationInfo = &applicationInfo;
-	VulkanHelper::VkCheck(vkCreateInstance(&instanceCreateInfo, &myAllocator, &instance), "Could not create instance");
-
-
-	void* getHowMany = nullptr;
-
-	// Get Physical devices
-	uint32_t numOfPhysicalDevices = 0;
-	std::vector<VkPhysicalDevice> arrayOfPhysicalDevices;
-	// second parameter of VK physical devices function works both input & output.
-	// As an output, the parameter get how many physical devices I can use.
-	// As an input, The maximum number of devices I can control in this application.
-	// Once we want to know how many devices available in the system, give final parameter nullptr.(second parameter still should be valid pointer)
-	// Then call the same function again with the final parameter set to an array that has been appropriately sized for the number what we have known.
-	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, reinterpret_cast<VkPhysicalDevice*>(getHowMany)), "The first Procedure with physical devices is failed! (Originally, it might be failed)");
-	arrayOfPhysicalDevices.resize(numOfPhysicalDevices);
-	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, arrayOfPhysicalDevices.data()), "The second Procedure with physical devices is failed! (Logically, should not be failed)");
-
-	// Create logical devices per physical device
-	for (const VkPhysicalDevice& physicalDevice : arrayOfPhysicalDevices)
+bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
+{
+	if (CreateInstance(appName, appVersion) == false)
 	{
-		physicalDevices.push_back(physicalDevice);
-
-		/*!!!!!!!! Skip memory stuff at this moment*/
-		VkPhysicalDeviceProperties physicalProperty{};
-		vkGetPhysicalDeviceProperties(physicalDevice, &physicalProperty);
-#ifdef PRINT_RESULT
-		/// PRINT
-		resultFile.open("Result of " + std::string(physicalProperty.deviceName) + ".txt");																   /// PRINT
-		resultFile << "apiVersion: " << physicalProperty.apiVersion << std::endl;																   /// PRINT
-		resultFile << "driverVersion: " << physicalProperty.driverVersion << std::endl;															 /// PRINT
-		resultFile << "vendorID: " << physicalProperty.vendorID << std::endl;																		/// PRINT
-		resultFile << "deviceID: " << physicalProperty.deviceID << std::endl;																		 /// PRINT
-		resultFile << "deviceType: " << physicalProperty.deviceType << std::endl;																 /// PRINT
-		resultFile << "deviceName: " << physicalProperty.deviceName << std::endl << std::endl << std::endl;					   /// PRINT
-#endif
-
-		//VkPhysicalDeviceMemoryProperties memoryProperties;
-		//// Get the memory properties of the physical device.
-		//vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
-
-		//// Do something about memory
-		//for  (int m= 0; m < memoryProperties.memoryTypeCount; m++)
-		//{
-		//	for (int h = 0; h < memoryProperties.memoryHeapCount; h++)
-		//	{
-		//		// memoryProperties.memoryHeaps[]				....................
-		//	}
-		//}
-		//memoryProperties.memoryTypes[0].propertyFlags;
-		//memoryProperties.memoryHeaps[memoryProperties.memoryTypes[0].heapIndex];
-
-
-
-		// First determine the number of queue families supported by the physical device.
-		uint32_t numOfQueueFamilyProperty = 0;
-		std::vector<VkQueueFamilyProperties> familyProperties;
-		// Bellow code works similar with vkEnumeratePhysicalDevice()
-		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &numOfQueueFamilyProperty, reinterpret_cast<VkQueueFamilyProperties*>(getHowMany));
-		// Allocate enough space for the queue property structures.
-		familyProperties.resize(numOfQueueFamilyProperty);
-		// Now query the actual properties of the queue families.
-		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &numOfQueueFamilyProperty, familyProperties.data());
-
-
-#ifdef PRINT_RESULT
-		resultFile << "Queue Family Count: " << numOfQueueFamilyProperty << std::endl;																							 /// PRINT
-		resultFile << "queueFlags: " << familyProperties.front().queueFlags << std::endl;																							   /// PRINT
-		resultFile << "queueCount: " << familyProperties.front().queueCount << std::endl;																							  /// PRINT
-		resultFile << "timestampValidBits: " << familyProperties.front().timestampValidBits << std::endl;																		/// PRINT
-		resultFile << "minImageTransferGranularity.width: " << familyProperties.front().minImageTransferGranularity.width << std::endl;					   /// PRINT
-		resultFile << "minImageTransferGranularity.height: " << familyProperties.front().minImageTransferGranularity.height << std::endl;				  /// PRINT
-		resultFile << "minImageTransferGranularity.depth: " << familyProperties.front().minImageTransferGranularity.depth << std::endl << std::endl << std::endl;					  /// PRINT
-#endif
-
-		// Create Logical Device
-		VkDeviceQueueCreateInfo logicalDeviceQueueCreateInfo{};
-		logicalDeviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		logicalDeviceQueueCreateInfo.pNext = nullptr;
-		logicalDeviceQueueCreateInfo.flags = 0;
-		logicalDeviceQueueCreateInfo.queueFamilyIndex = 0;		// ????????? I do not know what this field is for....
-		logicalDeviceQueueCreateInfo.queueCount = 1;
-		logicalDeviceQueueCreateInfo.pQueuePriorities = nullptr;
-
-		// Get Layers
-		uint32_t layerCount = 0;
-		std::vector<VkLayerProperties> layers;
-		std::vector<const char*> layerNames;
-		// Query the instance layers
-		VulkanHelper::VkCheck(vkEnumerateInstanceLayerProperties(&layerCount, reinterpret_cast<VkLayerProperties*>(getHowMany)), "First Layer : Layer enumeration is failed! when pointer to array is nullptr");
-
-#ifdef PRINT_RESULT
-		resultFile << "layerCount: " << layerCount << std::endl << std::endl;		/// PRINT
-#endif
-		if (layerCount != 0)
-		{
-			layers.resize(layerCount);
-			VulkanHelper::VkCheck(vkEnumerateInstanceLayerProperties(&layerCount, layers.data()), "Second Layer : Layer enumeration is failed! when pointer to array is not nullptr");
-			for (const VkLayerProperties& layer : layers)
-			{
-
-#ifdef PRINT_RESULT
-				resultFile << "layerName: " << layer.layerName << std::endl;		/// PRINT
-				resultFile << "specVersion: " << layer.specVersion << std::endl;		/// PRINT
-				resultFile << "implementationVersion: " << layer.implementationVersion << std::endl;		/// PRINT
-				resultFile << "description: " << layer.description << std::endl << std::endl;		/// PRINT
-#endif
-				layerNames.push_back(layer.layerName);
-			}
-		}
-		else
-		{
-			std::cout << "WARNING:: available layer is zero!" << std::endl;
-		}
-
-		resultFile << std::endl << std::endl;
-
-		// Get Extensions
-		/*!!!!!!!!!!!!!!!!!!!!!!!!!!!! However, since extension need cost, for now do not use extension. Let us prefer vanilla mode*/
-		uint32_t instanceExtensionCount = 0;
-		std::vector<VkExtensionProperties> instanceExtensions;
-		std::vector<const char*> extensionNames;
-		VulkanHelper::VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, reinterpret_cast<VkExtensionProperties*>(getHowMany)), "Error during get instance extesions!");
-
-#ifdef PRINT_RESULT
-		resultFile << "extensionCount: " << instanceExtensionCount << std::endl << std::endl;		/// PRINT
-#endif
-		if (instanceExtensionCount > 0)
-		{
-			instanceExtensions.resize(instanceExtensionCount);
-			VulkanHelper::VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, instanceExtensions.data()), "Error during get instance extesions!");
-			for (VkExtensionProperties extension : instanceExtensions)
-			{
-#ifdef PRINT_RESULT
-				resultFile << "extensionName: " << extension.extensionName << std::endl;		/// PRINT
-				resultFile << "specVersion: " << extension.specVersion << std::endl << std::endl;		/// PRINT
-#endif
-				extensionNames.push_back(extension.extensionName);
-			}
-		}
-		else
-		{
-			std::cout << "Supported extensions are zero" << std::endl;
-		}
-
-		VkPhysicalDeviceFeatures supportedFeatures{};
-		vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
-		VkPhysicalDeviceFeatures requiredFeatures{};
-		// Set features based on book's example
-		requiredFeatures.multiDrawIndirect = supportedFeatures.multiDrawIndirect;
-		requiredFeatures.tessellationShader = VK_TRUE;
-		requiredFeatures.geometryShader = VK_TRUE;
-
-		VkDeviceCreateInfo logicalDeviceCreateInfo{};
-		logicalDeviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		logicalDeviceCreateInfo.pNext = 0;
-		logicalDeviceCreateInfo.flags = 0;
-		// For this time, let this value one. (At this moment, I'm not sure I can control two or more queues)
-		logicalDeviceCreateInfo.queueCreateInfoCount = 1;
-		logicalDeviceCreateInfo.pQueueCreateInfos = &logicalDeviceQueueCreateInfo;
-		// We are going to cover layer and extension later in this chapter.
-		logicalDeviceCreateInfo.enabledLayerCount = layerCount;
-		logicalDeviceCreateInfo.ppEnabledLayerNames = layerNames.data();
-		logicalDeviceCreateInfo.enabledExtensionCount = 0;
-		logicalDeviceCreateInfo.ppEnabledExtensionNames = nullptr;
-		logicalDeviceCreateInfo.pEnabledFeatures = &requiredFeatures;
-
-		VkDevice logicalDevice{};
-		VulkanHelper::VkCheck(vkCreateDevice(physicalDevice, &logicalDeviceCreateInfo, &myAllocator, &logicalDevice), "Vulkan logical device creation is failed!");
-		logicalDevices.push_back(logicalDevice);
-
-#ifdef PRINT_RESULT
-		resultFile.close();
-#endif
+		return false;
 	}
+	CreatePhysicalDevice();
+	ChooseQueueFamily();
+	if (CreateDevice() == false)
+	{
+		return false;
+	}
+	if (CreateSurfaceByGLFW() == false)
+	{
+		return false;
+	}
+	if (CreateCommandPoolAndAllocateCommandBuffer() == false)
+	{
+		return false;
+	}
+
+
 
 	CreateBuffers();
 	CreateImages();
+
+	return true;
 }
 
 void MyVulkan::CleanVulkan()
 {
-	for (VkDevice logicalDevice : logicalDevices)
-	{
-		VulkanHelper::VkCheck(vkDeviceWaitIdle(logicalDevice), "failed to make logical device idle");
-		vkDestroyDevice(logicalDevice, &myAllocator);
-	}
+	VulkanHelper::VkCheck(vkDeviceWaitIdle(device), "failed to make logical device idle");
 
-	vkDestroyInstance(instance, &myAllocator);
+	DestroyCommandPool();
+
+	DestroySurface();
+
+	DestroyDevice();
+
+	DestroyInstance();
 }
 
 void MyVulkan::CreateBuffers()
@@ -243,9 +81,9 @@ void MyVulkan::CreateBuffers()
 	};
 
 	VkBuffer buffer = VK_NULL_HANDLE;
-	VulkanHelper::VkCheck(vkCreateBuffer(logicalDevices.front(), &bufferCreateInfo, &myAllocator, &buffer), "Creating buffer is failed!");
+	VulkanHelper::VkCheck(vkCreateBuffer(device, &bufferCreateInfo, nullptr, &buffer), "Creating buffer is failed!");
 
-	vkDestroyBuffer(logicalDevices.front(), buffer, &myAllocator);
+	vkDestroyBuffer(device, buffer, nullptr);
 }
 
 void MyVulkan::CreateImages()
@@ -275,9 +113,9 @@ void MyVulkan::CreateImages()
 
 	VkImage image = VK_NULL_HANDLE;
 
-	VulkanHelper::VkCheck(vkCreateImage(logicalDevices.front(), &imageCreateInfo, &myAllocator, &image), "Creating Image is failed");
+	VulkanHelper::VkCheck(vkCreateImage(device, &imageCreateInfo, nullptr, &image), "Creating Image is failed");
 
-	vkDestroyImage(logicalDevices.front(), image, &myAllocator);
+	vkDestroyImage(device, image, nullptr);
 }
 
 void MyVulkan::CreateCubeImages()
@@ -301,14 +139,14 @@ void MyVulkan::CreateCubeImages()
 
 	VkImage cube = VK_NULL_HANDLE;
 
-	VulkanHelper::VkCheck(vkCreateImage(logicalDevices.front(), &createInfo, &myAllocator, &cube), "Image creation is failed!");
+	VulkanHelper::VkCheck(vkCreateImage(device, &createInfo, nullptr, &cube), "Image creation is failed!");
 
 	VkImageViewCreateInfo viewCreateInfo;
 	viewCreateInfo;
 
 	//vkCreateImageView(logicalDevices.front(), )
 
-	vkDestroyImage(logicalDevices.front(), cube, &myAllocator);
+	vkDestroyImage(device, cube, nullptr);
 }
 
 
@@ -371,7 +209,7 @@ uint32_t MyVulkan::ChooseHeapFromFlags(const VkMemoryRequirements& memoryRequire
 uint32_t MyVulkan::ChooseHeapFromFlags(const VkMemoryRequirements& memoryRequirements, VkMemoryPropertyFlags requiredFlags, VkMemoryPropertyFlags preferredFlags)
 {
 	VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
-	vkGetPhysicalDeviceMemoryProperties(physicalDevices.front(), &deviceMemoryProperties);
+	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &deviceMemoryProperties);
 
 	for (uint32_t memoryType = 0; memoryType < VK_MAX_MEMORY_TYPES; memoryType++)
 	{
@@ -716,10 +554,383 @@ void MyVulkan::CreateSimpleRenderpass()
 
 	// The only code that actually executes is this single call, which creates the renderpass object.
 	vkCreateRenderPass(
-		logicalDevices.front(),
+		device,
 		&renderpassCreateInfo,
-		&myAllocator,
+		nullptr,
 		&renderPass);
+}
+
+bool MyVulkan::CreateInstance(const char* appName, uint32_t appVersion)
+{
+	//A generic application info structure
+	VkApplicationInfo applicationInfo{};
+	applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	applicationInfo.pNext = nullptr;
+	applicationInfo.pApplicationName = appName;
+	applicationInfo.applicationVersion = appVersion;
+	applicationInfo.pEngineName = "Sinil Engine";
+	applicationInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+	applicationInfo.apiVersion = VK_API_VERSION_1_0;
+
+	uint32_t glfwExtensionCount;
+	const char** extensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+	// Create an instance
+	VkInstanceCreateInfo instanceCreateInfo{};
+	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	instanceCreateInfo.pNext = nullptr;
+	instanceCreateInfo.flags = 0;
+	instanceCreateInfo.pApplicationInfo = &applicationInfo;
+	instanceCreateInfo.enabledExtensionCount = glfwExtensionCount;
+	instanceCreateInfo.ppEnabledExtensionNames = extensions;
+	instanceCreateInfo.enabledLayerCount = instanceLayers.size();
+	instanceCreateInfo.ppEnabledLayerNames = instanceLayers.data();
+	if (VulkanHelper::VkCheck(vkCreateInstance(&instanceCreateInfo, nullptr, &instance), "Could not create instance") != VK_SUCCESS)
+	{
+		DestroyInstance();
+		return false;
+	}
+
+	return true;
+}
+
+void MyVulkan::DestroyInstance()
+{
+	vkDestroyInstance(instance, nullptr);
+}
+
+void MyVulkan::CreatePhysicalDevice()
+{
+	uint32_t physicalDevicesCount;
+	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &physicalDevicesCount, nullptr), "Get number of physical devices has failed.");
+	std::vector<VkPhysicalDevice> physicalDeviceCandidates(physicalDevicesCount);
+	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &physicalDevicesCount, physicalDeviceCandidates.data()), "Get physical devices information has failed.");
+
+	for (const VkPhysicalDevice& physicalDeviceCandidate : physicalDeviceCandidates)
+	{
+		VkPhysicalDeviceProperties deviceProperties;
+		vkGetPhysicalDeviceProperties(physicalDeviceCandidate, &deviceProperties);
+		
+		if (deviceProperties.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+		{
+			continue;
+		}
+
+		uint32_t extensionCount = 0;
+		VulkanHelper::VkCheck(vkEnumerateDeviceExtensionProperties(physicalDeviceCandidate, nullptr, &extensionCount, nullptr), "Get number of device extension properties has failed.");
+		std::vector<VkExtensionProperties> extensions(extensionCount);
+		VulkanHelper::VkCheck(vkEnumerateDeviceExtensionProperties(physicalDeviceCandidate, nullptr, &extensionCount, extensions.data()), "Get device extension properties has failed.");
+
+		unsigned int compatibleExtensions = 0;
+		for (const char* element : reqDeviceExtensions)
+		{
+			for (size_t i = 0; i < extensionCount; i++)
+			{
+				if (strcmp(element, extensions[i].extensionName) == 0)
+				{
+					compatibleExtensions++;
+					break;
+				}
+			}
+
+			if (compatibleExtensions == reqDeviceExtensions.size())
+			{
+				physicalDevice = physicalDeviceCandidate;
+				return;
+			}
+		}
+	}
+
+}
+
+void MyVulkan::ChooseQueueFamily()
+{
+	// VK_QUEUE_GRAPHICS_BIT - queues in this family support graphics operations such as drawing points, line,s and triangles.
+	// VK_QUEUE_COMPUTE_BIT - queues in this family support compute operations such as dispatching compute shaders.
+	// VK_QUEUE_TRANSFER_BIT - queues in this family support transfer operations such as copying buffer and image contents.
+	// VK_QUEUE_SPARSE_BINDING_BIT - queues in this family support memory binding operations used to update sparse resources.
+	VkQueueFlags requiredQueueFlags = VK_QUEUE_GRAPHICS_BIT;
+
+	uint32_t queueFamilyCount;
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+	std::vector<VkQueueFamilyProperties> queueFamilyCandidates(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyCandidates.data());
+
+	// Search the list for the first queue family that has the required flags.
+	for (uint32_t i = 0; i < queueFamilyCount; i++)
+	{
+		// Use bit manipulation to check queue flags contain every flags we want
+		if ((queueFamilyCandidates[i].queueFlags & requiredQueueFlags) == requiredQueueFlags)
+		{
+			queueFamily = i;
+		}
+	}
+}
+
+bool MyVulkan::CreateDevice()
+{
+	VkPhysicalDeviceVulkan13Features features13{};
+	features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+	features13.pNext = nullptr;
+
+	VkPhysicalDeviceVulkan12Features features12{};
+	features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+	features12.pNext = &features13;
+
+	VkPhysicalDeviceVulkan11Features features11{};
+	features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+	features11.pNext = &features12;
+
+
+	VkPhysicalDeviceFeatures2 features2{};
+	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	features2.pNext = &features11;
+
+	vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
+
+	features2.features.robustBufferAccess = VK_FALSE;
+
+	// priority is between [0.f, 1.f], 1.f has higher priority while 0 has lower priority.
+	float priority = 1.0f;
+	VkDeviceQueueCreateInfo queueCreateInfo{};
+	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queueCreateInfo.queueCount = 1;
+	queueCreateInfo.queueFamilyIndex = queueFamily;
+	queueCreateInfo.pQueuePriorities = &priority;
+
+
+	VkDeviceCreateInfo deviceCreateInfo{};
+	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	deviceCreateInfo.pNext = &features2;
+
+	deviceCreateInfo.queueCreateInfoCount = 1;
+	deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
+
+	deviceCreateInfo.enabledExtensionCount = reqDeviceExtensions.size();
+	deviceCreateInfo.ppEnabledExtensionNames = reqDeviceExtensions.data();
+
+	if (VulkanHelper::VkCheck(vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device), "Creating a logical device has failed.") != VK_SUCCESS)
+	{
+		DestroyDevice();
+		return false;
+	}
+
+	return true;
+}
+
+void MyVulkan::DestroyDevice()
+{
+	vkDestroyDevice(device, nullptr);
+}
+
+void MyVulkan::GetCommandQueue()
+{
+	// Why queueIndex is 0???
+	vkGetDeviceQueue(device, queueFamily, 0, &queue);
+}
+
+// VkSurface is Vulkan's name for the screen.
+// Since GLFW creates and manges the window, it creates the VkSurface at our request.
+bool MyVulkan::CreateSurfaceByGLFW()
+{
+	VkBool32 isSupported;		//Supports drawing on a screen
+
+	VulkanHelper::VkCheck(glfwCreateWindowSurface(instance, windowHolder->glfwWindow, nullptr, &surface), "Creating surface by GLFW has failed!");
+	VulkanHelper::VkCheck(vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueFamily, surface, &isSupported), "Querying if presentation is supported has failed!");
+
+	if (isSupported != VK_TRUE)
+	{
+		DestroySurface();
+		return false;
+	}
+
+	return true;
+}
+
+void MyVulkan::DestroySurface()
+{
+	vkDestroySurfaceKHR(instance, surface, nullptr);
+}
+
+// Create a command pool used to allocate command buffers, which in turn used to gather and send commands to the GPU.
+// The flag makes it possible to reuse command buffers.
+// The queue index determines which queue the command buffers can be submitted to.
+// Use the command pool to also create a command buffer.
+bool MyVulkan::CreateCommandPoolAndAllocateCommandBuffer()
+{
+	VkCommandPoolCreateInfo poolCreateInfo{};
+	poolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	poolCreateInfo.queueFamilyIndex = queueFamily;
+	if (VulkanHelper::VkCheck(vkCreateCommandPool(device, &poolCreateInfo, nullptr, &commandPool), "Creating command pool has failed!") != VK_SUCCESS)
+	{
+		DestroyCommandPool();
+		return false;
+	}
+
+	VkCommandBufferAllocateInfo bufferAllocateInfo{};
+	bufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	bufferAllocateInfo.commandPool = commandPool;
+	bufferAllocateInfo.commandBufferCount = 1;
+	bufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	if (VulkanHelper::VkCheck(vkAllocateCommandBuffers(device, &bufferAllocateInfo, &commandBuffer), "Allocating command buffer has failed!") != VK_SUCCESS)
+	{
+		DestroyCommandPool();
+		return false;
+	}
+
+	return true;
+}
+
+void MyVulkan::DestroyCommandPool()
+{
+	vkDestroyCommandPool(device, commandPool, nullptr);
+}
+
+void MyVulkan::RecordClientData()
+{
+	std::ofstream resultFile;
+	void* getHowMany = nullptr;
+
+	// Get Physical devices
+	uint32_t numOfPhysicalDevices = 0;
+	std::vector<VkPhysicalDevice> arrayOfPhysicalDevices;
+	// second parameter of VK physical devices function works both input & output.
+	// As an output, the parameter get how many physical devices I can use.
+	// As an input, The maximum number of devices I can control in this application.
+	// Once we want to know how many devices available in the system, give final parameter nullptr.(second parameter still should be valid pointer)
+	// Then call the same function again with the final parameter set to an array that has been appropriately sized for the number what we have known.
+	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, reinterpret_cast<VkPhysicalDevice*>(getHowMany)), "The first Procedure with physical devices is failed! (Originally, it might be failed)");
+	arrayOfPhysicalDevices.resize(numOfPhysicalDevices);
+	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, arrayOfPhysicalDevices.data()), "The second Procedure with physical devices is failed! (Logically, should not be failed)");
+
+	// Create logical devices per physical device
+	for (const VkPhysicalDevice& physicalDevice : arrayOfPhysicalDevices)
+	{
+
+		VkPhysicalDeviceProperties physicalProperty{};
+		vkGetPhysicalDeviceProperties(physicalDevice, &physicalProperty);
+		/// PRINT
+		resultFile.open("Result of " + std::string(physicalProperty.deviceName) + ".txt");																   /// PRINT
+		resultFile << "apiVersion: " << physicalProperty.apiVersion << std::endl;																   /// PRINT
+		resultFile << "driverVersion: " << physicalProperty.driverVersion << std::endl;															 /// PRINT
+		resultFile << "vendorID: " << physicalProperty.vendorID << std::endl;																		/// PRINT
+		resultFile << "deviceID: " << physicalProperty.deviceID << std::endl;																		 /// PRINT
+		resultFile << "deviceType: " << physicalProperty.deviceType << std::endl;																 /// PRINT
+		resultFile << "deviceName: " << physicalProperty.deviceName << std::endl << std::endl << std::endl;					   /// PRINT
+
+
+
+
+		// First determine the number of queue families supported by the physical device.
+		uint32_t numOfQueueFamilyProperty = 0;
+		std::vector<VkQueueFamilyProperties> familyProperties;
+		// Bellow code works similar with vkEnumeratePhysicalDevice()
+		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &numOfQueueFamilyProperty, reinterpret_cast<VkQueueFamilyProperties*>(getHowMany));
+		// Allocate enough space for the queue property structures.
+		familyProperties.resize(numOfQueueFamilyProperty);
+		// Now query the actual properties of the queue families.
+		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &numOfQueueFamilyProperty, familyProperties.data());
+
+		for (const VkQueueFamilyProperties& familyProperty : familyProperties)
+		{
+			resultFile << "Queue Family Count: " << numOfQueueFamilyProperty << std::endl;																							 /// PRINT
+			resultFile << "queueFlags: " << familyProperty.queueFlags << std::endl;																							   /// PRINT
+			resultFile << "queueCount: " << familyProperty.queueCount << std::endl;																							  /// PRINT
+			resultFile << "timestampValidBits: " << familyProperty.timestampValidBits << std::endl;																		/// PRINT
+			resultFile << "minImageTransferGranularity.width: " << familyProperty.minImageTransferGranularity.width << std::endl;					   /// PRINT
+			resultFile << "minImageTransferGranularity.height: " << familyProperty.minImageTransferGranularity.height << std::endl;				  /// PRINT
+			resultFile << "minImageTransferGranularity.depth: " << familyProperty.minImageTransferGranularity.depth << std::endl << std::endl << std::endl;					  /// PRINT
+		}
+
+		// Create Logical Device
+		VkDeviceQueueCreateInfo logicalDeviceQueueCreateInfo{};
+		logicalDeviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		logicalDeviceQueueCreateInfo.pNext = nullptr;
+		logicalDeviceQueueCreateInfo.flags = 0;
+		logicalDeviceQueueCreateInfo.queueFamilyIndex = 0;		// ????????? I do not know what this field is for....
+		logicalDeviceQueueCreateInfo.queueCount = 1;
+		logicalDeviceQueueCreateInfo.pQueuePriorities = nullptr;
+
+		// Get Layers
+		uint32_t layerCount = 0;
+		std::vector<VkLayerProperties> layers;
+		std::vector<const char*> layerNames;
+		// Query the instance layers
+		VulkanHelper::VkCheck(vkEnumerateInstanceLayerProperties(&layerCount, reinterpret_cast<VkLayerProperties*>(getHowMany)), "First Layer : Layer enumeration is failed! when pointer to array is nullptr");
+
+		resultFile << "layerCount: " << layerCount << std::endl << std::endl;		/// PRINT
+		if (layerCount != 0)
+		{
+			layers.resize(layerCount);
+			VulkanHelper::VkCheck(vkEnumerateInstanceLayerProperties(&layerCount, layers.data()), "Second Layer : Layer enumeration is failed! when pointer to array is not nullptr");
+			for (const VkLayerProperties& layer : layers)
+			{
+
+				resultFile << "layerName: " << layer.layerName << std::endl;		/// PRINT
+				resultFile << "specVersion: " << layer.specVersion << std::endl;		/// PRINT
+				resultFile << "implementationVersion: " << layer.implementationVersion << std::endl;		/// PRINT
+				resultFile << "description: " << layer.description << std::endl << std::endl;		/// PRINT
+				layerNames.push_back(layer.layerName);
+			}
+		}
+		else
+		{
+			std::cout << "WARNING:: available layer is zero!" << std::endl;
+		}
+
+		resultFile << std::endl << std::endl;
+
+		// Get Extensions
+		/*!!!!!!!!!!!!!!!!!!!!!!!!!!!! However, since extension need cost, for now do not use extension. Let us prefer vanilla mode*/
+		uint32_t instanceExtensionCount = 0;
+		std::vector<VkExtensionProperties> instanceExtensions;
+		std::vector<const char*> extensionNames;
+		VulkanHelper::VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, reinterpret_cast<VkExtensionProperties*>(getHowMany)), "Error during get instance extesions!");
+
+		resultFile << "extensionCount: " << instanceExtensionCount << std::endl << std::endl;		/// PRINT
+		if (instanceExtensionCount > 0)
+		{
+			instanceExtensions.resize(instanceExtensionCount);
+			VulkanHelper::VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, instanceExtensions.data()), "Error during get instance extesions!");
+			for (VkExtensionProperties extension : instanceExtensions)
+			{
+				resultFile << "extensionName: " << extension.extensionName << std::endl;		/// PRINT
+				resultFile << "specVersion: " << extension.specVersion << std::endl << std::endl;		/// PRINT
+				extensionNames.push_back(extension.extensionName);
+			}
+		}
+		else
+		{
+			std::cout << "Supported extensions are zero" << std::endl;
+		}
+
+		VkPhysicalDeviceFeatures supportedFeatures{};
+		vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
+		VkPhysicalDeviceFeatures requiredFeatures{};
+		// Set features based on book's example
+		requiredFeatures.multiDrawIndirect = supportedFeatures.multiDrawIndirect;
+		requiredFeatures.tessellationShader = VK_TRUE;
+		requiredFeatures.geometryShader = VK_TRUE;
+
+		VkDeviceCreateInfo logicalDeviceCreateInfo{};
+		logicalDeviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+		logicalDeviceCreateInfo.pNext = 0;
+		logicalDeviceCreateInfo.flags = 0;
+		// For this time, let this value one. (At this moment, I'm not sure I can control two or more queues)
+		logicalDeviceCreateInfo.queueCreateInfoCount = 1;
+		logicalDeviceCreateInfo.pQueueCreateInfos = &logicalDeviceQueueCreateInfo;
+		// We are going to cover layer and extension later in this chapter.
+		logicalDeviceCreateInfo.enabledLayerCount = layerCount;
+		logicalDeviceCreateInfo.ppEnabledLayerNames = layerNames.data();
+		logicalDeviceCreateInfo.enabledExtensionCount = 0;
+		logicalDeviceCreateInfo.ppEnabledExtensionNames = nullptr;
+		logicalDeviceCreateInfo.pEnabledFeatures = &requiredFeatures;
+
+		VkDevice logicalDevice{};
+
+		resultFile.close();
+	}
 }
 
 //void MyVulkan::CreateSimpleGraphicsPipeline()

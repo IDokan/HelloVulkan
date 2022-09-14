@@ -13,12 +13,16 @@ Creation Date: 06.12.2021
 #include "Vulkan/vulkan.h"
 #include "Graphics/Allocator/Allocator.h"
 
+class Window;
+
 class MyVulkan
 {
 public:
+	MyVulkan(const Window* window);
+
 	// Return if initialization is succeed or not
 	// Use VK_MAKE_VERSION(major, minor, patch) for second parameter 'appVersion'
-	void InitVulkan(const char* appName, uint32_t appVersion);
+	bool InitVulkan(const char* appName, uint32_t appVersion);
 	void CleanVulkan();
 
 	void CreateBuffers();
@@ -60,9 +64,38 @@ public:
 	void SetupSeparateVertexAttribute();
 
 private:
+	bool CreateInstance(const char* appName, uint32_t appVersion);
+	void DestroyInstance();
+	void CreatePhysicalDevice();
+	void ChooseQueueFamily();
+	bool CreateDevice();
+	void DestroyDevice();
+	void GetCommandQueue();
+	bool CreateSurfaceByGLFW();
+	void DestroySurface();
+	bool CreateCommandPoolAndAllocateCommandBuffer();
+	void DestroyCommandPool();
+
+	void RecordClientData();
+private:
+	const Window* windowHolder;
 	VkInstance instance{};
-	std::vector<VkPhysicalDevice> physicalDevices;
-	std::vector<VkDevice> logicalDevices;
-	allocator allocatorForm;
-	const VkAllocationCallbacks myAllocator = (VkAllocationCallbacks)allocatorForm;
+	VkPhysicalDevice physicalDevice;
+	uint32_t queueFamily;
+	VkDevice device;
+	VkQueue queue;
+	VkSurfaceKHR surface;
+	VkCommandPool commandPool;
+	VkCommandBuffer commandBuffer;
+
+
+	// GLFW provides required instance extensions.
+
+	std::vector<const char*> instanceLayers = {
+		"VK_LAYER_KHRONOS_validation"		// it assists developers in isolating incorrect usage, and in verifying that applications correctly use the API.
+	};
+
+	std::vector<const char*> reqDeviceExtensions = {
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+	};
 };

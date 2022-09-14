@@ -20,7 +20,7 @@ Creation Date: 06.08.2021
 #include "vulkan/vulkan_core.h"
 
 Engine::Engine()
-	: isUpdate(true), window(new Window())
+	: isUpdate(true), window(new Window()), VK(new MyVulkan(window))
 {
 }
 
@@ -32,11 +32,12 @@ Engine::~Engine()
 bool Engine::Init()
 {
 	// Vulkan Init
-	VK->InitVulkan("Sinil's Hello Vulkan", VK_MAKE_VERSION(1, 0, 0));
 
-	window->CreateWindow(800, 600, "Vulkan Window", nullptr, nullptr);
+	if (window->CreateWindow(800, 600, "Vulkan Window", nullptr, nullptr) == false)
+		return false;
 
-
+	if (VK->InitVulkan("Sinil's Hello Vulkan", VK_MAKE_VERSION(1, 0, 0)) == false)
+		return false;
 
 	return true;
 }

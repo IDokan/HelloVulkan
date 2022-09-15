@@ -9,10 +9,11 @@ Creation Date: 06.12.2021
 	Source file for my vulkan.
 ******************************************************************************/
 #define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include <GLFW/glfw3.h>	// for glfw functions such as glfwGetRequiredInstanceExtensions, glfwCreateWindowSurface, ....
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <algorithm> // for std::clamp
 #include "Graphics/MyVulkan.h"
 #include "Helper/VulkanHelper.h"
 #include "GLMath.h"
@@ -44,7 +45,10 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	{
 		return false;
 	}
-
+	if (CreateSwapchain() == false)
+	{
+		return false;
+	}
 
 
 	CreateBuffers();
@@ -56,6 +60,8 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 void MyVulkan::CleanVulkan()
 {
 	VulkanHelper::VkCheck(vkDeviceWaitIdle(device), "failed to make logical device idle");
+
+	DestroySwapchain();
 
 	DestroyCommandPool();
 
@@ -785,6 +791,146 @@ bool MyVulkan::CreateCommandPoolAndAllocateCommandBuffer()
 void MyVulkan::DestroyCommandPool()
 {
 	vkDestroyCommandPool(device, commandPool, nullptr);
+}
+
+bool MyVulkan::CreateSwapchain()
+{
+	VkSurfaceCapabilitiesKHR capabilities;
+	VulkanHelper::VkCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities), "Get physical device surface capabilities has failed!");
+
+	uint32_t formatCount;
+	VulkanHelper::VkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr), "Get number of surface formats has failed!");
+	std::vector<VkSurfaceFormatKHR> formats(formatCount);
+	VulkanHelper::VkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, formats.data()), "Get surface formats has failed!");
+
+	VkSurfaceFormatKHR selectedFormat = ChooseSwapSurfaceFormat(formats);
+	// Save swapchain image format because tutorial let me do.
+	swapchainImageFormat = selectedFormat.format;
+
+	uint32_t presentModeCount;
+	VulkanHelper::VkCheck(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr), "Get number of present mode failed!");
+	std::vector<VkPresentModeKHR> presentModes(presentModeCount);
+	VulkanHelper::VkCheck(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, presentModes.data()), "Get present mode has failed!");
+
+	VkPresentModeKHR selectedPresentMode = ChooseSwapPresentMode(presentModes);
+
+	VkExtent2D swapchainExtent = ChooseSwapExtent(capabilities);
+
+	// one more image than the minimum to get another image to render to even when internal operation image capability is full.
+	uint32_t imageCount = capabilities.minImageCount + 1;
+
+	// 0 indicates there are no maximum image count.
+	if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount)
+	{
+		imageCount = capabilities.maxImageCount;
+	}
+	
+	VkSwapchainCreateInfoKHR createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	// the surface where the swapchain should be tied to.
+	createInfo.surface = surface;
+	createInfo.minImageCount = imageCount;
+	createInfo.imageFormat = selectedFormat.format;
+	createInfo.imageColorSpace = selectedFormat.colorSpace;
+	createInfo.imageExtent = swapchainExtent;
+	// This specifies the amount of layers each image consists of, which should be always 1.
+	createInfo.imageArrayLayers = 1;
+	// This specifies what kind of operations we'll use the images in the swap chain for.
+	// We use COLOR_ATTACHMENT_BIT to render directly to it.
+	// If you want to render images to a separate image first to perform operations like post-processing. It might be TRANSFER_DST_BIT 
+	//		-> Draw somewhere else image, and send to here.
+	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	// Like a 90 degree CW rotation or horizontal flip
+	createInfo.preTransform = capabilities.currentTransform;
+	// It specifies if the alpha channel should be used for blending with other windows in the window system.
+	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	// Queue ownership to image.
+	createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	createInfo.queueFamilyIndexCount = 1;
+	createInfo.pQueueFamilyIndices = &queueFamily;
+	createInfo.presentMode = selectedPresentMode;
+	createInfo.oldSwapchain = VK_NULL_HANDLE;
+	// If it is true, it means that we don't care about the color of pixels that are obscured.
+	createInfo.clipped = VK_TRUE;
+
+	if (VulkanHelper::VkCheck(vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapchain), "Creating swapchain has failed!") != VK_SUCCESS)
+	{
+		return false;
+	}
+
+	GetSwapchainImages();
+
+	return true;
+}
+
+const VkSurfaceFormatKHR& MyVulkan::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) const
+{
+	for (const VkSurfaceFormatKHR& format : formats)
+	{
+		if (format.format == VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+		{
+			return format;
+		}
+	}
+
+	// Return the first format if there are no appropriate format, but it's fine.
+	return formats[0];
+}
+
+const VkPresentModeKHR MyVulkan::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& presentModes) const
+{
+	for (const VkPresentModeKHR presentMode : presentModes)
+	{
+		if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+		{
+			return presentMode;
+		}
+	}
+
+	// If mail box is not available, use FIFO.
+	return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+const VkExtent2D MyVulkan::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) const
+{
+	// Vulkan tells us to match the resolution of the window.
+	// However, some window managers allow us to do something different.
+	//		In that case, we'll pick the resolution that best matches the window within the minImageExtent & maxImageExtent bounds.
+	if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+	{
+		return capabilities.currentExtent;
+	}
+	else
+	{
+		int width;
+		int height;
+		glfwGetFramebufferSize(windowHolder->glfwWindow, &width, &height);
+
+		VkExtent2D actualExtent = {
+			static_cast<uint32_t>(width),
+			static_cast<uint32_t>(height)
+		};
+
+		actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+		actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+		return actualExtent;
+	}
+}
+
+void MyVulkan::DestroySwapchain()
+{
+	vkDestroySwapchainKHR(device, swapchain, nullptr);
+}
+
+void MyVulkan::GetSwapchainImages()
+{
+	uint32_t imageCount;
+	VulkanHelper::VkCheck(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr), "Getting number of swapchain images has failed!");
+	swapchainImages.resize(imageCount);
+	VulkanHelper::VkCheck(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapchainImages.data()), "Get swapchain images has failed!");
+
+	// @@@@@TODO: implement setting up the images as render targets
 }
 
 void MyVulkan::RecordClientData()

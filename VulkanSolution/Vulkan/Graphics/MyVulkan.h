@@ -75,6 +75,12 @@ private:
 	void DestroySurface();
 	bool CreateCommandPoolAndAllocateCommandBuffer();
 	void DestroyCommandPool();
+	bool CreateSwapchain();
+	const VkSurfaceFormatKHR& ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) const;
+	const VkPresentModeKHR ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& presentModes) const;
+	const VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) const;
+	void DestroySwapchain();
+	void GetSwapchainImages();
 
 	void RecordClientData();
 private:
@@ -87,6 +93,10 @@ private:
 	VkSurfaceKHR surface;
 	VkCommandPool commandPool;
 	VkCommandBuffer commandBuffer;
+	VkSwapchainKHR swapchain;
+	std::vector<VkImage> swapchainImages;
+	VkFormat swapchainImageFormat;
+	VkExtent2D swapchainExtent;
 
 
 	// GLFW provides required instance extensions.

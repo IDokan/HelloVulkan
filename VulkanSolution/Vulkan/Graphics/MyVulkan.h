@@ -81,6 +81,8 @@ private:
 	const VkExtent2D ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) const;
 	void DestroySwapchain();
 	void GetSwapchainImages();
+	void CreateImageViews();
+	void DestroyImageViews();
 
 	void RecordClientData();
 private:
@@ -97,6 +99,7 @@ private:
 	std::vector<VkImage> swapchainImages;
 	VkFormat swapchainImageFormat;
 	VkExtent2D swapchainExtent;
+	std::vector<VkImageView> swapchainImageViews;
 
 
 	// GLFW provides required instance extensions.

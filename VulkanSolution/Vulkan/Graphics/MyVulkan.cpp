@@ -61,6 +61,8 @@ void MyVulkan::CleanVulkan()
 {
 	VulkanHelper::VkCheck(vkDeviceWaitIdle(device), "failed to make logical device idle");
 
+	DestroyImageViews();
+
 	DestroySwapchain();
 
 	DestroyCommandPool();
@@ -929,8 +931,41 @@ void MyVulkan::GetSwapchainImages()
 	VulkanHelper::VkCheck(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr), "Getting number of swapchain images has failed!");
 	swapchainImages.resize(imageCount);
 	VulkanHelper::VkCheck(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapchainImages.data()), "Get swapchain images has failed!");
+}
 
-	// @@@@@TODO: implement setting up the images as render targets
+void MyVulkan::CreateImageViews()
+{
+	swapchainImageViews.resize(swapchainImages.size());
+
+	const size_t swapchainImageCount = swapchainImages.size();
+	for (size_t i = 0; i < swapchainImageCount; i++)
+	{
+		VkImageViewCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+		createInfo.image = swapchainImages[i];
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = swapchainImageFormat;
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+
+		VulkanHelper::VkCheck(vkCreateImageView(device, &createInfo, nullptr, &swapchainImageViews[i]), "Creating swapchain image view has failed!");
+
+	}
+}
+
+void MyVulkan::DestroyImageViews()
+{
+	for (VkImageView& imageView : swapchainImageViews)
+	{
+		vkDestroyImageView(device, imageView, nullptr);
+	}
 }
 
 void MyVulkan::RecordClientData()

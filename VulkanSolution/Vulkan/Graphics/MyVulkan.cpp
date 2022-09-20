@@ -54,6 +54,7 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	CreateBuffers();
 	CreateImages();
 
+
 	return true;
 }
 
@@ -966,6 +967,66 @@ void MyVulkan::DestroyImageViews()
 	{
 		vkDestroyImageView(device, imageView, nullptr);
 	}
+}
+
+void MyVulkan::CreateGraphicsPipeline()
+{
+	VkShaderModule vertModule = CreateShaderModule(readFile("spv/vertexShader.vert.spv"));
+	VkShaderModule fragModule = CreateShaderModule(readFile("spv/fragShader.frag.spv"));
+
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertShaderStageInfo.module = vertModule;
+	vertShaderStageInfo.pName = "main";
+	// pSpecializationInfo which is an optional allows you to specify values for shader constants.
+
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragShaderStageInfo.module = fragModule;
+	fragShaderStageInfo.pName = "main";
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+
+	vkDestroyShaderModule(device, vertModule, nullptr);
+	vkDestroyShaderModule(device, fragModule, nullptr);
+}
+
+std::vector<char> MyVulkan::readFile(const std::string& filename)
+{
+	// ate -> read from at the end.
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open())
+	{
+		VulkanHelper::VkCheck(VK_ERROR_UNKNOWN, std::string(std::string("Opening spv file has failed!\nFilename: ") + filename).c_str());
+	}
+
+	// tellg -> return position of the current character
+	//				-> Since we opened it with ate, current position would be size of the file.
+	size_t fileSize = (size_t)file.tellg();
+	std::vector<char> buffer(fileSize);
+	file.seekg(0);
+	file.read(buffer.data(), fileSize);
+
+	file.close();
+
+	return buffer;
+}
+
+VkShaderModule MyVulkan::CreateShaderModule(const std::vector<char>& code)
+{
+	VkShaderModuleCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.codeSize = code.size();
+	createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+	
+	VkShaderModule shaderModule;
+	VulkanHelper::VkCheck(vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule), "Creating shader module has failed!");
+
+	return shaderModule;
 }
 
 void MyVulkan::RecordClientData()

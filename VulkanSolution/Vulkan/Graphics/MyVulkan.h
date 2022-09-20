@@ -10,6 +10,7 @@ Creation Date: 06.12.2021
 ******************************************************************************/
 #pragma once
 
+#include <fstream> // for ifstream to read spv file
 #include "Vulkan/vulkan.h"
 #include "Graphics/Allocator/Allocator.h"
 
@@ -84,13 +85,17 @@ private:
 	void CreateImageViews();
 	void DestroyImageViews();
 
+	void CreateGraphicsPipeline();
+	static std::vector<char> readFile(const std::string& filename);
+	VkShaderModule CreateShaderModule(const std::vector<char>& code);
+
 	void RecordClientData();
 private:
 	const Window* windowHolder;
 	VkInstance instance{};
 	VkPhysicalDevice physicalDevice;
 	uint32_t queueFamily;
-	VkDevice device;
+	VkDevice device; 
 	VkQueue queue;
 	VkSurfaceKHR surface;
 	VkCommandPool commandPool;

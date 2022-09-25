@@ -19,12 +19,14 @@ class Window;
 class MyVulkan
 {
 public:
-	MyVulkan(const Window* window);
+	MyVulkan(Window* window);
 
 	// Return if initialization is succeed or not
 	// Use VK_MAKE_VERSION(major, minor, patch) for second parameter 'appVersion'
 	bool InitVulkan(const char* appName, uint32_t appVersion);
 	void CleanVulkan();
+
+	void DrawFrame();
 
 	void CreateBuffers();
 	void CreateImages();
@@ -74,7 +76,7 @@ private:
 	void GetCommandQueue();
 	bool CreateSurfaceByGLFW();
 	void DestroySurface();
-	bool CreateCommandPoolAndAllocateCommandBuffer();
+	bool CreateCommandPoolAndAllocateCommandBuffers();
 	void DestroyCommandPool();
 	bool CreateSwapchain();
 	const VkSurfaceFormatKHR& ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) const;
@@ -85,13 +87,32 @@ private:
 	void CreateImageViews();
 	void DestroyImageViews();
 
+	void CreateRenderPass();
+
 	void CreateGraphicsPipeline();
 	static std::vector<char> readFile(const std::string& filename);
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
+	void DestroyPipeline();
+
+	void CreateFramebuffers();
+	void DestroyFramebuffers();
+
+	void CreateSyncObjects();
+	void DestroySyncObjects();
+
+	// It has drawing triangle part, which does not make sense.
+	// I'm gonna change it.
+	void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 
 	void RecordClientData();
+	void UpdateCurrentFrameID();
+
+	void RecreateSwapchain();
+	void CleanupSwapchainResourcesForRecreation();
+	private:
+		const int MAX_FRAMES_IN_FLIGHT = 2;
 private:
-	const Window* windowHolder;
+	Window* windowHolder;
 	VkInstance instance{};
 	VkPhysicalDevice physicalDevice;
 	uint32_t queueFamily;
@@ -99,13 +120,24 @@ private:
 	VkQueue queue;
 	VkSurfaceKHR surface;
 	VkCommandPool commandPool;
-	VkCommandBuffer commandBuffer;
+	std::vector<VkCommandBuffer> commandBuffers;
 	VkSwapchainKHR swapchain;
 	std::vector<VkImage> swapchainImages;
 	VkFormat swapchainImageFormat;
 	VkExtent2D swapchainExtent;
 	std::vector<VkImageView> swapchainImageViews;
 
+	VkRenderPass renderPass;
+	VkPipelineLayout pipelineLayout;
+	VkPipeline pipeline;
+	std::vector<VkFramebuffer>  swapchainFramebuffers;
+
+	// synchronization objects
+	std::vector<VkSemaphore> imageAvailableSemaphores;
+	std::vector<VkSemaphore> renderFinishedSemaphores;
+	std::vector<VkFence> inFlightFences;
+	
+	uint32_t currentFrameID;
 
 	// GLFW provides required instance extensions.
 

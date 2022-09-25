@@ -58,6 +58,8 @@ void Engine::Update()
 
 	// Update window
 	window->PollWindowEvents();
+
+	VK->DrawFrame();
 }
 
 void Engine::Clean()

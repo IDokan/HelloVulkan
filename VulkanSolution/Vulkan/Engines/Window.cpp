@@ -24,6 +24,12 @@ namespace CallbackFuncs
 	{
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
 	}
+
+	void FramebufferResizeCallback(GLFWwindow* window, int width, int height)
+	{
+		auto app = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+		app->SetWindowFramebufferResized(true);
+	}
 }
 
 bool Window::CreateWindow(const int& width, const int& height, const char* title, GLFWmonitor* monitor, GLFWwindow* share)
@@ -43,7 +49,9 @@ bool Window::CreateWindow(const int& width, const int& height, const char* title
 
 	glfwWindow = glfwCreateWindow(width, height, title, monitor, share);
 
+	glfwSetWindowUserPointer(glfwWindow, this);
 	glfwSetWindowCloseCallback(glfwWindow, CallbackFuncs::WindowClose);
+	glfwSetFramebufferSizeCallback(glfwWindow, CallbackFuncs::FramebufferResizeCallback);
 
 	if (!glfwVulkanSupported())
 	{
@@ -88,4 +96,14 @@ void Window::ShutWindowDown()
 void Window::SetWindowTitle(const std::string& newTitle)
 {
 	glfwSetWindowTitle(glfwWindow, newTitle.c_str());
+}
+
+void Window::SetWindowFramebufferResized(bool resized)
+{
+	windowFramebufferResized = resized;
+}
+
+bool Window::GetWindowFramebuffer()
+{
+	return windowFramebufferResized;
 }

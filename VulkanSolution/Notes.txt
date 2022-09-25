@@ -17,3 +17,118 @@ About presentation modes:
 	VK_PRESENT_MODE_FIFO_KHR: The swap chain is a queue where the display takes an image from the front of the queue when the display is refreshed and the program inserts rendered images at the back of the queue. If the queue is full then the program has to wait. This is most similar to vertical sync as found in modern games. The moment that the display is refreshed is known as "vertical blank".	
 	VK_PRESENT_MODE_FIFO_RELAXED_KHR: This mode only differs from the previous one if the application is late and the queue was empty at the last vertical blank. Instead of waiting for the next vertical blank, the image is transferred right away when it finally arrives. This may result in visible tearing.
 	VK_PRESENT_MODE_MAILBOX_KHR: This is another variation of the second mode. Instead of blocking the application when the queue is full, the images that are already queued are simply replaced with the newer ones. This mode can be used to render frames as fast as possible while still avoiding tearing, resulting in fewer latency issues than standard vertical sync. This is commonly known as "triple buffering", although the existence of three buffers alone does not necessarily mean that the framerate is unlocked.
+
+VkSwapchainCreateInfoKHR:
+	createInfo.imageUsage:
+		This specifies what kind of operations we'll use the images in the swap chain for.
+		We use COLOR_ATTACHMENT_BIT to render directly to it.
+		If you want to render images to a separate image first to perform operations like post-processing.
+		It might be TRANSFER_DST_BIT
+
+	There are a lot of flags:
+		VK_IMAGE_USAGE_SAMPLED_BIT
+		VK_IMAGE_USAGE_STORAGE_BIT
+		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT
+		VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT
+		VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT
+		VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT
+		VK_IMAGE_USAGE_FRAGMENT_SHADING_RATE_ATTACHMENT_BIT_KHR
+		VK_IMAGE_USAGE_FRAGMENT_DENSITY_MAP_BIT_EXT
+		VK_IMAGE_USAGE_VIDEO_DECODE_DST_BIT_KHR
+		VK_IMAGE_USAGE_VIDEO_DECODE_DPB_BIT_KHR
+		VK_IMAGE_USAGE_VIDEO_ENCODE_SRC_BIT_KHR
+		VK_IMAGE_USAGE_VIDEO_ENCODE_DPB_BIT_KHR
+		VK_IMAGE_USAGE_SAMPLE_WEIGHT_BIT_QCOM
+		VK_IMAGE_USAGE_SAMPLE_BLOCK_MATCH_BIT_QCOM
+
+Creating Graphics Pipeline:
+	ShaderStages
+	DynamicState
+	VertexInputState
+	InputAssemblyState
+	ViewportState
+	RasterizationState
+	MultisampleState
+	DepthStencilState
+	ColorBlending(two methods):
+		ColorBlendAttachmentState
+		ColorBlendState
+	PipelineLayout
+
+RenderPass:
+	VkAttachment loadOp:
+		VK_ATTACHMENT_LOAD_OP_LOAD: Preverse the existing contents of the attachment
+		VK_ATTACHMENT_LOAD_OP_CLEAR: Clear the values to a constant at the start
+		VK_ATTACHMENT_LOAD_OP_DONT_CARE: Existing contents are undefined; we don't care about them
+	VkAttachment storeOp:
+		VK_ATTACHMENT_STORE_OP_STORE: Rendered contents will be stored in memory and can be read later
+		VK_ATTACHMENT_STORE_OP_DONT_CARE: Contents of the framebuffer will be undefined after the rendering operation
+
+VkAttachmentReference:
+	ref.layout:
+		The layout specifies which layout we would like the attachment to have during a subpass that uses this reference.
+		Vulkan will automatically transition the attachment to this layout when the subpass is started.
+
+Pipeline recaps:
+	Shader stages:
+		The shader modules that define the functionality of the programmable stages of the graphics pipeline
+	Fixed-function state:
+		All of the structures that define the fixed-function stages of the pipeline, like input assembly, rasterizer, viewport and color blending
+	Pipeline layout: 
+		The uniform and push values referenced by the shader that can be updated at draw time
+	Render pass:
+		The attachments referneced by the pipeline stages and their usage
+
+
+vkCmdBeginRenderPass flag:
+	VK_SUBPASS_CONTENTS_INLINE: The render pass commands will be embedded in the primary command buffer itself and no secondary command buffers will be executed.
+	Vk_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS: The render pass commands will be executed from secondary command buffers.
+
+Outline of a frame:
+	At a high level, rendering a frame in Vulkan consists of a common set of steps:
+		Wait for the previous frame to finish
+		Acquire an image from the swap chain
+		Record a command buffer which draws the scene onto that image
+		Submit the recorded command buffer
+		Present the swap chain image
+
+Synchronization:
+	Important steps to draw something to a screen such as...
+		Acquire an image from the swap chain
+		Execute commands that draws onto the acquired image
+		Present that image to the screen for presentaion, returning it to the swapchain
+	Need synchronization with GPU.
+	Methods to synchronize it with GPU:
+		Semaphores (Block GPU side):
+			It is used to add order between queue operations.
+			There are binary semaphores and timeline semaphores.
+			How semephores work:
+				A semaphore is either unsignaled or signaled. 
+				It begins life as unsignaled. 
+				The way we use a semaphore to order queue operations is by providing the same semaphore as a 'signal' semaphore in one queue operation and as a 'wait' semaphore in another queue operation.
+
+				For example,
+					Lets say we have semaphore S and queue operations A and B that we want to execute in order.
+					What we tell Vulkan is that operation A will 'signal' semaphore S when it finishes executing, and operation B will 'wait' on semaphore S before it begins executing.
+					When operation A finishes, semaphore S will be signaled, while operation B wont start until S is signaled.
+					After operation B begins executing, semaphore S is automatically reset back to being unsignaled, allowing it to be used again.
+
+
+		Fences (Block CPU side):
+			Usage: If the CPU needs to know when the GPU has finished something, we use a fence.
+			How fences work:
+				Similar to semaphores, fences are either in a signaled or unsignaled state.
+				Whenever we submit work to execute, we can attach a fence to that work. 
+				When the work is finished, the fence will be signaled.
+				Then we can make the host wait for the fence to be signaled, guaranteeing that the work has finished before the host continues.
+
+		What to choose?
+			Generally, stop CPU is not preferred.
+			Using semaphores for swapchain operations
+			Using fences for waiting on the previous frame to finish
+
+
+
+What is Subpass dependency????
+
+

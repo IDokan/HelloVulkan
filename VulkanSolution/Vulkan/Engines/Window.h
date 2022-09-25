@@ -20,7 +20,7 @@ public:
 	friend MyVulkan;
 public:
 	Window()
-		: glfwWindow(nullptr)
+		: glfwWindow(nullptr), windowFramebufferResized(false)
 	{}
 
 	bool CreateWindow(const int& width, const int& height, const char* title, GLFWmonitor* monitor, GLFWwindow* share);
@@ -32,6 +32,11 @@ public:
 
 	void SetWindowTitle(const std::string& newTitle);
 
+	void SetWindowFramebufferResized(bool resized);
+	bool GetWindowFramebuffer();
+
 private:
 	GLFWwindow* glfwWindow;
+
+	bool windowFramebufferResized;
 };

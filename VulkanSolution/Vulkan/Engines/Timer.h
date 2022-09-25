@@ -54,7 +54,9 @@ public:
 		if (fpsEllapsedTime >= 1.f)
 		{
 			fpsEllapsedTime = 0.f;
+			frame = fpsFrame;
 			fpsFrame = 0;
+
 		}
 
 		return frame;

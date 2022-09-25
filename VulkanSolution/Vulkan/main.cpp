@@ -8,9 +8,6 @@ Author
 Creation Date: 06.08.2021
 	main function.
 ******************************************************************************/
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
-
 #include "GLMath.h"
 
 #include <iostream>
@@ -20,20 +17,20 @@ Creation Date: 06.08.2021
 
 int main()
 {
-	Engine engine;
+	Engine* engine = new Engine();
 
-	if (engine.Init() == false)
+	if (engine->Init() == false)
 	{
 		std::cout << "Initialization Failed!" << std::endl;
 		return 0;
 	}
 
-	while (engine.IsUpdate())
+	while (engine->IsUpdate())
 	{
-		engine.Update();
+		engine->Update();
 	}
 
-	engine.Clean();
+	engine->Clean();
 
 	return 0;
 }

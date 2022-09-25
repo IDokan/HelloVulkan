@@ -8,6 +8,7 @@ Author
 Creation Date: 06.13.2021
 	header file for vulkan allocator.
 ******************************************************************************/
+#pragma once
 
 #include <Vulkan/vulkan.h>
 

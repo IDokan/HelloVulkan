@@ -8,268 +8,154 @@ Author
 Creation Date: 06.12.2021
 	Source file for my vulkan.
 ******************************************************************************/
+#define GLFW_INCLUDE_VULKAN
+#include <GLFW/glfw3.h>	// for glfw functions such as glfwGetRequiredInstanceExtensions, glfwCreateWindowSurface, ....
 #include <iostream>
 #include <fstream>
 #include <vector>
+#include <algorithm> // for std::clamp
 #include "Graphics/MyVulkan.h"
-#include "Vulkan/vulkan.h"
 #include "Helper/VulkanHelper.h"
-#include "Graphics/Allocator/Allocator.h"
 #include "GLMath.h"
+#include "Engines/Window.h"
 
-namespace MyVulkan
+MyVulkan::MyVulkan(Window* window)
+	: windowHolder(window), currentFrameID(0)
 {
-	VkInstance instance{};
-	std::vector<VkPhysicalDevice> physicalDevices;
-	std::vector<VkDevice> logicalDevices;
-	allocator allocatorForm;
-	const VkAllocationCallbacks myAllocator = (VkAllocationCallbacks)allocatorForm;
 
-	double linearTosRGB(double cl);
-	double sRGBToLinear(double cs);
-
-	// When required or preferredFlags are not,
-	uint32_t ChooseHeapFromFlags(
-		const VkMemoryRequirements& memoryRequirements);
-	// returns ~0u if matched memory does not exist.
-	uint32_t ChooseHeapFromFlags(
-		const VkMemoryRequirements& memoryRequirements,
-		VkMemoryPropertyFlags requiredFlags,
-		VkMemoryPropertyFlags preferredFlags);
-
-	void FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize length, const float value);
-
-	/*
-	void CreateSwapChain();
-
-	void TransitionImageLayout();
-
-	void SavingPipelineCacheDataToFile(VkDevice device, VkPipelineCache cache, const char* fileName);
-
-	void CreateDescriptorSetLayout();
-
-	void CreatePipelineLayout();
-	*/
-
-	void CreateSimpleRenderpass();
-
-	//void CreateSimpleGraphicsPipeline();
-
-	void DescribeVertexInputData();
-
-	void SetupSeparateVertexAttribute();
 }
 
-void MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
+bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
-	std::ofstream resultFile;
-
-	//A generic application info structure
-	VkApplicationInfo applicationInfo{};
-	applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-	applicationInfo.pNext = nullptr;
-	applicationInfo.pApplicationName = appName;
-	applicationInfo.applicationVersion = appVersion;
-	applicationInfo.pEngineName = "Sinil Engine";
-	applicationInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-	applicationInfo.apiVersion = VK_API_VERSION_1_0;
-	// application.Info.apiVersion = ; it contains the version of Vulkan API that my application is expecting to run on. This should be set to the absolute minimum version
-
-
-	// Create an instance
-	VkInstanceCreateInfo instanceCreateInfo{};
-	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	instanceCreateInfo.pNext = nullptr;
-	instanceCreateInfo.flags = 0;
-	instanceCreateInfo.pApplicationInfo = &applicationInfo;
-	VulkanHelper::VkCheck(vkCreateInstance(&instanceCreateInfo, &myAllocator, &instance), "Could not create instance");
-
-
-	void* getHowMany = nullptr;
-
-	// Get Physical devices
-	uint32_t numOfPhysicalDevices = 0;
-	std::vector<VkPhysicalDevice> arrayOfPhysicalDevices;
-	// second parameter of VK physical devices function works both input & output.
-	// As an output, the parameter get how many physical devices I can use.
-	// As an input, The maximum number of devices I can control in this application.
-	// Once we want to know how many devices available in the system, give final parameter nullptr.(second parameter still should be valid pointer)
-	// Then call the same function again with the final parameter set to an array that has been appropriately sized for the number what we have known.
-	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, reinterpret_cast<VkPhysicalDevice*>(getHowMany)), "The first Procedure with physical devices is failed! (Originally, it might be failed)");
-	arrayOfPhysicalDevices.resize(numOfPhysicalDevices);
-	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, arrayOfPhysicalDevices.data()), "The second Procedure with physical devices is failed! (Logically, should not be failed)");
-
-	// Create logical devices per physical device
-	for (const VkPhysicalDevice& physicalDevice : arrayOfPhysicalDevices)
+	if (CreateInstance(appName, appVersion) == false)
 	{
-		physicalDevices.push_back(physicalDevice);
-
-		/*!!!!!!!! Skip memory stuff at this moment*/
-		VkPhysicalDeviceProperties physicalProperty{};
-		vkGetPhysicalDeviceProperties(physicalDevice, &physicalProperty);
-#ifdef PRINT_RESULT
-		/// PRINT
-		resultFile.open("Result of " + std::string(physicalProperty.deviceName) + ".txt");																   /// PRINT
-		resultFile << "apiVersion: " << physicalProperty.apiVersion << std::endl;																   /// PRINT
-		resultFile << "driverVersion: " << physicalProperty.driverVersion << std::endl;															 /// PRINT
-		resultFile << "vendorID: " << physicalProperty.vendorID << std::endl;																		/// PRINT
-		resultFile << "deviceID: " << physicalProperty.deviceID << std::endl;																		 /// PRINT
-		resultFile << "deviceType: " << physicalProperty.deviceType << std::endl;																 /// PRINT
-		resultFile << "deviceName: " << physicalProperty.deviceName << std::endl << std::endl << std::endl;					   /// PRINT
-#endif
-
-		//VkPhysicalDeviceMemoryProperties memoryProperties;
-		//// Get the memory properties of the physical device.
-		//vkGetPhysicalDeviceMemoryProperties(physicalDevice, &memoryProperties);
-
-		//// Do something about memory
-		//for  (int m= 0; m < memoryProperties.memoryTypeCount; m++)
-		//{
-		//	for (int h = 0; h < memoryProperties.memoryHeapCount; h++)
-		//	{
-		//		// memoryProperties.memoryHeaps[]				....................
-		//	}
-		//}
-		//memoryProperties.memoryTypes[0].propertyFlags;
-		//memoryProperties.memoryHeaps[memoryProperties.memoryTypes[0].heapIndex];
-
-
-
-		// First determine the number of queue families supported by the physical device.
-		uint32_t numOfQueueFamilyProperty = 0;
-		std::vector<VkQueueFamilyProperties> familyProperties;
-		// Bellow code works similar with vkEnumeratePhysicalDevice()
-		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &numOfQueueFamilyProperty, reinterpret_cast<VkQueueFamilyProperties*>(getHowMany));
-		// Allocate enough space for the queue property structures.
-		familyProperties.resize(numOfQueueFamilyProperty);
-		// Now query the actual properties of the queue families.
-		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &numOfQueueFamilyProperty, familyProperties.data());
-
-
-#ifdef PRINT_RESULT
-		resultFile << "Queue Family Count: " << numOfQueueFamilyProperty << std::endl;																							 /// PRINT
-		resultFile << "queueFlags: " << familyProperties.front().queueFlags << std::endl;																							   /// PRINT
-		resultFile << "queueCount: " << familyProperties.front().queueCount << std::endl;																							  /// PRINT
-		resultFile << "timestampValidBits: " << familyProperties.front().timestampValidBits << std::endl;																		/// PRINT
-		resultFile << "minImageTransferGranularity.width: " << familyProperties.front().minImageTransferGranularity.width << std::endl;					   /// PRINT
-		resultFile << "minImageTransferGranularity.height: " << familyProperties.front().minImageTransferGranularity.height << std::endl;				  /// PRINT
-		resultFile << "minImageTransferGranularity.depth: " << familyProperties.front().minImageTransferGranularity.depth << std::endl << std::endl << std::endl;					  /// PRINT
-#endif
-
-		// Create Logical Device
-		VkDeviceQueueCreateInfo logicalDeviceQueueCreateInfo{};
-		logicalDeviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-		logicalDeviceQueueCreateInfo.pNext = nullptr;
-		logicalDeviceQueueCreateInfo.flags = 0;
-		logicalDeviceQueueCreateInfo.queueFamilyIndex = 0;		// ????????? I do not know what this field is for....
-		logicalDeviceQueueCreateInfo.queueCount = 1;
-		logicalDeviceQueueCreateInfo.pQueuePriorities = nullptr;
-
-		// Get Layers
-		uint32_t layerCount = 0;
-		std::vector<VkLayerProperties> layers;
-		std::vector<const char*> layerNames;
-		// Query the instance layers
-		VulkanHelper::VkCheck(vkEnumerateInstanceLayerProperties(&layerCount, reinterpret_cast<VkLayerProperties*>(getHowMany)), "First Layer : Layer enumeration is failed! when pointer to array is nullptr");
-
-#ifdef PRINT_RESULT
-		resultFile << "layerCount: " << layerCount << std::endl << std::endl;		/// PRINT
-#endif
-		if (layerCount != 0)
-		{
-			layers.resize(layerCount);
-			VulkanHelper::VkCheck(vkEnumerateInstanceLayerProperties(&layerCount, layers.data()), "Second Layer : Layer enumeration is failed! when pointer to array is not nullptr");
-			for (const VkLayerProperties& layer : layers)
-			{
-
-#ifdef PRINT_RESULT
-				resultFile << "layerName: " << layer.layerName << std::endl;		/// PRINT
-				resultFile << "specVersion: " << layer.specVersion << std::endl;		/// PRINT
-				resultFile << "implementationVersion: " << layer.implementationVersion << std::endl;		/// PRINT
-				resultFile << "description: " << layer.description << std::endl << std::endl;		/// PRINT
-#endif
-				layerNames.push_back(layer.layerName);
-			}
-		}
-		else
-		{
-			std::cout << "WARNING:: available layer is zero!" << std::endl;
-		}
-
-		resultFile << std::endl << std::endl;
-
-		// Get Extensions
-		/*!!!!!!!!!!!!!!!!!!!!!!!!!!!! However, since extension need cost, for now do not use extension. Let us prefer vanilla mode*/
-		uint32_t instanceExtensionCount = 0;
-		std::vector<VkExtensionProperties> instanceExtensions;
-		std::vector<const char*> extensionNames;
-		VulkanHelper::VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, reinterpret_cast<VkExtensionProperties*>(getHowMany)), "Error during get instance extesions!");
-
-#ifdef PRINT_RESULT
-		resultFile << "extensionCount: " << instanceExtensionCount << std::endl << std::endl;		/// PRINT
-#endif
-		if (instanceExtensionCount > 0)
-		{
-			instanceExtensions.resize(instanceExtensionCount);
-			VulkanHelper::VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, instanceExtensions.data()), "Error during get instance extesions!");
-			for (VkExtensionProperties extension : instanceExtensions)
-			{
-#ifdef PRINT_RESULT
-				resultFile << "extensionName: " << extension.extensionName << std::endl;		/// PRINT
-				resultFile << "specVersion: " << extension.specVersion << std::endl << std::endl;		/// PRINT
-#endif
-				extensionNames.push_back(extension.extensionName);
-			}
-		}
-		else
-		{
-			std::cout << "Supported extensions are zero" << std::endl;
-		}
-
-		VkPhysicalDeviceFeatures supportedFeatures{};
-		vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
-		VkPhysicalDeviceFeatures requiredFeatures{};
-		// Set features based on book's example
-		requiredFeatures.multiDrawIndirect = supportedFeatures.multiDrawIndirect;
-		requiredFeatures.tessellationShader = VK_TRUE;
-		requiredFeatures.geometryShader = VK_TRUE;
-
-		VkDeviceCreateInfo logicalDeviceCreateInfo{};
-		logicalDeviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-		logicalDeviceCreateInfo.pNext = 0;
-		logicalDeviceCreateInfo.flags = 0;
-		// For this time, let this value one. (At this moment, I'm not sure I can control two or more queues)
-		logicalDeviceCreateInfo.queueCreateInfoCount = 1;
-		logicalDeviceCreateInfo.pQueueCreateInfos = &logicalDeviceQueueCreateInfo;
-		// We are going to cover layer and extension later in this chapter.
-		logicalDeviceCreateInfo.enabledLayerCount = layerCount;
-		logicalDeviceCreateInfo.ppEnabledLayerNames = layerNames.data();
-		logicalDeviceCreateInfo.enabledExtensionCount = 0;
-		logicalDeviceCreateInfo.ppEnabledExtensionNames = nullptr;
-		logicalDeviceCreateInfo.pEnabledFeatures = &requiredFeatures;
-
-		VkDevice logicalDevice{};
-		VulkanHelper::VkCheck(vkCreateDevice(physicalDevice, &logicalDeviceCreateInfo, &myAllocator, &logicalDevice), "Vulkan logical device creation is failed!");
-		logicalDevices.push_back(logicalDevice);
-
-#ifdef PRINT_RESULT
-		resultFile.close();
-#endif
+		return false;
 	}
+	CreatePhysicalDevice();
+	ChooseQueueFamily();
+	if (CreateDevice() == false)
+	{
+		return false;
+	}
+	if (CreateSurfaceByGLFW() == false)
+	{
+		return false;
+	}
+	if (CreateCommandPoolAndAllocateCommandBuffers() == false)
+	{
+		return false;
+	}
+	if (CreateSwapchain() == false)
+	{
+		return false;
+	}
+	CreateImageViews();
+	CreateRenderPass();
+	CreateGraphicsPipeline();
+
+	CreateFramebuffers();
+
+	CreateSyncObjects();
+
 
 	CreateBuffers();
 	CreateImages();
+
+
+	return true;
 }
 
 void MyVulkan::CleanVulkan()
 {
-	for (VkDevice logicalDevice : logicalDevices)
+	VulkanHelper::VkCheck(vkDeviceWaitIdle(device), "failed to make logical device idle");
+
+	DestroySyncObjects();
+
+	DestroyFramebuffers();
+
+	DestroyPipeline();
+
+	DestroyImageViews();
+
+	DestroySwapchain();
+
+	DestroyCommandPool();
+
+	// @@ TODO: Should DestroyDebugUtilsMessengerEXT(instance, debugMessenger, nullptr)?
+
+	DestroySurface();
+
+	DestroyDevice();
+
+	DestroyInstance();
+}
+
+void MyVulkan::DrawFrame()
+{
+	vkWaitForFences(device, 1, &inFlightFences[currentFrameID], VK_TRUE, UINT64_MAX);
+
+	uint32_t imageIndex;
+	VkResult resultGetNextImage = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrameID], VK_NULL_HANDLE, &imageIndex);
+	if (windowHolder->windowFramebufferResized || resultGetNextImage == VK_ERROR_OUT_OF_DATE_KHR)
 	{
-		VulkanHelper::VkCheck(vkDeviceWaitIdle(logicalDevice), "failed to make logical device idle");
-		vkDestroyDevice(logicalDevice, &myAllocator);
+		windowHolder->SetWindowFramebufferResized(false);
+		RecreateSwapchain();
+		return;
+	}
+	else if (resultGetNextImage != VK_SUCCESS && resultGetNextImage != VK_SUBOPTIMAL_KHR)
+	{
+		std::cout << "Acquiring next image has failed!" << std::endl;
+		abort();
+	}
+	// Prevent deadlock, delay ResetFences
+	vkResetFences(device, 1, &inFlightFences[currentFrameID]);
+
+	vkResetCommandBuffer(commandBuffers[currentFrameID], 0);
+	RecordCommandBuffer(commandBuffers[currentFrameID], imageIndex);
+
+	VkSubmitInfo submitInfo{};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrameID] };
+	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
+	submitInfo.waitSemaphoreCount = 1;
+	submitInfo.pWaitSemaphores = waitSemaphores;
+	submitInfo.pWaitDstStageMask = waitStages;
+
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffers[currentFrameID];
+
+	VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrameID] };
+	submitInfo.signalSemaphoreCount = 1;
+	submitInfo.pSignalSemaphores = signalSemaphores;
+
+	VulkanHelper::VkCheck(vkQueueSubmit(queue, 1, &submitInfo, inFlightFences[currentFrameID]), "Submitting queue has failed!");
+
+	VkPresentInfoKHR presentInfo{};
+	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+	presentInfo.waitSemaphoreCount = 1;
+	presentInfo.pWaitSemaphores = signalSemaphores;
+
+	VkSwapchainKHR swapchains[] = { swapchain };
+	presentInfo.swapchainCount = 1;
+	presentInfo.pSwapchains = swapchains;
+	presentInfo.pImageIndices = &imageIndex;
+	// It allows you to specify an array of VkResult values to check for every individual swap chain if presentation was successful.
+	// It's not necessary if you're only using a single swap chain, because you can simply use the return value of the present function.
+	presentInfo.pResults = nullptr;
+
+	VkResult resultQueuePresent = vkQueuePresentKHR(queue, &presentInfo);
+	if (windowHolder->windowFramebufferResized || resultQueuePresent == VK_ERROR_OUT_OF_DATE_KHR || resultQueuePresent == VK_SUBOPTIMAL_KHR)
+	{
+		windowHolder->SetWindowFramebufferResized(false);
+		RecreateSwapchain();
+	}
+	else if (resultQueuePresent != VK_SUCCESS)
+	{
+		std::cout << "Acquiring next image has failed!" << std::endl;
+		abort();
 	}
 
-	vkDestroyInstance(instance, &myAllocator);
+	UpdateCurrentFrameID();
 }
 
 void MyVulkan::CreateBuffers()
@@ -287,9 +173,9 @@ void MyVulkan::CreateBuffers()
 	};
 
 	VkBuffer buffer = VK_NULL_HANDLE;
-	VulkanHelper::VkCheck(vkCreateBuffer(logicalDevices.front(), &bufferCreateInfo, &myAllocator, &buffer), "Creating buffer is failed!");
+	VulkanHelper::VkCheck(vkCreateBuffer(device, &bufferCreateInfo, nullptr, &buffer), "Creating buffer is failed!");
 
-	vkDestroyBuffer(logicalDevices.front(), buffer, &myAllocator);
+	vkDestroyBuffer(device, buffer, nullptr);
 }
 
 void MyVulkan::CreateImages()
@@ -319,9 +205,9 @@ void MyVulkan::CreateImages()
 
 	VkImage image = VK_NULL_HANDLE;
 
-	VulkanHelper::VkCheck(vkCreateImage(logicalDevices.front(), &imageCreateInfo, &myAllocator, &image), "Creating Image is failed");
+	VulkanHelper::VkCheck(vkCreateImage(device, &imageCreateInfo, nullptr, &image), "Creating Image is failed");
 
-	vkDestroyImage(logicalDevices.front(), image, &myAllocator);
+	vkDestroyImage(device, image, nullptr);
 }
 
 void MyVulkan::CreateCubeImages()
@@ -345,14 +231,14 @@ void MyVulkan::CreateCubeImages()
 
 	VkImage cube = VK_NULL_HANDLE;
 
-	VulkanHelper::VkCheck(vkCreateImage(logicalDevices.front(), &createInfo, &myAllocator, &cube), "Image creation is failed!");
+	VulkanHelper::VkCheck(vkCreateImage(device, &createInfo, nullptr, &cube), "Image creation is failed!");
 
 	VkImageViewCreateInfo viewCreateInfo;
 	viewCreateInfo;
 
 	//vkCreateImageView(logicalDevices.front(), )
 
-	vkDestroyImage(logicalDevices.front(), cube, &myAllocator);
+	vkDestroyImage(device, cube, nullptr);
 }
 
 
@@ -415,7 +301,7 @@ uint32_t MyVulkan::ChooseHeapFromFlags(const VkMemoryRequirements& memoryRequire
 uint32_t MyVulkan::ChooseHeapFromFlags(const VkMemoryRequirements& memoryRequirements, VkMemoryPropertyFlags requiredFlags, VkMemoryPropertyFlags preferredFlags)
 {
 	VkPhysicalDeviceMemoryProperties deviceMemoryProperties;
-	vkGetPhysicalDeviceMemoryProperties(physicalDevices.front(), &deviceMemoryProperties);
+	vkGetPhysicalDeviceMemoryProperties(physicalDevice, &deviceMemoryProperties);
 
 	for (uint32_t memoryType = 0; memoryType < VK_MAX_MEMORY_TYPES; memoryType++)
 	{
@@ -760,10 +646,959 @@ void MyVulkan::CreateSimpleRenderpass()
 
 	// The only code that actually executes is this single call, which creates the renderpass object.
 	vkCreateRenderPass(
-		logicalDevices.front(),
+		device,
 		&renderpassCreateInfo,
-		&myAllocator,
+		nullptr,
 		&renderPass);
+}
+
+bool MyVulkan::CreateInstance(const char* appName, uint32_t appVersion)
+{
+	//A generic application info structure
+	VkApplicationInfo applicationInfo{};
+	applicationInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
+	applicationInfo.pNext = nullptr;
+	applicationInfo.pApplicationName = appName;
+	applicationInfo.applicationVersion = appVersion;
+	applicationInfo.pEngineName = "Sinil Engine";
+	applicationInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
+	applicationInfo.apiVersion = VK_API_VERSION_1_0;
+
+	uint32_t glfwExtensionCount;
+	const char** extensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+
+	// Create an instance
+	VkInstanceCreateInfo instanceCreateInfo{};
+	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+	instanceCreateInfo.pNext = nullptr;
+	instanceCreateInfo.flags = 0;
+	instanceCreateInfo.pApplicationInfo = &applicationInfo;
+	instanceCreateInfo.enabledExtensionCount = glfwExtensionCount;
+	instanceCreateInfo.ppEnabledExtensionNames = extensions;
+	instanceCreateInfo.enabledLayerCount = instanceLayers.size();
+	instanceCreateInfo.ppEnabledLayerNames = instanceLayers.data();
+	if (VulkanHelper::VkCheck(vkCreateInstance(&instanceCreateInfo, nullptr, &instance), "Could not create instance") != VK_SUCCESS)
+	{
+		DestroyInstance();
+		return false;
+	}
+
+	return true;
+}
+
+void MyVulkan::DestroyInstance()
+{
+	vkDestroyInstance(instance, nullptr);
+}
+
+void MyVulkan::CreatePhysicalDevice()
+{
+	uint32_t physicalDevicesCount;
+	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &physicalDevicesCount, nullptr), "Get number of physical devices has failed.");
+	std::vector<VkPhysicalDevice> physicalDeviceCandidates(physicalDevicesCount);
+	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &physicalDevicesCount, physicalDeviceCandidates.data()), "Get physical devices information has failed.");
+
+	for (const VkPhysicalDevice& physicalDeviceCandidate : physicalDeviceCandidates)
+	{
+		VkPhysicalDeviceProperties deviceProperties;
+		vkGetPhysicalDeviceProperties(physicalDeviceCandidate, &deviceProperties);
+		
+		if (deviceProperties.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
+		{
+			continue;
+		}
+
+		uint32_t extensionCount = 0;
+		VulkanHelper::VkCheck(vkEnumerateDeviceExtensionProperties(physicalDeviceCandidate, nullptr, &extensionCount, nullptr), "Get number of device extension properties has failed.");
+		std::vector<VkExtensionProperties> extensions(extensionCount);
+		VulkanHelper::VkCheck(vkEnumerateDeviceExtensionProperties(physicalDeviceCandidate, nullptr, &extensionCount, extensions.data()), "Get device extension properties has failed.");
+
+		unsigned int compatibleExtensions = 0;
+		for (const char* element : reqDeviceExtensions)
+		{
+			for (size_t i = 0; i < extensionCount; i++)
+			{
+				if (strcmp(element, extensions[i].extensionName) == 0)
+				{
+					compatibleExtensions++;
+					break;
+				}
+			}
+
+			if (compatibleExtensions == reqDeviceExtensions.size())
+			{
+				physicalDevice = physicalDeviceCandidate;
+				return;
+			}
+		}
+	}
+
+}
+
+void MyVulkan::ChooseQueueFamily()
+{
+	// VK_QUEUE_GRAPHICS_BIT - queues in this family support graphics operations such as drawing points, line,s and triangles.
+	// VK_QUEUE_COMPUTE_BIT - queues in this family support compute operations such as dispatching compute shaders.
+	// VK_QUEUE_TRANSFER_BIT - queues in this family support transfer operations such as copying buffer and image contents.
+	// VK_QUEUE_SPARSE_BINDING_BIT - queues in this family support memory binding operations used to update sparse resources.
+	VkQueueFlags requiredQueueFlags = VK_QUEUE_GRAPHICS_BIT;
+
+	uint32_t queueFamilyCount;
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, nullptr);
+	std::vector<VkQueueFamilyProperties> queueFamilyCandidates(queueFamilyCount);
+	vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &queueFamilyCount, queueFamilyCandidates.data());
+
+	// Search the list for the first queue family that has the required flags.
+	for (uint32_t i = 0; i < queueFamilyCount; i++)
+	{
+		// Use bit manipulation to check queue flags contain every flags we want
+		if ((queueFamilyCandidates[i].queueFlags & requiredQueueFlags) == requiredQueueFlags)
+		{
+			queueFamily = i;
+		}
+	}
+}
+
+bool MyVulkan::CreateDevice()
+{
+	VkPhysicalDeviceVulkan13Features features13{};
+	features13.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_3_FEATURES;
+	features13.pNext = nullptr;
+
+	VkPhysicalDeviceVulkan12Features features12{};
+	features12.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_2_FEATURES;
+	features12.pNext = &features13;
+
+	VkPhysicalDeviceVulkan11Features features11{};
+	features11.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_VULKAN_1_1_FEATURES;
+	features11.pNext = &features12;
+
+
+	VkPhysicalDeviceFeatures2 features2{};
+	features2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2;
+	features2.pNext = &features11;
+
+	vkGetPhysicalDeviceFeatures2(physicalDevice, &features2);
+
+	features2.features.robustBufferAccess = VK_FALSE;
+
+	// priority is between [0.f, 1.f], 1.f has higher priority while 0 has lower priority.
+	float priority = 1.0f;
+	VkDeviceQueueCreateInfo queueCreateInfo{};
+	queueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+	queueCreateInfo.queueCount = 1;
+	queueCreateInfo.queueFamilyIndex = queueFamily;
+	queueCreateInfo.pQueuePriorities = &priority;
+
+
+	VkDeviceCreateInfo deviceCreateInfo{};
+	deviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+	// Temporaily disable it.
+	// deviceCreateInfo.pNext = &features2;
+
+	deviceCreateInfo.queueCreateInfoCount = 1;
+	deviceCreateInfo.pQueueCreateInfos = &queueCreateInfo;
+
+	deviceCreateInfo.enabledExtensionCount = reqDeviceExtensions.size();
+	deviceCreateInfo.ppEnabledExtensionNames = reqDeviceExtensions.data();
+
+	if (VulkanHelper::VkCheck(vkCreateDevice(physicalDevice, &deviceCreateInfo, nullptr, &device), "Creating a logical device has failed.") != VK_SUCCESS)
+	{
+		DestroyDevice();
+		return false;
+	}
+
+	GetCommandQueue();
+
+	return true;
+}
+
+void MyVulkan::DestroyDevice()
+{
+	vkDestroyDevice(device, nullptr);
+}
+
+void MyVulkan::GetCommandQueue()
+{
+	// Why queueIndex is 0???
+	vkGetDeviceQueue(device, queueFamily, 0, &queue);
+}
+
+// VkSurface is Vulkan's name for the screen.
+// Since GLFW creates and manges the window, it creates the VkSurface at our request.
+bool MyVulkan::CreateSurfaceByGLFW()
+{
+	VkBool32 isSupported;		//Supports drawing on a screen
+
+	VulkanHelper::VkCheck(glfwCreateWindowSurface(instance, windowHolder->glfwWindow, nullptr, &surface), "Creating surface by GLFW has failed!");
+	VulkanHelper::VkCheck(vkGetPhysicalDeviceSurfaceSupportKHR(physicalDevice, queueFamily, surface, &isSupported), "Querying if presentation is supported has failed!");
+
+	if (isSupported != VK_TRUE)
+	{
+		DestroySurface();
+		return false;
+	}
+
+	return true;
+}
+
+void MyVulkan::DestroySurface()
+{
+	vkDestroySurfaceKHR(instance, surface, nullptr);
+}
+
+// Create a command pool used to allocate command buffers, which in turn used to gather and send commands to the GPU.
+// The flag makes it possible to reuse command buffers.
+// The queue index determines which queue the command buffers can be submitted to.
+// Use the command pool to also create a command buffer.
+bool MyVulkan::CreateCommandPoolAndAllocateCommandBuffers()
+{
+	commandBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+
+	VkCommandPoolCreateInfo poolCreateInfo{};
+	poolCreateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	poolCreateInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	poolCreateInfo.queueFamilyIndex = queueFamily;
+	if (VulkanHelper::VkCheck(vkCreateCommandPool(device, &poolCreateInfo, nullptr, &commandPool), "Creating command pool has failed!") != VK_SUCCESS)
+	{
+		DestroyCommandPool();
+		return false;
+	}
+
+	VkCommandBufferAllocateInfo bufferAllocateInfo{};
+	bufferAllocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	bufferAllocateInfo.commandPool = commandPool;
+	bufferAllocateInfo.commandBufferCount = MAX_FRAMES_IN_FLIGHT;
+	bufferAllocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	if (VulkanHelper::VkCheck(vkAllocateCommandBuffers(device, &bufferAllocateInfo, commandBuffers.data()), "Allocating command buffer has failed!") != VK_SUCCESS)
+	{
+		DestroyCommandPool();
+		return false;
+	}
+
+	return true;
+}
+
+void MyVulkan::DestroyCommandPool()
+{
+	vkDestroyCommandPool(device, commandPool, nullptr);
+}
+
+bool MyVulkan::CreateSwapchain()
+{
+	VkSurfaceCapabilitiesKHR capabilities;
+	VulkanHelper::VkCheck(vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physicalDevice, surface, &capabilities), "Get physical device surface capabilities has failed!");
+
+	uint32_t formatCount;
+	VulkanHelper::VkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, nullptr), "Get number of surface formats has failed!");
+	std::vector<VkSurfaceFormatKHR> formats(formatCount);
+	VulkanHelper::VkCheck(vkGetPhysicalDeviceSurfaceFormatsKHR(physicalDevice, surface, &formatCount, formats.data()), "Get surface formats has failed!");
+
+	VkSurfaceFormatKHR selectedFormat = ChooseSwapSurfaceFormat(formats);
+	// Save swapchain image format because tutorial let me do.
+	swapchainImageFormat = selectedFormat.format;
+
+	uint32_t presentModeCount;
+	VulkanHelper::VkCheck(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, nullptr), "Get number of present mode failed!");
+	std::vector<VkPresentModeKHR> presentModes(presentModeCount);
+	VulkanHelper::VkCheck(vkGetPhysicalDeviceSurfacePresentModesKHR(physicalDevice, surface, &presentModeCount, presentModes.data()), "Get present mode has failed!");
+
+	VkPresentModeKHR selectedPresentMode = ChooseSwapPresentMode(presentModes);
+
+	swapchainExtent = ChooseSwapExtent(capabilities);
+
+	// one more image than the minimum to get another image to render to even when internal operation image capability is full.
+	uint32_t imageCount = capabilities.minImageCount + 1;
+
+	// 0 indicates there are no maximum image count.
+	if (capabilities.maxImageCount > 0 && imageCount > capabilities.maxImageCount)
+	{
+		imageCount = capabilities.maxImageCount;
+	}
+	
+	VkSwapchainCreateInfoKHR createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
+	// the surface where the swapchain should be tied to.
+	createInfo.surface = surface;
+	createInfo.minImageCount = imageCount;
+	createInfo.imageFormat = selectedFormat.format;
+	createInfo.imageColorSpace = selectedFormat.colorSpace;
+	createInfo.imageExtent = swapchainExtent;
+	// This specifies the amount of layers each image consists of, which should be always 1.
+	createInfo.imageArrayLayers = 1;
+	// This specifies what kind of operations we'll use the images in the swap chain for.
+	// We use COLOR_ATTACHMENT_BIT to render directly to it.
+	// If you want to render images to a separate image first to perform operations like post-processing. It might be TRANSFER_DST_BIT 
+	//		-> Draw somewhere else image, and send to here.
+	createInfo.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+	// Like a 90 degree CW rotation or horizontal flip
+	createInfo.preTransform = capabilities.currentTransform;
+	// It specifies if the alpha channel should be used for blending with other windows in the window system.
+	createInfo.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
+	// Queue ownership to image.
+	createInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
+	createInfo.queueFamilyIndexCount = 1;
+	createInfo.pQueueFamilyIndices = &queueFamily;
+	createInfo.presentMode = selectedPresentMode;
+	createInfo.oldSwapchain = VK_NULL_HANDLE;
+	// If it is true, it means that we don't care about the color of pixels that are obscured.
+	createInfo.clipped = VK_TRUE;
+
+	if (VulkanHelper::VkCheck(vkCreateSwapchainKHR(device, &createInfo, nullptr, &swapchain), "Creating swapchain has failed!") != VK_SUCCESS)
+	{
+		return false;
+	}
+
+	GetSwapchainImages();
+
+	return true;
+}
+
+const VkSurfaceFormatKHR& MyVulkan::ChooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& formats) const
+{
+	for (const VkSurfaceFormatKHR& format : formats)
+	{
+		if (format.format == VK_FORMAT_B8G8R8A8_SRGB && format.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR)
+		{
+			return format;
+		}
+	}
+
+	// Return the first format if there are no appropriate format, but it's fine.
+	return formats[0];
+}
+
+const VkPresentModeKHR MyVulkan::ChooseSwapPresentMode(const std::vector<VkPresentModeKHR>& presentModes) const
+{
+	// For v-sync and energy saving issue, return fifo mode immediately.
+	return VK_PRESENT_MODE_FIFO_KHR;
+
+	for (const VkPresentModeKHR presentMode : presentModes)
+	{
+		if (presentMode == VK_PRESENT_MODE_MAILBOX_KHR)
+		{
+			return presentMode;
+		}
+	}
+
+	// If mail box is not available, use FIFO.
+	return VK_PRESENT_MODE_FIFO_KHR;
+}
+
+const VkExtent2D MyVulkan::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) const
+{
+	// Vulkan tells us to match the resolution of the window.
+	// However, some window managers allow us to do something different.
+	//		In that case, we'll pick the resolution that best matches the window within the minImageExtent & maxImageExtent bounds.
+	if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max())
+	{
+		return capabilities.currentExtent;
+	}
+	else
+	{
+		int width;
+		int height;
+		glfwGetFramebufferSize(windowHolder->glfwWindow, &width, &height);
+
+		VkExtent2D actualExtent = {
+			static_cast<uint32_t>(width),
+			static_cast<uint32_t>(height)
+		};
+
+		actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);
+		actualExtent.height = std::clamp(actualExtent.height, capabilities.minImageExtent.height, capabilities.maxImageExtent.height);
+
+		return actualExtent;
+	}
+}
+
+void MyVulkan::DestroySwapchain()
+{
+	vkDestroySwapchainKHR(device, swapchain, nullptr);
+}
+
+void MyVulkan::GetSwapchainImages()
+{
+	uint32_t imageCount;
+	VulkanHelper::VkCheck(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, nullptr), "Getting number of swapchain images has failed!");
+	swapchainImages.resize(imageCount);
+	VulkanHelper::VkCheck(vkGetSwapchainImagesKHR(device, swapchain, &imageCount, swapchainImages.data()), "Get swapchain images has failed!");
+}
+
+void MyVulkan::CreateImageViews()
+{
+	swapchainImageViews.resize(swapchainImages.size());
+
+	const size_t swapchainImageCount = swapchainImages.size();
+	for (size_t i = 0; i < swapchainImageCount; i++)
+	{
+		VkImageViewCreateInfo createInfo{};
+		createInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		createInfo.image = swapchainImages[i];
+		createInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		createInfo.format = swapchainImageFormat;
+		createInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		createInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+		createInfo.subresourceRange.baseMipLevel = 0;
+		createInfo.subresourceRange.levelCount = 1;
+		createInfo.subresourceRange.baseArrayLayer = 0;
+		createInfo.subresourceRange.layerCount = 1;
+
+		VulkanHelper::VkCheck(vkCreateImageView(device, &createInfo, nullptr, &swapchainImageViews[i]), "Creating swapchain image view has failed!");
+
+	}
+}
+
+void MyVulkan::DestroyImageViews()
+{
+	for (VkImageView& imageView : swapchainImageViews)
+	{
+		vkDestroyImageView(device, imageView, nullptr);
+	}
+}
+
+void MyVulkan::CreateRenderPass()
+{
+	VkAttachmentDescription colorAttachment{};
+	colorAttachment.format = swapchainImageFormat;
+	colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT;
+	// They affects color and depth data
+	colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+	colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+	colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+	colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE;
+	colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+	colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+
+	VkAttachmentReference colorAttachmentRef{};
+	colorAttachmentRef.attachment = 0;
+	// The layout specifies which layout we would like the attachment to have during a subpass that uses this reference.
+	// Vulkan will automatically transition the attachment to this layout when the subpass is started.
+	colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+
+	VkSubpassDescription subpass{};
+	subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+	subpass.colorAttachmentCount = 1;
+	subpass.pColorAttachments = &colorAttachmentRef;
+
+	// @@@@@@@@ TODO: Back to dependency part and understand what dependency is for
+	// https://vulkan-tutorial.com/Drawing_a_triangle/Drawing/Rendering_and_presentation
+	VkSubpassDependency dependency{};
+	dependency.srcSubpass = VK_SUBPASS_EXTERNAL;
+	dependency.dstSubpass = 0;
+	dependency.srcStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.srcAccessMask = 0;
+	dependency.dstStageMask = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	dependency.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+	VkRenderPassCreateInfo renderPassInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+	renderPassInfo.attachmentCount = 1;
+	renderPassInfo.pAttachments = &colorAttachment;
+	renderPassInfo.subpassCount = 1;
+	renderPassInfo.pSubpasses = &subpass;
+	renderPassInfo.dependencyCount = 1;
+	renderPassInfo.pDependencies = &dependency;
+
+	VulkanHelper::VkCheck(vkCreateRenderPass(device, &renderPassInfo, nullptr, &renderPass), "Creating render pass has failed!");
+
+}
+
+void MyVulkan::CreateGraphicsPipeline()
+{
+	VkShaderModule vertModule = CreateShaderModule(readFile("spv/vertexShader.vert.spv"));
+	VkShaderModule fragModule = CreateShaderModule(readFile("spv/fragShader.frag.spv"));
+
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertShaderStageInfo.module = vertModule;
+	vertShaderStageInfo.pName = "main";
+	// pSpecializationInfo which is an optional allows you to specify values for shader constants.
+
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragShaderStageInfo.module = fragModule;
+	fragShaderStageInfo.pName = "main";
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+	std::vector<VkDynamicState> dynamicStates = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR,
+	};
+	VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo{};
+	dynamicStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicStateCreateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+	dynamicStateCreateInfo.pDynamicStates = dynamicStates.data();
+
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	vertexInputInfo.vertexBindingDescriptionCount = 0;
+	vertexInputInfo.pVertexBindingDescriptions = nullptr;
+	vertexInputInfo.vertexAttributeDescriptionCount = 0;
+	vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
+	inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
+
+	VkPipelineViewportStateCreateInfo viewportState{};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.scissorCount = 1;
+
+	VkPipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	// If it is true, then fragments that are beyond the near and far planes are clamped to them as opposed to discarding them.
+	// It is useful in some special cases like shadow maps which requires enabling a GPU feature.
+	rasterizer.depthClampEnable = VK_FALSE;
+	// If it is true, then geometry never passes through the rasterizer stage.
+	// It is basically disables any output to the framebuffer.
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	// It determines how fragments are generated for geometry.
+	// Using VK_POLYGON_MODE_LINE, MODE_POINT requires enabling a GPU feature.
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+	// Any line thicker than 1.f requires you to enable the wideLines GPU feature.
+	rasterizer.lineWidth = 1.f;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizer.depthBiasEnable = VK_FALSE;
+	rasterizer.depthBiasConstantFactor = 0.0f;
+	rasterizer.depthBiasClamp = 0.0f;
+	rasterizer.depthBiasSlopeFactor = 0.0f;
+
+	VkPipelineMultisampleStateCreateInfo multisampling{};
+	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampling.sampleShadingEnable = VK_FALSE;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.minSampleShading = 1.f;
+	multisampling.pSampleMask = nullptr;
+	multisampling.alphaToCoverageEnable = VK_FALSE;
+	multisampling.alphaToOneEnable = VK_FALSE;
+
+	VkPipelineDepthStencilStateCreateInfo depthStencil{};
+	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depthStencil.depthTestEnable = VK_TRUE;
+	depthStencil.depthWriteEnable = VK_TRUE;
+	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;		// Why it is..?
+	depthStencil.depthBoundsTestEnable = VK_FALSE;
+	depthStencil.stencilTestEnable = VK_FALSE;
+
+	/*
+	Bellow blending options would be this.
+	
+	finalColor.rgb = newAlpha * newColor + (1 - newAlpha) * oldColor;
+	finalColor.a = newAlpha.a;
+	*/
+	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	colorBlendAttachment.blendEnable = VK_TRUE;
+	// Bellow settings are optional, unless blendEnable is VK_FALSE.
+	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+	VkPipelineColorBlendStateCreateInfo colorBlending{};
+	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlending.logicOpEnable = VK_FALSE;
+	colorBlending.logicOp = VK_LOGIC_OP_COPY;
+	colorBlending.attachmentCount = 1;
+	colorBlending.pAttachments = &colorBlendAttachment;
+	colorBlending.blendConstants[0] = 0.0f;
+	colorBlending.blendConstants[1] = 0.0f;
+	colorBlending.blendConstants[2] = 0.0f;
+	colorBlending.blendConstants[3] = 0.0f;
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 0;
+	pipelineLayoutInfo.pSetLayouts = nullptr;
+	pipelineLayoutInfo.pushConstantRangeCount = 0;
+	pipelineLayoutInfo.pPushConstantRanges = nullptr;
+
+	VulkanHelper::VkCheck(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout), "Creating pipelineLayout has failed!");
+
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	// shader stages
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.stageCount = 2;
+	pipelineInfo.pStages = shaderStages;
+	// Fixed-function states
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssemblyInfo;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pDepthStencilState = &depthStencil;
+	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.pDynamicState = &dynamicStateCreateInfo;
+	// Pipeline layout
+	pipelineInfo.layout = pipelineLayout;
+	// Render pass
+	pipelineInfo.renderPass = renderPass;
+	pipelineInfo.subpass = 0;
+	// Below parameters are used for specify parent pipeline to handle derived multiple pipelines, which we don't use it here.
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineInfo.basePipelineIndex = -1;
+
+	VulkanHelper::VkCheck(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline), "Creating graphics pipeline has failed!");
+
+
+
+	vkDestroyShaderModule(device, vertModule, nullptr);
+	vkDestroyShaderModule(device, fragModule, nullptr);
+}
+
+std::vector<char> MyVulkan::readFile(const std::string& filename)
+{
+	// ate -> read from at the end.
+	std::ifstream file(filename, std::ios::ate | std::ios::binary);
+
+	if (!file.is_open())
+	{
+		VulkanHelper::VkCheck(VK_ERROR_UNKNOWN, std::string(std::string("Opening spv file has failed!\nFilename: ") + filename).c_str());
+	}
+
+	// tellg -> return position of the current character
+	//				-> Since we opened it with ate, current position would be size of the file.
+	size_t fileSize = (size_t)file.tellg();
+	std::vector<char> buffer(fileSize);
+	file.seekg(0);
+	file.read(buffer.data(), fileSize);
+
+	file.close();
+
+	return buffer;
+}
+
+VkShaderModule MyVulkan::CreateShaderModule(const std::vector<char>& code)
+{
+	VkShaderModuleCreateInfo createInfo{};
+	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	createInfo.codeSize = code.size();
+	createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
+	
+	VkShaderModule shaderModule;
+	VulkanHelper::VkCheck(vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule), "Creating shader module has failed!");
+
+	return shaderModule;
+}
+
+void MyVulkan::DestroyPipeline()
+{
+	vkDestroyPipeline(device, pipeline, nullptr);
+	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+	vkDestroyRenderPass(device, renderPass, nullptr);
+}
+
+void MyVulkan::CreateFramebuffers()
+{
+	const size_t swapchainImageViewCount = swapchainImageViews.size();
+	swapchainFramebuffers.resize(swapchainImageViewCount);
+
+	for (size_t i = 0; i < swapchainImageViewCount; i++)
+	{
+		VkImageView attachments[] =
+		{
+			swapchainImageViews[i]
+		};
+		
+		VkFramebufferCreateInfo framebufferInfo{};
+		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+		framebufferInfo.renderPass = renderPass;
+		framebufferInfo.attachmentCount = 1;
+		framebufferInfo.pAttachments = attachments;
+		framebufferInfo.width = swapchainExtent.width;
+		framebufferInfo.height = swapchainExtent.height;
+		framebufferInfo.layers = 1;
+
+		VulkanHelper::VkCheck(vkCreateFramebuffer(device, &framebufferInfo, nullptr, &swapchainFramebuffers[i]), "Creating swapchain framebuffer has failed!");
+	}
+}
+
+void MyVulkan::DestroyFramebuffers()
+{
+	for (VkFramebuffer& framebuffer : swapchainFramebuffers)
+	{
+		vkDestroyFramebuffer(device, framebuffer, nullptr);
+	}
+}
+
+void MyVulkan::CreateSyncObjects()
+{
+	VkSemaphoreCreateInfo semaphoreInfo{};
+	semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
+
+	VkFenceCreateInfo fenceInfo{};
+	fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+	fenceInfo.flags = VK_FENCE_CREATE_SIGNALED_BIT;
+
+	imageAvailableSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	renderFinishedSemaphores.resize(MAX_FRAMES_IN_FLIGHT);
+	inFlightFences.resize(MAX_FRAMES_IN_FLIGHT);
+
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		VulkanHelper::VkCheck(
+			vkCreateSemaphore(device, &semaphoreInfo, nullptr, &imageAvailableSemaphores[i])
+			, "Creating a synchronization object(imageAvailableSemaphore) has failed!"
+		);
+		VulkanHelper::VkCheck(
+			vkCreateSemaphore(device, &semaphoreInfo, nullptr, &renderFinishedSemaphores[i])
+			, "Creating a synchronization object(renderFinishedSemaphore) has failed!"
+		);
+		VulkanHelper::VkCheck(
+			vkCreateFence(device, &fenceInfo, nullptr, &inFlightFences[i])
+			, "Creating a synchronization object(inFlightFence) has failed!"
+		);
+	}
+		
+		
+}
+
+void MyVulkan::DestroySyncObjects()
+{
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		vkDestroySemaphore(device, imageAvailableSemaphores[i], nullptr);
+		vkDestroySemaphore(device, renderFinishedSemaphores[i], nullptr);
+		vkDestroyFence(device, inFlightFences[i], nullptr);
+	}
+}
+
+void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
+{
+	VkCommandBufferBeginInfo beginInfo{};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = 0;
+	beginInfo.pInheritanceInfo = nullptr;
+
+	VulkanHelper::VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Begining command buffer has failed!");
+
+
+	// Starting a render pass??????
+	VkRenderPassBeginInfo renderPassInfo{};
+	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+	renderPassInfo.renderPass = renderPass;
+	renderPassInfo.framebuffer = swapchainFramebuffers[imageIndex];
+	renderPassInfo.renderArea.offset = { 0, 0 };
+	renderPassInfo.renderArea.extent = swapchainExtent;
+
+	VkClearValue clearColor = { {{0.f, 0.f, 0.f, 1.f}} };
+	renderPassInfo.clearValueCount = 1;
+	renderPassInfo.pClearValues = &clearColor;
+
+	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+	VkViewport viewport{};
+	viewport.x = 0.f;
+	viewport.y = 0.f;
+	viewport.width = static_cast<float>(swapchainExtent.width);
+	viewport.height = static_cast<float>(swapchainExtent.height);
+	viewport.minDepth = 0.f;
+	viewport.maxDepth = 1.f;
+	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+	VkRect2D scissor{};
+	scissor.offset = { 0, 0 };
+	scissor.extent = swapchainExtent;
+	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
+
+	vkCmdDraw(commandBuffer, 3, 1, 0, 0);
+
+	vkCmdEndRenderPass(commandBuffer);
+
+	VulkanHelper::VkCheck(vkEndCommandBuffer(commandBuffer), "Ending command buffer has failed!");
+}
+
+void MyVulkan::RecordClientData()
+{
+	std::ofstream resultFile;
+	void* getHowMany = nullptr;
+
+	// Get Physical devices
+	uint32_t numOfPhysicalDevices = 0;
+	std::vector<VkPhysicalDevice> arrayOfPhysicalDevices;
+	// second parameter of VK physical devices function works both input & output.
+	// As an output, the parameter get how many physical devices I can use.
+	// As an input, The maximum number of devices I can control in this application.
+	// Once we want to know how many devices available in the system, give final parameter nullptr.(second parameter still should be valid pointer)
+	// Then call the same function again with the final parameter set to an array that has been appropriately sized for the number what we have known.
+	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, reinterpret_cast<VkPhysicalDevice*>(getHowMany)), "The first Procedure with physical devices is failed! (Originally, it might be failed)");
+	arrayOfPhysicalDevices.resize(numOfPhysicalDevices);
+	VulkanHelper::VkCheck(vkEnumeratePhysicalDevices(instance, &numOfPhysicalDevices, arrayOfPhysicalDevices.data()), "The second Procedure with physical devices is failed! (Logically, should not be failed)");
+
+	// Create logical devices per physical device
+	for (const VkPhysicalDevice& physicalDevice : arrayOfPhysicalDevices)
+	{
+
+		VkPhysicalDeviceProperties physicalProperty{};
+		vkGetPhysicalDeviceProperties(physicalDevice, &physicalProperty);
+		/// PRINT
+		resultFile.open("Result of " + std::string(physicalProperty.deviceName) + ".txt");																   /// PRINT
+		resultFile << "apiVersion: " << physicalProperty.apiVersion << std::endl;																   /// PRINT
+		resultFile << "driverVersion: " << physicalProperty.driverVersion << std::endl;															 /// PRINT
+		resultFile << "vendorID: " << physicalProperty.vendorID << std::endl;																		/// PRINT
+		resultFile << "deviceID: " << physicalProperty.deviceID << std::endl;																		 /// PRINT
+		resultFile << "deviceType: " << physicalProperty.deviceType << std::endl;																 /// PRINT
+		resultFile << "deviceName: " << physicalProperty.deviceName << std::endl << std::endl << std::endl;					   /// PRINT
+
+
+
+
+		// First determine the number of queue families supported by the physical device.
+		uint32_t numOfQueueFamilyProperty = 0;
+		std::vector<VkQueueFamilyProperties> familyProperties;
+		// Bellow code works similar with vkEnumeratePhysicalDevice()
+		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &numOfQueueFamilyProperty, reinterpret_cast<VkQueueFamilyProperties*>(getHowMany));
+		// Allocate enough space for the queue property structures.
+		familyProperties.resize(numOfQueueFamilyProperty);
+		// Now query the actual properties of the queue families.
+		vkGetPhysicalDeviceQueueFamilyProperties(physicalDevice, &numOfQueueFamilyProperty, familyProperties.data());
+
+		for (const VkQueueFamilyProperties& familyProperty : familyProperties)
+		{
+			resultFile << "Queue Family Count: " << numOfQueueFamilyProperty << std::endl;																							 /// PRINT
+			resultFile << "queueFlags: " << familyProperty.queueFlags << std::endl;																							   /// PRINT
+			resultFile << "queueCount: " << familyProperty.queueCount << std::endl;																							  /// PRINT
+			resultFile << "timestampValidBits: " << familyProperty.timestampValidBits << std::endl;																		/// PRINT
+			resultFile << "minImageTransferGranularity.width: " << familyProperty.minImageTransferGranularity.width << std::endl;					   /// PRINT
+			resultFile << "minImageTransferGranularity.height: " << familyProperty.minImageTransferGranularity.height << std::endl;				  /// PRINT
+			resultFile << "minImageTransferGranularity.depth: " << familyProperty.minImageTransferGranularity.depth << std::endl << std::endl << std::endl;					  /// PRINT
+		}
+
+		// Create Logical Device
+		VkDeviceQueueCreateInfo logicalDeviceQueueCreateInfo{};
+		logicalDeviceQueueCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+		logicalDeviceQueueCreateInfo.pNext = nullptr;
+		logicalDeviceQueueCreateInfo.flags = 0;
+		logicalDeviceQueueCreateInfo.queueFamilyIndex = 0;		// ????????? I do not know what this field is for....
+		logicalDeviceQueueCreateInfo.queueCount = 1;
+		logicalDeviceQueueCreateInfo.pQueuePriorities = nullptr;
+
+		// Get Layers
+		uint32_t layerCount = 0;
+		std::vector<VkLayerProperties> layers;
+		std::vector<const char*> layerNames;
+		// Query the instance layers
+		VulkanHelper::VkCheck(vkEnumerateInstanceLayerProperties(&layerCount, reinterpret_cast<VkLayerProperties*>(getHowMany)), "First Layer : Layer enumeration is failed! when pointer to array is nullptr");
+
+		resultFile << "layerCount: " << layerCount << std::endl << std::endl;		/// PRINT
+		if (layerCount != 0)
+		{
+			layers.resize(layerCount);
+			VulkanHelper::VkCheck(vkEnumerateInstanceLayerProperties(&layerCount, layers.data()), "Second Layer : Layer enumeration is failed! when pointer to array is not nullptr");
+			for (const VkLayerProperties& layer : layers)
+			{
+
+				resultFile << "layerName: " << layer.layerName << std::endl;		/// PRINT
+				resultFile << "specVersion: " << layer.specVersion << std::endl;		/// PRINT
+				resultFile << "implementationVersion: " << layer.implementationVersion << std::endl;		/// PRINT
+				resultFile << "description: " << layer.description << std::endl << std::endl;		/// PRINT
+				layerNames.push_back(layer.layerName);
+			}
+		}
+		else
+		{
+			std::cout << "WARNING:: available layer is zero!" << std::endl;
+		}
+
+		resultFile << std::endl << std::endl;
+
+		// Get Extensions
+		/*!!!!!!!!!!!!!!!!!!!!!!!!!!!! However, since extension need cost, for now do not use extension. Let us prefer vanilla mode*/
+		uint32_t instanceExtensionCount = 0;
+		std::vector<VkExtensionProperties> instanceExtensions;
+		std::vector<const char*> extensionNames;
+		VulkanHelper::VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, reinterpret_cast<VkExtensionProperties*>(getHowMany)), "Error during get instance extesions!");
+
+		resultFile << "extensionCount: " << instanceExtensionCount << std::endl << std::endl;		/// PRINT
+		if (instanceExtensionCount > 0)
+		{
+			instanceExtensions.resize(instanceExtensionCount);
+			VulkanHelper::VkCheck(vkEnumerateInstanceExtensionProperties(nullptr, &instanceExtensionCount, instanceExtensions.data()), "Error during get instance extesions!");
+			for (VkExtensionProperties extension : instanceExtensions)
+			{
+				resultFile << "extensionName: " << extension.extensionName << std::endl;		/// PRINT
+				resultFile << "specVersion: " << extension.specVersion << std::endl << std::endl;		/// PRINT
+				extensionNames.push_back(extension.extensionName);
+			}
+		}
+		else
+		{
+			std::cout << "Supported extensions are zero" << std::endl;
+		}
+
+		VkPhysicalDeviceFeatures supportedFeatures{};
+		vkGetPhysicalDeviceFeatures(physicalDevice, &supportedFeatures);
+		VkPhysicalDeviceFeatures requiredFeatures{};
+		// Set features based on book's example
+		requiredFeatures.multiDrawIndirect = supportedFeatures.multiDrawIndirect;
+		requiredFeatures.tessellationShader = VK_TRUE;
+		requiredFeatures.geometryShader = VK_TRUE;
+
+		VkDeviceCreateInfo logicalDeviceCreateInfo{};
+		logicalDeviceCreateInfo.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+		logicalDeviceCreateInfo.pNext = 0;
+		logicalDeviceCreateInfo.flags = 0;
+		// For this time, let this value one. (At this moment, I'm not sure I can control two or more queues)
+		logicalDeviceCreateInfo.queueCreateInfoCount = 1;
+		logicalDeviceCreateInfo.pQueueCreateInfos = &logicalDeviceQueueCreateInfo;
+		// We are going to cover layer and extension later in this chapter.
+		logicalDeviceCreateInfo.enabledLayerCount = layerCount;
+		logicalDeviceCreateInfo.ppEnabledLayerNames = layerNames.data();
+		logicalDeviceCreateInfo.enabledExtensionCount = 0;
+		logicalDeviceCreateInfo.ppEnabledExtensionNames = nullptr;
+		logicalDeviceCreateInfo.pEnabledFeatures = &requiredFeatures;
+
+		VkDevice logicalDevice{};
+
+		resultFile.close();
+	}
+}
+
+void MyVulkan::UpdateCurrentFrameID()
+{
+	currentFrameID = (currentFrameID + 1) % MAX_FRAMES_IN_FLIGHT;
+}
+
+void MyVulkan::RecreateSwapchain()
+{
+	int width = 0;
+	int height = 0;
+	glfwGetFramebufferSize(windowHolder->glfwWindow, &width, &height);
+	while (width == 0 || height == 0)
+	{
+		glfwGetFramebufferSize(windowHolder->glfwWindow, &width, &height);
+		glfwWaitEvents();
+	}
+
+
+	vkDeviceWaitIdle(device);
+
+	CleanupSwapchainResourcesForRecreation();
+
+	CreateSwapchain();
+	CreateImageViews();
+	CreateFramebuffers();
+}
+
+void MyVulkan::CleanupSwapchainResourcesForRecreation()
+{
+	DestroyFramebuffers();
+	DestroyImageViews();
+	DestroySwapchain();
 }
 
 //void MyVulkan::CreateSimpleGraphicsPipeline()

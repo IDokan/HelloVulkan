@@ -11,6 +11,7 @@ Creation Date: 06.08.2021
 #pragma once
 
 class Window;
+class MyVulkan;
 
 class Engine
 {
@@ -28,4 +29,5 @@ public:
 private:
 	bool isUpdate;
 	Window* window;
+	MyVulkan* VK;
 };

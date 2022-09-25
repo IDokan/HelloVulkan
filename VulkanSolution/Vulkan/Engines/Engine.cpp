@@ -9,6 +9,7 @@ Creation Date: 06.08.2021
 	Source file for engine.
 	Contains main game loop and control windows.
 ******************************************************************************/
+#define _CRT_SECURE_NO_WARNINGS
 #include <string>
 #include <iostream>
 
@@ -19,7 +20,7 @@ Creation Date: 06.08.2021
 #include "vulkan/vulkan_core.h"
 
 Engine::Engine()
-	: isUpdate(true), window(new Window())
+	: isUpdate(true), window(new Window()), VK(new MyVulkan(window))
 {
 }
 
@@ -31,11 +32,12 @@ Engine::~Engine()
 bool Engine::Init()
 {
 	// Vulkan Init
-	MyVulkan::InitVulkan("Sinil's Hello Vulkan", VK_MAKE_VERSION(1, 0, 0));
 
-	window->CreateWindow(800, 600, "Vulkan Window", nullptr, nullptr);
+	if (window->CreateWindow(800, 600, "Vulkan Window", nullptr, nullptr) == false)
+		return false;
 
-	
+	if (VK->InitVulkan("Sinil's Hello Vulkan", VK_MAKE_VERSION(1, 0, 0)) == false)
+		return false;
 
 	return true;
 }
@@ -45,26 +47,26 @@ void Engine::Update()
 	// Calculate dt, and FPS to show up on window's title bar
 	Timer* timer = Timer::GetTimer();
 	float dt = static_cast<float>(timer->GetDeltaTime());
-	(dt);
 	int frame = timer->GetFPSFrame();
 	if (frame >= 0)
 	{
-		window->SetWindowTitle(std::string("Vulkan Window, FPS : " + frame));
+		char buf[32];
+		_itoa(frame, buf, 10);
+		window->SetWindowTitle(std::string("Vulkan Window, FPS : ") + std::string(buf));
 	}
 	Timer::GetTimer()->Reset();
 
-	// Update window when it is alive.
-	while (window->ShouldWindowClose() == false)
-	{
-		window->PollWindowEvents();
-	}
+	// Update window
+	window->PollWindowEvents();
+
+	VK->DrawFrame();
 }
 
 void Engine::Clean()
 {
 	window->ShutWindowDown();
 
-	MyVulkan::CleanVulkan();
+	VK->CleanVulkan();
 }
 
 bool Engine::IsUpdate()

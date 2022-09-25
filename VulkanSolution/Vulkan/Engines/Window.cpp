@@ -15,15 +15,26 @@ Creation Date: 06.08.2021
 
 namespace CallbackFuncs
 {
+	void onError(int error, const char* description)
+	{
+		printf("GLFW Error %d: %s\n", error, description);
+	}
+
 	void WindowClose(GLFWwindow* window)
 	{
 		glfwSetWindowShouldClose(window, GLFW_TRUE);
+	}
+
+	void FramebufferResizeCallback(GLFWwindow* window, int width, int height)
+	{
+		auto app = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+		app->SetWindowFramebufferResized(true);
 	}
 }
 
 bool Window::CreateWindow(const int& width, const int& height, const char* title, GLFWmonitor* monitor, GLFWwindow* share)
 {
-	if (window != nullptr)
+	if (glfwWindow != nullptr)
 	{
 		ShutWindowDown();
 	}
@@ -34,22 +45,31 @@ bool Window::CreateWindow(const int& width, const int& height, const char* title
 	}
 
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
+	glfwSetErrorCallback(CallbackFuncs::onError);
 
-	window = glfwCreateWindow(width, height, title, monitor, share);
+	glfwWindow = glfwCreateWindow(width, height, title, monitor, share);
 
-	glfwSetWindowCloseCallback(window, CallbackFuncs::WindowClose);
+	glfwSetWindowUserPointer(glfwWindow, this);
+	glfwSetWindowCloseCallback(glfwWindow, CallbackFuncs::WindowClose);
+	glfwSetFramebufferSizeCallback(glfwWindow, CallbackFuncs::FramebufferResizeCallback);
+
+	if (!glfwVulkanSupported())
+	{
+		printf("GLFW: Vulkan Not Supported\n");
+		return false;
+	}
 
 	return true;
 }
 
 bool Window::ShouldWindowClose()
 {
-	if (window == nullptr)
+	if (glfwWindow == nullptr)
 	{
 		return true;
 	}
 
-	return glfwWindowShouldClose(window);
+	return glfwWindowShouldClose(glfwWindow);
 }
 
 void Window::PollWindowEvents()
@@ -59,21 +79,31 @@ void Window::PollWindowEvents()
 
 void Window::CloseWindow()
 {
-	CallbackFuncs::WindowClose(window);
+	CallbackFuncs::WindowClose(glfwWindow);
 }
 
 void Window::ShutWindowDown()
 {
-	if (window == nullptr)
+	if (glfwWindow == nullptr)
 	{
 		return;
 	}
-	glfwDestroyWindow(window);
+	glfwDestroyWindow(glfwWindow);
 	glfwTerminate();
-	window = nullptr;
+	glfwWindow = nullptr;
 }
 
 void Window::SetWindowTitle(const std::string& newTitle)
 {
-	glfwSetWindowTitle(window, newTitle.c_str());
+	glfwSetWindowTitle(glfwWindow, newTitle.c_str());
+}
+
+void Window::SetWindowFramebufferResized(bool resized)
+{
+	windowFramebufferResized = resized;
+}
+
+bool Window::GetWindowFramebuffer()
+{
+	return windowFramebufferResized;
 }

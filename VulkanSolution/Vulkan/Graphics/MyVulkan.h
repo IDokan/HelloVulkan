@@ -13,6 +13,7 @@ Creation Date: 06.12.2021
 #include <fstream> // for ifstream to read spv file
 #include "Vulkan/vulkan.h"
 #include "Graphics/Allocator/Allocator.h"
+#include "Graphics/Structures/Structs.h"
 
 class Window;
 
@@ -28,21 +29,11 @@ public:
 
 	void DrawFrame();
 
-	void CreateBuffers();
 	void CreateImages();
 	void CreateCubeImages();
 
 	double linearTosRGB(double cl);
 	double sRGBToLinear(double cs);
-
-	// When required or preferredFlags are not,
-	uint32_t ChooseHeapFromFlags(
-		const VkMemoryRequirements& memoryRequirements);
-	// returns ~0u if matched memory does not exist.
-	uint32_t ChooseHeapFromFlags(
-		const VkMemoryRequirements& memoryRequirements,
-		VkMemoryPropertyFlags requiredFlags,
-		VkMemoryPropertyFlags preferredFlags);
 
 	void FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize length, const float value);
 
@@ -58,7 +49,7 @@ public:
 	void CreatePipelineLayout();
 	*/
 
-	void CreateSimpleRenderpass();
+	// void CreateSimpleRenderpass();
 
 	//void CreateSimpleGraphicsPipeline();
 
@@ -109,6 +100,35 @@ private:
 
 	void RecreateSwapchain();
 	void CleanupSwapchainResourcesForRecreation();
+
+	void CreateBuffers();
+	void CreateVertexBuffer();
+	void DestroyBuffersAndFreeMemories();
+	void DestroyBuffer(VkBuffer& buffer);
+	void FreeMemory(VkDeviceMemory memory);
+
+	// When requiredFlags are not,
+	uint32_t FindMemoryTypeIndex(
+		const VkMemoryRequirements& memoryRequirements);
+	// returns ~0u if matched memory does not exist.
+	uint32_t FindMemoryTypeIndex(
+		const VkMemoryRequirements& memoryRequirements,
+		VkMemoryPropertyFlags requiredFlags);
+
+	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+	
+	void CreateIndexBuffer();
+
+	void CreateDescriptorSetLayout();
+	void DestroyDescriptorSetLayout();
+
+	void CreateUniformBuffers();
+	void UpdateUniformBuffer(uint32_t currentImage);
+
+	void CreateDescriptorPool();
+	void DestroyDescriptorPool();
+	void CreateDescriptorSets();
 	private:
 		const int MAX_FRAMES_IN_FLIGHT = 2;
 private:
@@ -128,6 +148,9 @@ private:
 	std::vector<VkImageView> swapchainImageViews;
 
 	VkRenderPass renderPass;
+	VkDescriptorSetLayout descriptorSetLayout;
+	VkDescriptorPool descriptorPool;
+	std::vector<VkDescriptorSet> descriptorSets;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline pipeline;
 	std::vector<VkFramebuffer>  swapchainFramebuffers;
@@ -148,4 +171,22 @@ private:
 	std::vector<const char*> reqDeviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	};
+
+	std::vector<Vertex> vertices = {
+	Vertex({{1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}}),
+	Vertex({{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}}),
+	Vertex({{-1.0f, 0.5f}, {0.0f, 1.0f, 1.0f}}),
+	Vertex({{1.0f, 0.5f}, {0.f, 0.f, 1.f}}),
+	};
+	std::vector<uint16_t> indices = {
+		0, 1, 2, 2, 3, 0
+	};
+
+	VkBuffer vertexBuffer;
+	VkDeviceMemory vertexBufferMemory;
+	VkBuffer indexBuffer;
+	VkDeviceMemory indexBufferMemory;
+	
+	std::vector<VkBuffer> uniformBuffers;
+	std::vector<VkDeviceMemory> uniformBuffersMemory;
 };

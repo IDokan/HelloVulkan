@@ -132,3 +132,45 @@ Synchronization:
 What is Subpass dependency????
 
 
+VkVertexInputAttributeDescription format examples:
+	float: VK_FORMAT_R32_SFLOAT
+	vec2: VK_FORMAT_R32G32_SFLOAT
+	vec3: VK_FORMAT_R32G32B32_SFLOAT
+	vec4: VK_FORMAT_R32G32B32A32_SFLOAT
+	ivec2: VK_FORMAT_R32G32_SINT
+	uvec4: VK_FORMAT_R32G32B32A32_UINT
+	double: VK_FORMAT_R64_SFLOAT
+
+vkMapMemory & vkUnmapMemory issue:
+	Unfortunately the driver may not immediately copy the data into the buffer memory, for example because of caching.
+	It is also possible that writes to the buffer are not visible in the mapped memory yet.
+	There are two ways to deal with that problem:
+		Use a memory heap that is host coherent, indicated with VK_MEMORY_PROPERTY_HOST_COHERENT_BIT
+		Call vkFlushMappedMemoryRanges after writing to the mapped memory, and call vkInvalidateMappedMemoryRanges before reading from the mapped memory
+
+	First approach may lead to slightly worse performance than explicit flushing which is the second method.
+
+
+
+Quest!'
+@If you like a challenge, then you can still try to use a different queue family specifically for transfer operations. It will require you to make the following modifications to your program:
+
+@1. Modify QueueFamilyIndices and findQueueFamilies to explicitly look for a queue family with the VK_QUEUE_TRANSFER_BIT bit, but not the VK_QUEUE_GRAPHICS_BIT.
+@2. Modify createLogicalDevice to request a handle to the transfer queue
+@3. Create a second command pool for command buffers that are submitted on the transfer queue family
+@4. Change the sharingMode of resources to be VK_SHARING_MODE_CONCURRENT and specify both the graphics and transfer queue families
+@5. Submit any transfer commands like vkCmdCopyBuffer (which we'll be using in this chapter) to the transfer queue instead of the graphics queue
+
+It's a bit of work, but it'll teach you a lot about how resources are shared between queue families.
+
+
+
+!@!@!@!@!@vkAllocateMemory WARNINGS@!@!@!@!@!@!@:
+It should be noted that in a real world application, you're not supposed to actually call vkAllocateMemory for every individual buffer. 
+The maximum number of simultaneous memory allocations is limited by the maxMemoryAllocationCount physical device limit(4096 even on NVIDIA GTX 1080). 
+	Two solutions:
+		1. Create a custom allocator that splits up a single allocation among many different objects by using the offset parameters that we've seen in many functions.
+		2. Use the VulkanMemoryAllocator library provided by the GPUOpen initiative. 
+
+Driver developers recommend that you also store multiple buffers, like the vertex and index buffer, into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers. 
+The advantage is that your data is more cache friendly in that case, because it's closer together.

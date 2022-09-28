@@ -22,6 +22,12 @@
     <Filter Include="Graphics\Shaders">
       <UniqueIdentifier>{4786e205-ee57-40d7-9466-8c400eabbf6b}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Graphics\Structures">
+      <UniqueIdentifier>{8df6f2af-8c57-4ce8-82cc-487164a42927}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Graphics\Model">
+      <UniqueIdentifier>{20196814-1e87-4318-8bca-3825e8cf94ac}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
@@ -36,6 +42,12 @@
     </ClCompile>
     <ClCompile Include="Graphics\Allocator\Allocator.cpp">
       <Filter>Graphics\Allocator</Filter>
+    </ClCompile>
+    <ClCompile Include="Graphics\Structures\Structs.cpp">
+      <Filter>Graphics\Structures</Filter>
+    </ClCompile>
+    <ClCompile Include="Graphics\Model\Model.cpp">
+      <Filter>Graphics\Model</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -59,6 +71,12 @@
     </ClInclude>
     <ClInclude Include="Graphics\Allocator\Allocator.h">
       <Filter>Graphics\Allocator</Filter>
+    </ClInclude>
+    <ClInclude Include="Graphics\Structures\Structs.h">
+      <Filter>Graphics\Structures</Filter>
+    </ClInclude>
+    <ClInclude Include="Graphics\Model\Model.h">
+      <Filter>Graphics\Model</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

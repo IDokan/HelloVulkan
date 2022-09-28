@@ -15,6 +15,7 @@ Creation Date: 06.12.2021
 #include "Graphics/Allocator/Allocator.h"
 #include "Graphics/Structures/Structs.h"
 
+class Model;
 class Window;
 
 class MyVulkan
@@ -102,7 +103,7 @@ private:
 	void CleanupSwapchainResourcesForRecreation();
 
 	void CreateBuffers();
-	void CreateVertexBuffer();
+	void CreateVertexBuffer(int vertexCount, void* vertexData);
 	void DestroyBuffersAndFreeMemories();
 	void DestroyBuffer(VkBuffer& buffer);
 	void FreeMemory(VkDeviceMemory memory);
@@ -118,7 +119,7 @@ private:
 	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 	
-	void CreateIndexBuffer();
+	void CreateIndexBuffer(int indexCount, void* indexData);
 
 	void CreateDescriptorSetLayout();
 	void DestroyDescriptorSetLayout();
@@ -172,15 +173,16 @@ private:
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	};
 
-	std::vector<Vertex> vertices = {
-	Vertex({{1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}}),
-	Vertex({{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}}),
-	Vertex({{-1.0f, 0.5f}, {0.0f, 1.0f, 1.0f}}),
-	Vertex({{1.0f, 0.5f}, {0.f, 0.f, 1.f}}),
+	std::vector<TutorialVertex > vertices = {
+	TutorialVertex ({{1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}}),
+	TutorialVertex ({{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}}),
+	TutorialVertex ({{-1.0f, 0.5f}, {0.0f, 1.0f, 1.0f}}),
+	TutorialVertex ({{1.0f, 0.5f}, {0.f, 0.f, 1.f}}),
 	};
 	std::vector<uint16_t> indices = {
 		0, 1, 2, 2, 3, 0
 	};
+	uint32_t indexCount;
 
 	VkBuffer vertexBuffer;
 	VkDeviceMemory vertexBufferMemory;
@@ -189,4 +191,6 @@ private:
 	
 	std::vector<VkBuffer> uniformBuffers;
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
+
+	Model* model;
 };

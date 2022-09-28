@@ -13,12 +13,72 @@ Creation Date: 09.27.2022
 #include "Vulkan/vulkan.h"
 #include <GLMath.h>
 
-struct Vertex {
-	Vertex(glm::vec2 position, glm::vec3 color)
+struct TutorialVertex {
+	TutorialVertex(glm::vec2 position, glm::vec3 color)
 		:position(position), color(color)
 	{}
 	glm::vec2 position;
 	glm::vec3 color;
+
+	static const VkVertexInputBindingDescription& GetBindingDescription()
+	{
+		static VkVertexInputBindingDescription bindingDescription{};
+		bindingDescription.binding = 0;
+		bindingDescription.stride = sizeof(TutorialVertex);
+		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+
+		return bindingDescription;
+	}
+
+	static const std::vector<VkVertexInputAttributeDescription>& GetAttributeDescriptions()
+	{
+		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(2);
+
+		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].location = 0;
+		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;		// two 32-bit floats
+		attributeDescriptions[0].offset = offsetof(TutorialVertex, position);
+
+		attributeDescriptions[1].binding = 0;
+		attributeDescriptions[1].location = 1;
+		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;		// two 32-bit floats
+		attributeDescriptions[1].offset = offsetof(TutorialVertex, color);
+
+
+
+		return attributeDescriptions;
+	}
+};
+
+struct Vertex {
+	Vertex()
+	{
+		position = glm::vec3(0.f, 0.f, 0.f);
+	}
+	Vertex(glm::vec3 position)
+		:position(position)
+	{}
+
+	Vertex(const Vertex& v)
+		:position(v.position)
+	{}
+
+	Vertex(Vertex&& v)
+		:position(v.position)
+	{}
+	Vertex& operator=(const Vertex& v)
+	{
+		position = v.position;
+		return *this;
+	}
+	Vertex& operator=(Vertex&& v)
+	{
+		position = v.position;
+		return *this;
+	}
+
+
+		glm::vec3 position;
 
 	static const VkVertexInputBindingDescription& GetBindingDescription()
 	{
@@ -32,19 +92,12 @@ struct Vertex {
 
 	static const std::vector<VkVertexInputAttributeDescription>& GetAttributeDescriptions()
 	{
-		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(2);
+		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(1);
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
-		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;		// two 32-bit floats
+		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;		// two 32-bit floats
 		attributeDescriptions[0].offset = offsetof(Vertex, position);
-
-		attributeDescriptions[1].binding = 0;
-		attributeDescriptions[1].location = 1;
-		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;		// two 32-bit floats
-		attributeDescriptions[1].offset = offsetof(Vertex, color);
-		
-
 
 		return attributeDescriptions;
 	}

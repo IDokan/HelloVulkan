@@ -20,15 +20,18 @@ Creation Date: 06.12.2021
 #include <chrono>
 #include "Engines/Window.h"
 #include "Graphics/Structures/Structs.h"
+#include "Graphics/Model/Model.h"
 
 MyVulkan::MyVulkan(Window* window)
-	: windowHolder(window), currentFrameID(0)
+	: windowHolder(window), currentFrameID(0), model(nullptr)
 {
 
 }
 
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
+	model = new Model("../Vulkan/Graphics/Model/models/bunny.obj");
+
 	if (CreateInstance(appName, appVersion) == false)
 	{
 		return false;
@@ -97,6 +100,8 @@ void MyVulkan::CleanVulkan()
 	DestroyDevice();
 
 	DestroyInstance();
+
+	delete model;
 }
 
 void MyVulkan::DrawFrame()
@@ -173,8 +178,8 @@ void MyVulkan::DrawFrame()
 
 void MyVulkan::CreateBuffers()
 {
-	CreateVertexBuffer();
-	CreateIndexBuffer();
+	CreateVertexBuffer(model->GetVertexCount(), model->GetVertexData());
+	CreateIndexBuffer(model->GetIndexCount(), model->GetIndexData());
 	CreateUniformBuffers();
 }
 
@@ -1122,7 +1127,7 @@ void MyVulkan::CreateGraphicsPipeline()
 	// Any line thicker than 1.f requires you to enable the wideLines GPU feature.
 	rasterizer.lineWidth = 1.f;
 	rasterizer.cullMode = VK_CULL_MODE_NONE;
-	rasterizer.frontFace = VK_FRONT_FACE_CLOCKWISE;
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
 	rasterizer.depthBiasEnable = VK_FALSE;
 	rasterizer.depthBiasConstantFactor = 0.0f;
 	rasterizer.depthBiasClamp = 0.0f;
@@ -1359,7 +1364,7 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	VkBuffer vertexBuffers[] = { vertexBuffer };
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-	vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT16);
+	vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrameID], 0, nullptr);
 
 	VkViewport viewport{};
@@ -1376,7 +1381,7 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	scissor.extent = swapchainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
+	vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1562,12 +1567,12 @@ void MyVulkan::CleanupSwapchainResourcesForRecreation()
 	DestroySwapchain();
 }
 
-void MyVulkan::CreateVertexBuffer()
+void MyVulkan::CreateVertexBuffer(int vertexCount, void* vertexData)
 {
 	// Use two buffers.
 	// One for writing vertex data, the other is actual vertex buffer which we cannot see and use(map) at CPU.
 	// The reason why use two buffers is the buffer we can see at CPU is not a good buffer from the GPU side.
-	VkDeviceSize bufferSize = sizeof(Vertex) * vertices.size();
+	VkDeviceSize bufferSize = sizeof(Vertex) * vertexCount;
 
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
@@ -1576,7 +1581,7 @@ void MyVulkan::CreateVertexBuffer()
 	void* data;
 	// Operate as glMapBuffer, glUnmapBuffer
 	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, vertices.data(), static_cast<size_t>(bufferSize));
+	memcpy(data, vertexData, static_cast<size_t>(bufferSize));
 	vkUnmapMemory(device, stagingBufferMemory);
 
 	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
@@ -1710,9 +1715,10 @@ void MyVulkan::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize s
 	vkFreeCommandBuffers(device, commandPool, 1, &copyCommandBuffer);
 }
 
-void MyVulkan::CreateIndexBuffer()
+void MyVulkan::CreateIndexBuffer(int indexCount, void* indexData)
 {
-	VkDeviceSize bufferSize = sizeof(int16_t) * indices.size();
+	this->indexCount = indexCount;
+	VkDeviceSize bufferSize = sizeof(int32_t) * indexCount;
 
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
@@ -1721,7 +1727,7 @@ void MyVulkan::CreateIndexBuffer()
 
 	void* data;
 	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, indices.data(), bufferSize);
+	memcpy(data, indexData, bufferSize);
 	vkUnmapMemory(device, stagingBufferMemory);
 
 	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
@@ -1775,7 +1781,9 @@ void MyVulkan::UpdateUniformBuffer(uint32_t currentImage)
 	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
 	UniformBufferObject ubo;
-	ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f), glm::vec3(0.0f, 0.0f, 1.0f));
+	ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f), glm::vec3(0.0f, 0.0f, 1.0f)) * 
+		glm::rotate(glm::mat4(1.f), glm::radians(90.f), glm::vec3(1.0f, 0.0f, 0.0f)) * 
+		glm::scale(glm::vec3(6.f, 6.f, 6.f));
 	ubo.view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
 	ubo.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 10.f);
 	// flip the sign of the element because GLM originally designed for OpenGL, where Y coordinate of the clip coorinates is inverted.

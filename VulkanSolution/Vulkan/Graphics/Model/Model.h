@@ -31,5 +31,6 @@ private:
 	void ProcessNode(aiNode* node, const aiScene* scene);
 
 	std::vector<Vertex> vertices;
+
 	std::vector<unsigned int> indices;
 };

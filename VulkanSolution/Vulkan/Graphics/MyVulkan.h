@@ -130,6 +130,16 @@ private:
 	void CreateDescriptorPool();
 	void DestroyDescriptorPool();
 	void CreateDescriptorSets();
+
+	void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+	VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+
+	void CreateDepthResources();
+	void DestroyDepthResources();
+	VkFormat FindDepthFormat();
+	bool HasStencilComponent(VkFormat format);
+	VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 	private:
 		const int MAX_FRAMES_IN_FLIGHT = 2;
 private:
@@ -173,15 +183,6 @@ private:
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	};
 
-	std::vector<TutorialVertex > vertices = {
-	TutorialVertex ({{1.0f, -1.0f}, {1.0f, 1.0f, 1.0f}}),
-	TutorialVertex ({{-1.0f, -1.0f}, {1.0f, 0.0f, 0.0f}}),
-	TutorialVertex ({{-1.0f, 0.5f}, {0.0f, 1.0f, 1.0f}}),
-	TutorialVertex ({{1.0f, 0.5f}, {0.f, 0.f, 1.f}}),
-	};
-	std::vector<uint16_t> indices = {
-		0, 1, 2, 2, 3, 0
-	};
 	uint32_t indexCount;
 
 	VkBuffer vertexBuffer;
@@ -193,4 +194,8 @@ private:
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
 
 	Model* model;
+
+	VkImage depthImage;
+	VkDeviceMemory depthImageMemory;
+	VkImageView depthImageView;
 };

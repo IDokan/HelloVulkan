@@ -22,7 +22,7 @@ Model::Model(const std::string& path)
 void Model::LoadModel(const std::string& path)
 {
 	Assimp::Importer importer;
-	const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices);
+	const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_GenNormals);
 
 	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
 	{
@@ -64,6 +64,7 @@ void Model::ProcessNode(aiNode* node, const aiScene* scene)
 		for(unsigned int j = 0; j < mesh->mNumVertices; j++)
 		{ 
 			vertices[j].position = glm::vec3(mesh->mVertices[j].x, mesh->mVertices[j].y, mesh->mVertices[j].z);
+			vertices[j].normal = glm::vec3(mesh->mNormals[j].x, mesh->mNormals[j].y, mesh->mNormals[j].z);
 		}
 		for (unsigned int j = 0; j < mesh->mNumFaces; j++)
 		{

@@ -54,31 +54,35 @@ struct Vertex {
 	Vertex()
 	{
 		position = glm::vec3(0.f, 0.f, 0.f);
+		normal = glm::vec3(0.f, 0.f, 0.f);
 	}
-	Vertex(glm::vec3 position)
-		:position(position)
+	Vertex(glm::vec3 position, glm::vec3 normal)
+		:position(position), normal(normal)
 	{}
 
 	Vertex(const Vertex& v)
-		:position(v.position)
+		:position(v.position), normal(v.normal)
 	{}
 
 	Vertex(Vertex&& v)
-		:position(v.position)
+		:position(v.position), normal(v.normal)
 	{}
 	Vertex& operator=(const Vertex& v)
 	{
 		position = v.position;
+		normal = v.normal;
 		return *this;
 	}
 	Vertex& operator=(Vertex&& v)
 	{
 		position = v.position;
+		normal = v.normal;
 		return *this;
 	}
 
 
 		glm::vec3 position;
+		glm::vec3 normal;
 
 	static const VkVertexInputBindingDescription& GetBindingDescription()
 	{
@@ -92,12 +96,17 @@ struct Vertex {
 
 	static const std::vector<VkVertexInputAttributeDescription>& GetAttributeDescriptions()
 	{
-		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(1);
+		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(2);
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
-		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;		// two 32-bit floats
+		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;		// three 32-bit floats
 		attributeDescriptions[0].offset = offsetof(Vertex, position);
+
+		attributeDescriptions[1].binding = 0;
+		attributeDescriptions[1].location = 1;
+		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;		// three 32-bit floats
+		attributeDescriptions[1].offset = offsetof(Vertex, normal);
 
 		return attributeDescriptions;
 	}

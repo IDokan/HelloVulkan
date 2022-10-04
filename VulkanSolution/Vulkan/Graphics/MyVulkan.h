@@ -38,6 +38,7 @@ public:
 
 	void FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize length, const float value);
 
+	void LoadNewModel();
 	/*
 	void CreateSwapChain();
 
@@ -105,6 +106,8 @@ private:
 	void CreateBuffers();
 	void CreateVertexBuffer(int vertexCount, void* vertexData);
 	void DestroyBuffersAndFreeMemories();
+	void CreateModelBuffers();
+	void DestroyModelBuffers();
 	void DestroyBuffer(VkBuffer& buffer);
 	void FreeMemory(VkDeviceMemory memory);
 
@@ -140,7 +143,9 @@ private:
 	VkFormat FindDepthFormat();
 	bool HasStencilComponent(VkFormat format);
 	VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
-	private:
+
+
+private:
 		const int MAX_FRAMES_IN_FLIGHT = 2;
 private:
 	Window* windowHolder;

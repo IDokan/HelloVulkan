@@ -8,8 +8,14 @@ Author
 Creation Date: 06.08.2021
 	Source file for window using GLEW
 ******************************************************************************/
+#define _CRT_SECURE_NO_WARNINGS
+#include <windows.h>
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#define GLFW_EXPOSE_NATIVE_WIN32
+#define GLFW_EXPOSE_NATIVE_WGL
+#define GLFW_NATIVE_INCLUDE_NONE
+#include <GLFW/glfw3native.h>
 #include <string>
 #include "Window.h"
 
@@ -30,9 +36,18 @@ namespace CallbackFuncs
 		auto app = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
 		app->SetWindowFramebufferResized(true);
 	}
+
+	void DropCallback(GLFWwindow* window, int count, const char** paths)
+	{
+		auto app = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+		for (int i = 0; i < count; i++)
+		{
+			app->SetDroppedPath(paths[i]);
+		}
+	}
 }
 
-bool Window::CreateWindow(const int& width, const int& height, const char* title, GLFWmonitor* monitor, GLFWwindow* share)
+bool Window::CreateWindowGLFW(const int& width, const int& height, const char* title, GLFWmonitor* monitor, GLFWwindow* share)
 {
 	if (glfwWindow != nullptr)
 	{
@@ -52,6 +67,7 @@ bool Window::CreateWindow(const int& width, const int& height, const char* title
 	glfwSetWindowUserPointer(glfwWindow, this);
 	glfwSetWindowCloseCallback(glfwWindow, CallbackFuncs::WindowClose);
 	glfwSetFramebufferSizeCallback(glfwWindow, CallbackFuncs::FramebufferResizeCallback);
+	glfwSetDropCallback(glfwWindow, CallbackFuncs::DropCallback);
 
 	if (!glfwVulkanSupported())
 	{
@@ -106,4 +122,28 @@ void Window::SetWindowFramebufferResized(bool resized)
 bool Window::GetWindowFramebuffer()
 {
 	return windowFramebufferResized;
+}
+
+void Window::SetDroppedPath(const char* _path)
+{
+	isPathDropped = true;
+	if (path != nullptr)
+	{
+		delete[] path;
+	}
+	path = new char[strlen(_path)+1];
+	strcpy(path, _path);
+}
+
+bool Window::IsPathDropped()
+{
+	return isPathDropped;
+}
+
+void Window::DisplayMessage(std::string title, std::string message)
+{
+	std::wstring titleW = std::wstring(title.begin(), title.end());
+	std::wstring messageW = std::wstring(message.begin(), message.end());
+
+	MessageBox(glfwGetWin32Window(glfwWindow), messageW.c_str(), titleW.c_str(), MB_OK | MB_ICONERROR);
 }

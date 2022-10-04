@@ -181,8 +181,7 @@ void MyVulkan::DrawFrame()
 
 void MyVulkan::CreateBuffers()
 {
-	CreateVertexBuffer(model->GetVertexCount(), model->GetVertexData());
-	CreateIndexBuffer(model->GetIndexCount(), model->GetIndexData());
+	CreateModelBuffers();
 	CreateUniformBuffers();
 }
 
@@ -298,6 +297,25 @@ double MyVulkan::sRGBToLinear(double cs)
 void MyVulkan::FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize size, const float value)
 {
 	vkCmdFillBuffer(cmdBuffer, dstBuffer, offset, size, *(const uint32_t*)&value);
+}
+void MyVulkan::LoadNewModel()
+{
+	windowHolder->isPathDropped = false;
+	const char* newPath = windowHolder->path;
+	
+	if (model->LoadModel(newPath) == false)
+	{
+		windowHolder->DisplayMessage("Failed model loading!", model->GetErrorString());
+		return;
+	}
+
+	// In order to clean previous model buffers successfully, 
+			// I should guarantee that deleted buffers are not in use by a command buffer.
+	// Thus, wait until the submitted command buffer completed execution.
+	VulkanHelper::VkCheck(vkDeviceWaitIdle(device), "failed to make logical device idle");
+
+	DestroyModelBuffers();
+	CreateModelBuffers();
 }
 /*
 void MyVulkan::CreateSwapChain()
@@ -1623,17 +1641,28 @@ void MyVulkan::CreateVertexBuffer(int vertexCount, void* vertexData)
 
 void MyVulkan::DestroyBuffersAndFreeMemories()
 {
-	DestroyBuffer(vertexBuffer);
-	FreeMemory(vertexBufferMemory);
-
-	DestroyBuffer(indexBuffer);
-	FreeMemory(indexBufferMemory);
+	DestroyModelBuffers();
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		DestroyBuffer(uniformBuffers[i]);
 		FreeMemory(uniformBuffersMemory[i]);
 	}
+}
+
+void MyVulkan::CreateModelBuffers()
+{
+	CreateVertexBuffer(model->GetVertexCount(), model->GetVertexData());
+	CreateIndexBuffer(model->GetIndexCount(), model->GetIndexData());
+}
+
+void MyVulkan::DestroyModelBuffers()
+{
+	DestroyBuffer(vertexBuffer);
+	FreeMemory(vertexBufferMemory);
+
+	DestroyBuffer(indexBuffer);
+	FreeMemory(indexBufferMemory);
 }
 
 void MyVulkan::DestroyBuffer(VkBuffer& buffer)
@@ -1812,7 +1841,7 @@ void MyVulkan::UpdateUniformBuffer(uint32_t currentImage)
 	UniformBufferObject ubo;
 	ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f), glm::vec3(0.0f, 0.0f, 1.0f)) * 
 		glm::rotate(glm::mat4(1.f), glm::radians(90.f), glm::vec3(1.0f, 0.0f, 0.0f)) * 
-		glm::scale(glm::vec3(6.f, 6.f, 6.f));
+		model->CalculateAdjustBoundingBoxMatrix();
 	ubo.view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
 	ubo.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 10.f);
 	// flip the sign of the element because GLM originally designed for OpenGL, where Y coordinate of the clip coorinates is inverted.

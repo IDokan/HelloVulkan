@@ -20,10 +20,10 @@ public:
 	friend MyVulkan;
 public:
 	Window()
-		: glfwWindow(nullptr), windowFramebufferResized(false)
+		: glfwWindow(nullptr), windowFramebufferResized(false), isPathDropped(false), path(nullptr)
 	{}
 
-	bool CreateWindow(const int& width, const int& height, const char* title, GLFWmonitor* monitor, GLFWwindow* share);
+	bool CreateWindowGLFW(const int& width, const int& height, const char* title, GLFWmonitor* monitor, GLFWwindow* share);
 	bool ShouldWindowClose();
 	void PollWindowEvents();
 	void CloseWindow();
@@ -35,8 +35,15 @@ public:
 	void SetWindowFramebufferResized(bool resized);
 	bool GetWindowFramebuffer();
 
+	void SetDroppedPath(const char* path);
+	bool IsPathDropped();
+
+	void DisplayMessage(std::string title, std::string message);
 private:
 	GLFWwindow* glfwWindow;
 
 	bool windowFramebufferResized;
+
+	bool isPathDropped;
+	char* path;
 };

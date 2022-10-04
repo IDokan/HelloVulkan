@@ -33,7 +33,7 @@ bool Engine::Init()
 {
 	// Vulkan Init
 
-	if (window->CreateWindow(800, 600, "Vulkan Window", nullptr, nullptr) == false)
+	if (window->CreateWindowGLFW(800, 600, "Vulkan Window", nullptr, nullptr) == false)
 		return false;
 
 	if (VK->InitVulkan("Sinil's Hello Vulkan", VK_MAKE_VERSION(1, 0, 0)) == false)
@@ -59,6 +59,11 @@ void Engine::Update()
 	// Update window
 	window->PollWindowEvents();
 
+	if (window->IsPathDropped())
+	{
+		VK->LoadNewModel();
+	}
+	
 	VK->DrawFrame();
 }
 

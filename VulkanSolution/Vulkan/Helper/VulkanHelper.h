@@ -30,5 +30,5 @@ namespace VulkanHelper
 		return result;
 	}
 
-#define ARRAYSIZE(ARR) sizeof(ARR) / sizeof(ARR ## [0])
+// #define ARRAYSIZE(ARR) sizeof(ARR) / sizeof(ARR ## [0])
 }

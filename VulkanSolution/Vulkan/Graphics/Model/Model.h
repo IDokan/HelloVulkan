@@ -37,7 +37,7 @@ public:
 private:
 	void ClearData();
 
-	void ProcessNode(aiNode* node, const aiScene* scene);
+	void ReadMesh(aiNode* node, const aiScene* scene);
 
 	void UpdateBoundingBox(glm::vec3 vertex);
 	glm::vec3 GetModelScale();

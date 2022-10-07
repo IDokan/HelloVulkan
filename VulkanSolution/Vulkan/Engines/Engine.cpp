@@ -18,6 +18,7 @@ Creation Date: 06.08.2021
 #include "Timer.h"
 #include "Graphics/MyVulkan.h"
 #include "vulkan/vulkan_core.h"
+#include "ImGUI/myGUI.h"
 
 Engine::Engine()
 	: isUpdate(true), window(new Window()), VK(new MyVulkan(window))
@@ -38,6 +39,8 @@ bool Engine::Init()
 
 	if (VK->InitVulkan("Sinil's Hello Vulkan", VK_MAKE_VERSION(1, 0, 0)) == false)
 		return false;
+
+	VK->InitGUI();
 
 	return true;
 }
@@ -63,6 +66,8 @@ void Engine::Update()
 	{
 		VK->LoadNewModel();
 	}
+
+	MyImGUI::DrawGUI();
 	
 	VK->DrawFrame();
 }
@@ -70,6 +75,8 @@ void Engine::Update()
 void Engine::Clean()
 {
 	window->ShutWindowDown();
+
+	MyImGUI::DestroyGUIResources();
 
 	VK->CleanVulkan();
 }

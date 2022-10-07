@@ -31,8 +31,10 @@ bool Model::LoadModel(const std::string& path)
 	}
 
 	ClearData();
-
-	ProcessNode(scene->mRootNode, scene);
+	if (scene->HasMeshes())
+	{
+		ReadMesh(scene->mRootNode, scene);
+	}
 	isModelValid = true;
 	return isModelValid;
 }
@@ -83,7 +85,7 @@ void Model::ClearData()
 	boundingBox[1] = glm::vec3(-INFINITY);
 }
 
-void Model::ProcessNode(aiNode* node, const aiScene* scene)
+void Model::ReadMesh(aiNode* node, const aiScene* scene)
 {
 	// Process all the node's meshes (if any)
 	for (unsigned int i = 0; i < node->mNumMeshes; i++)
@@ -111,7 +113,7 @@ void Model::ProcessNode(aiNode* node, const aiScene* scene)
 	// then do the same for each of its children
 	for (unsigned int i = 0; i < node->mNumChildren; i++)
 	{
-		ProcessNode(node->mChildren[i], scene);
+		ReadMesh(node->mChildren[i], scene);
 	}
 }
 

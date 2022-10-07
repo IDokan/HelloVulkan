@@ -9,6 +9,7 @@ Creation Date: 06.08.2021
 	Header file for window using GLEW
 ******************************************************************************/
 #pragma once
+#include <string>
 
 struct GLFWwindow;
 struct GLFWmonitor;

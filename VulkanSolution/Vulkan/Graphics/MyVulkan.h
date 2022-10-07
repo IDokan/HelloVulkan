@@ -59,6 +59,8 @@ public:
 
 	void SetupSeparateVertexAttribute();
 
+	void InitGUI();
+
 private:
 	bool CreateInstance(const char* appName, uint32_t appVersion);
 	void DestroyInstance();

@@ -10,6 +10,7 @@ Creation Date: 06.12.2021
 		- result checks
 ******************************************************************************/
 #pragma once
+#include <iostream>
 
 enum VkResult;
 

@@ -21,6 +21,7 @@ Creation Date: 06.12.2021
 #include "Engines/Window.h"
 #include "Graphics/Structures/Structs.h"
 #include "Graphics/Model/Model.h"
+#include "ImGUI/myGUI.h"
 
 MyVulkan::MyVulkan(Window* window)
 	: windowHolder(window), currentFrameID(0), model(nullptr)
@@ -630,6 +631,11 @@ void MyVulkan::CreateSimpleRenderpass()
 		nullptr,
 		&renderPass);
 }*/
+
+void MyVulkan::InitGUI()
+{
+	MyImGUI::InitImGUI(windowHolder->glfwWindow, device, instance, physicalDevice, queue, renderPass, commandBuffers.front());
+}
 
 bool MyVulkan::CreateInstance(const char* appName, uint32_t appVersion)
 {
@@ -1427,6 +1433,8 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
 	vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
+
+	MyImGUI::GUIRender(commandBuffer);
 
 	vkCmdEndRenderPass(commandBuffer);
 

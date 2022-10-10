@@ -34,11 +34,17 @@ bool Engine::Init()
 {
 	// Vulkan Init
 
-	if (window->CreateWindowGLFW(800, 600, "Vulkan Window", nullptr, nullptr) == false)
+	if (window->CreateWindowGLFW(800, 600, "BMLv", nullptr, nullptr) == false)
+	{
+		window->DisplayMessage("Init Failed!", "Crating Window has Failed!");
 		return false;
+	}
 
 	if (VK->InitVulkan("Sinil's Hello Vulkan", VK_MAKE_VERSION(1, 0, 0)) == false)
+	{
+		window->DisplayMessage("Init Failed!", "Init Vulkan has Failed!");
 		return false;
+	}
 
 	VK->InitGUI();
 
@@ -47,6 +53,7 @@ bool Engine::Init()
 
 void Engine::Update()
 {
+
 	// Calculate dt, and FPS to show up on window's title bar
 	Timer* timer = Timer::GetTimer();
 	float dt = static_cast<float>(timer->GetDeltaTime());
@@ -55,7 +62,7 @@ void Engine::Update()
 	{
 		char buf[32];
 		_itoa(frame, buf, 10);
-		window->SetWindowTitle(std::string("Vulkan Window, FPS : ") + std::string(buf));
+		window->SetWindowTitle(std::string("BMLv, FPS : ") + std::string(buf));
 	}
 	Timer::GetTimer()->Reset();
 

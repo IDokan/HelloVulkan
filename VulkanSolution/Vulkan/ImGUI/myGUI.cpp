@@ -15,10 +15,23 @@ Creation Date: 10.06.2022
 #include "ImGUI/backends/imgui_impl_vulkan.h"
 #include <xutility>
 #include "Engines/Window.h"
+#include "Graphics/Model/Model.h"
 
 VkDescriptorPool imguiDescriptorPool{ VK_NULL_HANDLE };
 VkDevice guiDevice;
 
+namespace MyImGUI
+{
+    namespace Helper
+    {
+        void ModelStats();
+    }
+}
+
+namespace
+{
+    Model* model;
+}
 
 namespace MyImGUI
 {
@@ -139,9 +152,13 @@ void MyImGUI::DrawGUI()
 {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+    // ImGui::ShowDemoWindow();
 
-    ImGui::Text("tmp");
+    ImGui::Begin("Controller");
 
+    Helper::ModelStats();
+
+    ImGui::End();
     ImGui::EndFrame();
 }
 
@@ -149,4 +166,18 @@ void MyImGUI::GUIRender(VkCommandBuffer commandBuffer)
 {
     ImGui::Render();
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
+}
+
+void MyImGUI::Helper::ModelStats()
+{
+    if (ImGui::CollapsingHeader("Basic Information", ImGuiTreeNodeFlags_::ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::TextWrapped("Vertex Count: %d", model->GetVertexCount());
+        ImGui::TextWrapped("Triangle Count: %d", model->GetIndexCount() / 3);
+    }
+}
+
+void MyImGUI::SendModelInfo(Model* _model)
+{
+    model = _model;
 }

@@ -12,6 +12,7 @@ Creation Date: 10.06.2022
 #include "vulkan/vulkan.h"
 
 struct GLFWwindow;
+class Model;
 
 namespace MyImGUI
 {
@@ -20,7 +21,7 @@ namespace MyImGUI
 		VkPhysicalDevice physicalDevice, VkQueue queue, VkRenderPass renderPass, 
 		VkCommandBuffer commandBuffer);
 
-
+    void SendModelInfo(Model* model);
 
     // Should be called before destruction of Vulkan
     void DestroyGUIResources();

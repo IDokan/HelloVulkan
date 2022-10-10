@@ -635,6 +635,8 @@ void MyVulkan::CreateSimpleRenderpass()
 void MyVulkan::InitGUI()
 {
 	MyImGUI::InitImGUI(windowHolder->glfwWindow, device, instance, physicalDevice, queue, renderPass, commandBuffers.front());
+
+	MyImGUI::SendModelInfo(model);
 }
 
 bool MyVulkan::CreateInstance(const char* appName, uint32_t appVersion)

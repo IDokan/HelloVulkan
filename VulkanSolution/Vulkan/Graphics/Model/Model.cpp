@@ -96,7 +96,11 @@ void Model::ReadMesh(aiNode* node, const aiScene* scene)
 		{ 
 			Vertex vertex;
 			vertex.position = glm::vec3(mesh->mVertices[j].x, mesh->mVertices[j].y, mesh->mVertices[j].z);
-			vertex.normal = glm::vec3(mesh->mNormals[j].x, mesh->mNormals[j].y, mesh->mNormals[j].z);
+
+			if (mesh->HasNormals())
+			{
+				vertex.normal = glm::vec3(mesh->mNormals[j].x, mesh->mNormals[j].y, mesh->mNormals[j].z);
+			}
 			vertices.push_back(vertex);
 			UpdateBoundingBox(vertices.back().position);
 		}

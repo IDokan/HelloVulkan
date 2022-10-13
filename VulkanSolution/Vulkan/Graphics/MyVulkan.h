@@ -136,9 +136,7 @@ private:
 	void DestroyDescriptorPool();
 	void CreateDescriptorSets();
 
-	void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-	VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
 
 	void CreateDepthResources();
 	void DestroyDepthResources();
@@ -146,12 +144,34 @@ private:
 	bool HasStencilComponent(VkFormat format);
 	VkFormat FindSupportedFormat(const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 
+	VkCommandBuffer BeginSingleTimeCommands();
+	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 
+	// @@@@@ Texture functions & resources
+	void CreateTextures(const std::vector<std::string>& imagePaths);
+	void CreateTextureImageAndImageView(const std::string& path);
+	void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
+	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+	void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+	VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
+	void CreateTextureSampler();
+
+	void DestroyTextureImage();
+	void DestroyTextureSampler();
+
+	std::vector<VkImage> textureImages;
+	std::vector<VkDeviceMemory> textureImageMemories;
+	std::vector<VkImageView> textureImageViews;
+
+	VkSampler textureSampler;
+	// @@ End of Texture functions
 private:
 		const int MAX_FRAMES_IN_FLIGHT = 2;
 private:
 	Window* windowHolder;
 	VkInstance instance{};
+	VkPhysicalDeviceProperties physicalDeviceProperties;
+	VkPhysicalDeviceFeatures2 physicalDeviceFeatures;
 	VkPhysicalDevice physicalDevice;
 	uint32_t queueFamily;
 	VkDevice device; 
@@ -181,7 +201,7 @@ private:
 	uint32_t currentFrameID;
 
 	// GLFW provides required instance extensions.
-
+	VkValidationFeaturesEXT EnableBestPracticesValidation();
 	std::vector<const char*> instanceLayers = {
 		"VK_LAYER_KHRONOS_validation"		// it assists developers in isolating incorrect usage, and in verifying that applications correctly use the API.
 	};

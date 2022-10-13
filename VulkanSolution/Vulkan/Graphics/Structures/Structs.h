@@ -12,6 +12,7 @@ Creation Date: 09.27.2022
 #include <vector>
 #include "Vulkan/vulkan.h"
 #include <GLMath.h>
+#include <string>
 
 struct TutorialVertex {
 	TutorialVertex(glm::vec2 position, glm::vec3 color)
@@ -55,34 +56,38 @@ struct Vertex {
 	{
 		position = glm::vec3(0.f, 0.f, 0.f);
 		normal = glm::vec3(0.f, 0.f, 0.f);
+		texCoord = glm::vec2(0.f, 0.f);
 	}
-	Vertex(glm::vec3 position, glm::vec3 normal)
-		:position(position), normal(normal)
+	Vertex(glm::vec3 position, glm::vec3 normal, glm::vec2 texCoord)
+		:position(position), normal(normal), texCoord(texCoord)
 	{}
 
 	Vertex(const Vertex& v)
-		:position(v.position), normal(v.normal)
+		:position(v.position), normal(v.normal), texCoord(v.texCoord)
 	{}
 
 	Vertex(Vertex&& v)
-		:position(v.position), normal(v.normal)
+		:position(v.position), normal(v.normal), texCoord(v.texCoord)
 	{}
 	Vertex& operator=(const Vertex& v)
 	{
 		position = v.position;
 		normal = v.normal;
+		texCoord = v.texCoord;
 		return *this;
 	}
 	Vertex& operator=(Vertex&& v)
 	{
 		position = v.position;
 		normal = v.normal;
+		texCoord = v.texCoord;
 		return *this;
 	}
 
 
 		glm::vec3 position;
 		glm::vec3 normal;
+		glm::vec2 texCoord;
 
 	static const VkVertexInputBindingDescription& GetBindingDescription()
 	{
@@ -96,7 +101,7 @@ struct Vertex {
 
 	static const std::vector<VkVertexInputAttributeDescription>& GetAttributeDescriptions()
 	{
-		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(2);
+		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
@@ -107,6 +112,11 @@ struct Vertex {
 		attributeDescriptions[1].location = 1;
 		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;		// three 32-bit floats
 		attributeDescriptions[1].offset = offsetof(Vertex, normal);
+
+		attributeDescriptions[2].binding = 0;
+		attributeDescriptions[2].location = 2;
+		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;		// three 32-bit floats
+		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
 
 		return attributeDescriptions;
 	}
@@ -122,4 +132,18 @@ struct UniformBufferObject {
 	glm::mat4 model;
 	glm::mat4 view;
 	glm::mat4 proj;
+};
+
+struct Mesh
+{
+	Mesh();
+	Mesh(const std::string& name, const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices);
+	Mesh(const Mesh& m);
+	Mesh(Mesh&& m);
+	Mesh& operator=(const Mesh& m);
+	Mesh& operator=(Mesh&& m);
+
+	std::string meshName;
+	std::vector<uint32_t> indices;
+	std::vector<Vertex> vertices;
 };

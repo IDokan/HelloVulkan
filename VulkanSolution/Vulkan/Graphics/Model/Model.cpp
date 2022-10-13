@@ -8,55 +8,92 @@ Author
 Creation Date: 09.27.2022
 	Source file for custom structures.
 ******************************************************************************/
+
 #include <iostream>
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/postprocess.h>
 #include "Graphics/Model/Model.h"
 
+#include "stb/stb_image.h"
+
+
 Model::Model(const std::string& path)
-	: isModelValid(true)
+	: isModelValid(true), lSdkManager(nullptr), ios(nullptr), lImporter(nullptr)
 {
 	LoadModel(path);
 }
 
+Model::~Model()
+{
+	CleanFBXResources();
+}
+
 bool Model::LoadModel(const std::string& path)
 {
-	const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_GenNormals);
+	CleanFBXResources();
 
-	if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+	// It handles memory management.
+	lSdkManager = FbxManager::Create();
+
+	ios = FbxIOSettings::Create(lSdkManager, IOSROOT);
+	lSdkManager->SetIOSettings(ios);
+
+	lImporter = FbxImporter::Create(lSdkManager, "");
+
+	if (!lImporter->Initialize(path.c_str(), -1, ios))
 	{
 		isModelValid = false;
-		return isModelValid;
+		return false;
 	}
 
-	ClearData();
-	if (scene->HasMeshes())
-	{
-		ReadMesh(scene->mRootNode, scene);
-	}
+	lScene = FbxScene::Create(lSdkManager, "myScene");
+
+	lImporter->Import(lScene);
+
+	lImporter->Destroy();
+	lImporter = nullptr;
+
+	GetScene();
+
+
+	//const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_GenNormals);
+
+	//if (!scene || scene->mFlags & AI_SCENE_FLAGS_INCOMPLETE || !scene->mRootNode)
+	//{
+	//	isModelValid = false;
+	//	return isModelValid;
+	//}
+
+	//ClearData();
+	//if (scene->HasMeshes())
+	//{
+	//	ReadMesh(scene->mRootNode, scene);
+	//}
+	//if (scene->HasMaterials())
+	//{
+	//	ReadMaterial(scene, path);
+	//}
+	
 	isModelValid = true;
 	return isModelValid;
 }
 
 void* Model::GetVertexData()
 {
-	return reinterpret_cast<void*>(vertices.data());
+	return reinterpret_cast<void*>(meshes[0].vertices.data());
 }
 
 int Model::GetVertexCount()
 {
-	return static_cast<int>(vertices.size());
+	return static_cast<int>(meshes[0].vertices.size());
 }
 
 void* Model::GetIndexData()
 {
-	return reinterpret_cast<void*>(indices.data());
+	return reinterpret_cast<void*>(meshes[0].indices.data());
 }
 
 int Model::GetIndexCount()
 {
-	return static_cast<int>(indices.size());
+	return static_cast<int>(meshes[0].indices.size());
 }
 
 bool Model::IsModelValid()
@@ -66,7 +103,7 @@ bool Model::IsModelValid()
 
 const char* Model::GetErrorString()
 {
-	return importer.GetErrorString();
+	return lImporter->GetStatus().GetErrorString();
 }
 
 glm::mat4 Model::CalculateAdjustBoundingBoxMatrix()
@@ -76,49 +113,319 @@ glm::mat4 Model::CalculateAdjustBoundingBoxMatrix()
 	return glm::scale(glm::vec3(2.f / largest)) * glm::translate(-GetModelCentroid());
 }
 
+const std::vector<std::string>& Model::GetDiffuseImagePaths()
+{
+	return diffuseImagePaths;
+}
+
+const std::vector<std::string>& Model::GetNormalImagePaths()
+{
+	return normalImagePaths;
+}
+
+void Model::ExploreScene(FbxScene* scene)
+{
+	// The first root node is always empty
+	FbxNode* lRootNode = scene->GetRootNode();
+
+	if (lRootNode)
+	{
+		for (int i = 0; i < lRootNode->GetChildCount(); i++)
+		{
+			PrintNode(lRootNode->GetChild(i));
+		}
+	}
+}
+
+void Model::PrintNode(FbxNode* node)
+{
+	PrintTabs();
+	const char* nodeName = node->GetName();
+	FbxDouble3 translation = node->LclTranslation.Get();
+	FbxDouble3 rotation = node->LclRotation.Get();
+	FbxDouble3 scaling = node->LclScaling.Get();
+
+	// Print the contents of the node.
+	printf("<node name='%s' translation='(%f, %f, %f)' rotation='(%f, %f, %f)' scaling='(%f, %f, %f)'>\n",
+		nodeName,
+		translation[0], translation[1], translation[2],
+		rotation[0], rotation[1], rotation[2],
+		scaling[0], scaling[1], scaling[2]
+	);
+	numTabs++;
+
+	// Print the node's attributes.
+	for (int i = 0; i < node->GetNodeAttributeCount(); i++)
+		PrintAttribute(node->GetNodeAttributeByIndex(i));
+
+	// Recursively print the children.
+	for (int j = 0; j < node->GetChildCount(); j++)
+		PrintNode(node->GetChild(j));
+
+	numTabs--;
+	PrintTabs();
+	printf("</node>\n");
+}
+
+void Model::PrintTabs()
+{
+	for (int i = 0; i < numTabs; i++)
+		printf("\t");
+}
+
+void Model::PrintAttribute(FbxNodeAttribute* attribute)
+{
+	if (!attribute) return;
+
+	FbxString typeName = GetAttributeTypeName(attribute->GetAttributeType());
+	FbxString attrName = attribute->GetName();
+	PrintTabs();
+	// Note: to retrieve the character array of a FbxString, use its Buffer() method.
+	printf("<attribute type='%s' name='%s'/>\n", typeName.Buffer(), attrName.Buffer());
+}
+
+FbxString Model::GetAttributeTypeName(FbxNodeAttribute::EType type)
+{
+	switch (type) {
+	case FbxNodeAttribute::eUnknown: return "unidentified";
+	case FbxNodeAttribute::eNull: return "null";
+	case FbxNodeAttribute::eMarker: return "marker";
+	case FbxNodeAttribute::eSkeleton: return "skeleton";
+	case FbxNodeAttribute::eMesh: return "mesh";
+	case FbxNodeAttribute::eNurbs: return "nurbs";
+	case FbxNodeAttribute::ePatch: return "patch";
+	case FbxNodeAttribute::eCamera: return "camera";
+	case FbxNodeAttribute::eCameraStereo: return "stereo";
+	case FbxNodeAttribute::eCameraSwitcher: return "camera switcher";
+	case FbxNodeAttribute::eLight: return "light";
+	case FbxNodeAttribute::eOpticalReference: return "optical reference";
+	case FbxNodeAttribute::eOpticalMarker: return "marker";
+	case FbxNodeAttribute::eNurbsCurve: return "nurbs curve";
+	case FbxNodeAttribute::eTrimNurbsSurface: return "trim nurbs surface";
+	case FbxNodeAttribute::eBoundary: return "boundary";
+	case FbxNodeAttribute::eNurbsSurface: return "nurbs surface";
+	case FbxNodeAttribute::eShape: return "shape";
+	case FbxNodeAttribute::eLODGroup: return "lodgroup";
+	case FbxNodeAttribute::eSubDiv: return "subdiv";
+	default: return "unknown";
+	}
+}
+
+void Model::GetScene(FbxNode* root)
+{
+	if (!root)
+	{
+		root = lScene->GetRootNode();
+		if (!root)
+		{
+			return;
+		}
+	}
+
+	const uint32_t numNodes = static_cast<uint32_t>(root->GetChildCount());
+	for (uint32_t i = 0; i < numNodes; i++)
+	{
+		FbxNode* node = root->GetChild(i);
+
+		if (!node)
+		{
+			continue;
+		}
+
+		if (node->GetMesh())
+		{
+			GetMesh(node);
+		}
+		else
+		{
+			GetScene(node);
+		}
+	}
+}
+
+void Model::GetMesh(FbxNode* node)
+{
+	FbxMesh* mesh = node->GetMesh();
+	if (!mesh)
+	{
+		return;
+	}
+
+	if (mesh->RemoveBadPolygons() < 0)
+	{
+		return;
+	}
+
+	// Triangulate the mesh if needed.
+	FbxGeometryConverter gc{ lSdkManager };
+	mesh = static_cast<FbxMesh*>(gc.Triangulate(mesh, true));
+
+	if (!mesh || mesh->RemoveBadPolygons() < 0) 
+	{
+		return;
+	}
+
+	Mesh m;
+	m.meshName = (node->GetName()[0] != '\0') ? node->GetName() : mesh->GetName();
+	if (GetMeshData(mesh, m))
+	{
+		meshes.emplace_back(m);
+	}
+}
+
+bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
+{
+	const uint32_t polygonCount = mesh->GetPolygonCount();
+	if (polygonCount <= 0)
+	{
+		return false;
+	}
+
+	// Get Vertices
+	const uint32_t verticesCount = mesh->GetControlPointsCount();
+	FbxVector4* vertices = mesh->GetControlPoints();
+	const uint32_t indicesCount = mesh->GetPolygonVertexCount();
+	int* indices = mesh->GetPolygonVertices();
+
+
+	// Import normals
+	FbxArray<FbxVector4> normals;
+	// Calculate normals using FBX's built-in method, but only if no normal data is already there.
+
+	mesh->GenerateNormals();
+	mesh->GetPolygonVertexNormals(normals);
+	const uint32_t normalCount = normals.Size();
+
+	if (!(verticesCount > 0 && vertices && indicesCount > 0 && indices && normalCount > 0))
+	{
+		return false;
+	}
+
+	m.indices.resize(indicesCount);
+
+	if (normalCount == indicesCount)
+	{
+		for (size_t i = 0; i < indicesCount; i++)
+		{
+			int iInt = static_cast<int>(i);
+			FbxVector4 v = vertices[indices[i]] /* * _scene_scale */;
+			m.indices[i] = static_cast<uint32_t>(m.vertices.size());
+			m.vertices.emplace_back();
+			glm::vec3 position = glm::vec3(v[0], v[1], v[2]);
+			glm::vec3 normal = glm::vec3(normals[iInt][0], normals[iInt][1], normals[iInt][2]);
+			m.vertices.back().position = position;
+			m.vertices.back().normal = normal;
+
+			UpdateBoundingBox(position);
+		}
+	}
+	else
+	{
+		// When normal has same amount as positions
+		const int invalidIndexValue = std::numeric_limits<unsigned int>::max();
+		std::vector<unsigned int> vertexRef(verticesCount, invalidIndexValue);
+
+		for (size_t i = 0; i < indicesCount; i++)
+		{
+			const int vertexIndex = indices[i];
+			// Did we encounter this vertex before? If so, just add its index.
+			// If not, add the vertex and a new index.
+			if (vertexRef[vertexIndex] != invalidIndexValue)
+			{
+				m.indices[i] = vertexRef[vertexIndex];
+			}
+			else
+			{
+
+				// @@ TODO: Figure out _scene_scale;
+				FbxVector4 v = vertices[vertexIndex] /* * _scene_scale */;
+				m.indices[i] = static_cast<uint32_t>(m.vertices.size());
+				vertexRef[vertexIndex] = m.indices[i];
+				m.vertices.emplace_back();
+				glm::vec3 position = glm::vec3(v[0], v[1], v[2]);
+				m.vertices.back().position = position;
+
+				UpdateBoundingBox(position);
+			}
+		}
+	}
+
+	if (m.indices.size() % 3 != 0)
+	{
+		// Invalid index size
+		return false;
+	}
+
+return true;
+}
+
 void Model::ClearData()
 {
-	vertices.clear();
-	indices.clear();
-
 	boundingBox[0] = glm::vec3(INFINITY);
 	boundingBox[1] = glm::vec3(-INFINITY);
 }
 
+void Model::CleanFBXResources()
+{
+	if (lImporter != nullptr)
+	{
+		lImporter->Destroy();
+		lImporter = nullptr;
+	}
+
+	if (ios != nullptr)
+	{
+		ios->Destroy();
+		ios = nullptr;
+	}
+
+	if (lSdkManager != nullptr)
+	{
+		lSdkManager->Destroy();
+		lSdkManager = nullptr;
+	}
+}
+
 void Model::ReadMesh(aiNode* node, const aiScene* scene)
 {
-	// Process all the node's meshes (if any)
-	for (unsigned int i = 0; i < node->mNumMeshes; i++)
-	{
-		unsigned int baseIndex = vertices.size();
-		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-		for(unsigned int j = 0; j < mesh->mNumVertices; j++)
-		{ 
-			Vertex vertex;
-			vertex.position = glm::vec3(mesh->mVertices[j].x, mesh->mVertices[j].y, mesh->mVertices[j].z);
+	//// Process all the node's meshes (if any)
+	//for (unsigned int i = 0; i < node->mNumMeshes; i++)
+	//{
+	//	unsigned int baseIndex = static_cast<unsigned int>(vertices.size());
+	//	aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+	//	for(unsigned int j = 0; j < mesh->mNumVertices; j++)
+	//	{ 
+	//		Vertex vertex;
+	//		vertex.position = glm::vec3(mesh->mVertices[j].x, mesh->mVertices[j].y, mesh->mVertices[j].z);
 
-			if (mesh->HasNormals())
-			{
-				vertex.normal = glm::vec3(mesh->mNormals[j].x, mesh->mNormals[j].y, mesh->mNormals[j].z);
-			}
-			vertices.push_back(vertex);
-			UpdateBoundingBox(vertices.back().position);
-		}
-		for (unsigned int j = 0; j < mesh->mNumFaces; j++)
-		{
-			aiFace face = mesh->mFaces[j];
-			for (unsigned int k = 0; k < face.mNumIndices; k++)
-			{
-				indices.push_back(face.mIndices[k] + baseIndex);
-			}
-		}
-	}
-	
-	// then do the same for each of its children
-	for (unsigned int i = 0; i < node->mNumChildren; i++)
-	{
-		ReadMesh(node->mChildren[i], scene);
-	}
+	//		if (mesh->HasNormals())
+	//		{
+	//			vertex.normal = glm::vec3(mesh->mNormals[j].x, mesh->mNormals[j].y, mesh->mNormals[j].z);
+	//		}
+	//		
+	//		// Temporary texture coordinate data
+	//		if (mesh->HasTextureCoords(0))
+	//		{
+	//			vertex.texCoord = glm::vec2(mesh->mTextureCoords[0][j]. x, mesh->mTextureCoords[0][j].y);
+	//		}
+	//		vertices.push_back(vertex);
+	//		UpdateBoundingBox(vertices.back().position);
+	//	}
+	//	for (unsigned int j = 0; j < mesh->mNumFaces; j++)
+	//	{
+	//		aiFace face = mesh->mFaces[j];
+	//		for (unsigned int k = 0; k < face.mNumIndices; k++)
+	//		{
+	//			indices.push_back(face.mIndices[k] + baseIndex);
+	//		}
+	//	}
+	//}
+	//
+	//// then do the same for each of its children
+	//for (unsigned int i = 0; i < node->mNumChildren; i++)
+	//{
+	//	ReadMesh(node->mChildren[i], scene);
+	//}
 }
 
 void Model::UpdateBoundingBox(glm::vec3 vertex)
@@ -139,4 +446,65 @@ glm::vec3 Model::GetModelScale()
 glm::vec3 Model::GetModelCentroid()
 {
 	return (boundingBox[0] + boundingBox[1]) * 0.5f;
+}
+
+void Model::ReadMaterial(const aiScene* scene, const std::string& path)
+{
+	//std::string::size_type slashIndex = path.find_last_of('/');
+	//std::string dir;
+
+	//if (slashIndex == std::string::npos)
+	//{
+	//	dir = ".";
+	//}
+	//else if (slashIndex == 0)
+	//{
+	//	dir = "/";
+	//}
+	//else
+	//{
+	//	dir = path.substr(0, slashIndex);
+	//}
+
+	//diffuseImagePaths.resize(scene->mNumMaterials);
+	//normalImagePaths.resize(scene->mNumMaterials);
+
+	//for (unsigned int i = 0; i < scene->mNumMaterials; i++)
+	//{
+	//	const aiMaterial* pMaterial = scene->mMaterials[i];
+
+	//	if (pMaterial->GetTextureCount(aiTextureType_DIFFUSE) > 0)
+	//	{
+	//		aiString pathToTexture;
+
+	//		if (pMaterial->GetTexture(aiTextureType_DIFFUSE, i, &pathToTexture) == AI_SUCCESS)
+	//		{
+	//			std::string p(pathToTexture.data);
+
+	//			if (p.substr(0, 2) == ".\\")
+	//			{
+	//				p = p.substr(2, p.size() - 2);
+	//			}
+
+	//			diffuseImagePaths[i] = dir + "/" + p;
+	//		}
+	//	}
+	//	
+	//	if (pMaterial->GetTextureCount(aiTextureType_HEIGHT) > 0)
+	//	{
+	//		aiString pathToTexture;
+
+	//		if (pMaterial->GetTexture(aiTextureType_HEIGHT, i, &pathToTexture) == AI_SUCCESS)
+	//		{
+	//			std::string p(pathToTexture.data);
+
+	//			if (p.substr(0, 2) == ".\\")
+	//			{
+	//				p = p.substr(2, p.size() - 2);
+	//			}
+
+	//			normalImagePaths[i] = dir + "/" + p;
+	//		}
+	//	}
+	//}
 }

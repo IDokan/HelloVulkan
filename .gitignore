@@ -350,3 +350,5 @@ MigrationBackup/
 .ionide/
 
 VulkanSolution/ThirdParty/
+VulkanSolution/Vulkan/Graphics/Model/models/
+VulkanSolution/Vulkan/Graphics/Textures/

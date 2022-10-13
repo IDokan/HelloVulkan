@@ -5,7 +5,6 @@ Layers
 
 Create Instance -> Choose physical device -> Create logical device -> look queue family
 
-
 About queue flags
 	VK_QUEUE_GRAPHICS_BIT - queues in this family support graphics operations such as drawing points, line,s and triangles.
 	VK_QUEUE_COMPUTE_BIT - queues in this family support compute operations such as dispatching compute shaders.
@@ -174,3 +173,30 @@ The maximum number of simultaneous memory allocations is limited by the maxMemor
 
 Driver developers recommend that you also store multiple buffers, like the vertex and index buffer, into a single VkBuffer and use offsets in commands like vkCmdBindVertexBuffers. 
 The advantage is that your data is more cache friendly in that case, because it's closer together.
+
+vkCmdPipelineBarrier(..., VkPipelineStageFlags srcStageMask, VkPipelineStageFlags dstStageMask, ...)
+All types of pipeline barriers are submitted using the same function.
+srcStageMask specifies in which pipeline stage the operations occur that shold happen before the barrier.
+dstStageMask specifies the pipeline stage in which operations will wait on the barrier.
+The pipeline stages that you are allowed to specify before and after the barrier depend on how you use the resource before and after the barrier.
+For example, if you're going to read from a uniform after the barrier, you would specify a usage of VK_ACCESS_UNIFORM_READ_BIT and the earliest shader that will read from the uniform as pipline stage, for example VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT.
+It would not make sense to specify a non-shader pipeline stage for this type of usage and the validation layers will warn you when you specify a pipeline stage that does not match the type of usage.
+
+
+What is this?
+One thing to note is that command buffer submission results in implicit VK_ACCESS_HOST_WRITE_BIT synchronization at the beginning. 
+Since the transitionImageLayout function executes a command buffer with only a single command, you could use this implicit synchronization and set srcAccessMask to 0 if you ever needed a VK_ACCESS_HOST_WRITE_BIT dependency in a layout transition. 
+It's up to you if you want to be explicit about it or not, but I'm personally not a fan of relying on these OpenGL-like "hidden" operations.
+
+One more assignment for me.
+All of the helper functions that submit commands so far have been set up to execute synchronously by waiting for the queue to become idle. 
+For practical applications it is recommended to combine these operations in a single command buffer and execute them asynchronously for higher throughput, especially the transitions and copy in the createTextureImage function. 
+Try to experiment with this by creating a setupCommandBuffer that the helper functions record commands into, and add a flushSetupCommands to execute the commands that have been recorded so far. 
+It's best to do this after the texture mapping works to check if the texture resources are still set up correctly.
+
+Inadequate descriptor pools are a good example of a problem that the validation layers will not catch: As of Vulkan 1.1, vkAllocateDescriptorSets may fail with the error code VK_ERROR_POOL_OUT_OF_MEMORY if the pool is not sufficiently large, but the driver may also try to solve the problem internally. 
+This means that sometimes (depending on hardware, pool size and allocation size) the driver will let us get away with an allocation that exceeds the limits of our descriptor pool. 
+Other times, vkAllocateDescriptorSets will fail and return VK_ERROR_POOL_OUT_OF_MEMORY. 
+This can be particularly frustrating if the allocation succeeds on some machines, but fails on others.
+Since Vulkan shifts the responsiblity for the allocation to the driver, it is no longer a strict requirement to only allocate as many descriptors of a certain type (VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, etc.) as specified by the corresponding descriptorCount members for the creation of the descriptor pool. 
+However, it remains best practise to do so, and in the future, VK_LAYER_KHRONOS_validation will warn about this type of problem if you enable Best Practice Validation.

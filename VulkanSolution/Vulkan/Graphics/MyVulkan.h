@@ -28,7 +28,7 @@ public:
 	bool InitVulkan(const char* appName, uint32_t appVersion);
 	void CleanVulkan();
 
-	void DrawFrame();
+	void DrawFrame(float dt);
 
 	void CreateImages();
 	void CreateCubeImages();
@@ -106,7 +106,8 @@ private:
 	void CleanupSwapchainResourcesForRecreation();
 
 	void CreateBuffers();
-	void CreateVertexBuffer(int vertexCount, void* vertexData);
+	void ResizeModelBuffers(int size);
+	void CreateVertexBuffer(int vertexCount, void* vertexData, int i);
 	void DestroyBuffersAndFreeMemories();
 	void CreateModelBuffers();
 	void DestroyModelBuffers();
@@ -124,7 +125,7 @@ private:
 	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 	
-	void CreateIndexBuffer(int indexCount, void* indexData);
+	void CreateIndexBuffer(int indexCount, void* indexData, int i);
 
 	void CreateDescriptorSetLayout();
 	void DestroyDescriptorSetLayout();
@@ -135,6 +136,7 @@ private:
 	void CreateDescriptorPool();
 	void DestroyDescriptorPool();
 	void CreateDescriptorSets();
+	void UpdateDescriptorSets();
 
 	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
@@ -210,19 +212,23 @@ private:
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	};
 
-	uint32_t indexCount;
+	std::vector<uint32_t> indexCounts;
 
-	VkBuffer vertexBuffer;
-	VkDeviceMemory vertexBufferMemory;
-	VkBuffer indexBuffer;
-	VkDeviceMemory indexBufferMemory;
+	std::vector<VkBuffer> vertexBuffers;
+	std::vector<VkDeviceMemory> vertexBufferMemories;
+	std::vector<VkBuffer> indexBuffers;
+	std::vector<VkDeviceMemory> indexBufferMemories;
 	
 	std::vector<VkBuffer> uniformBuffers;
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
 
+	int meshSize;
 	Model* model;
 
 	VkImage depthImage;
 	VkDeviceMemory depthImageMemory;
 	VkImageView depthImageView;
+
+	bool isRotating;
+	float timer;
 };

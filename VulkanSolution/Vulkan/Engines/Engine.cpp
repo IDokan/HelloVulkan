@@ -76,7 +76,7 @@ void Engine::Update()
 
 	MyImGUI::DrawGUI();
 	
-	VK->DrawFrame();
+	VK->DrawFrame(dt);
 }
 
 void Engine::Clean()

@@ -11,7 +11,7 @@ Creation Date: 09.27.2022
 #pragma once
 #include <string>
 #include <Graphics/Structures/Structs.h>
-
+#include "assimp/Importer.hpp"
 #include "fbxsdk.h"
 
 struct aiNode;
@@ -24,11 +24,13 @@ public:
 	~Model();
 	bool LoadModel(const std::string& path);
 
-	void* GetVertexData();
-	int GetVertexCount();
+	int GetMeshSize();
 
-	void* GetIndexData();
-	int GetIndexCount();
+	void* GetVertexData(int i);
+	int GetVertexCount(int i);
+
+	void* GetIndexData(int i);
+	int GetIndexCount(int i);
 	
 	bool IsModelValid();
 
@@ -53,6 +55,8 @@ private:
 	void GetMesh(FbxNode* node);
 	bool GetMeshData(FbxMesh* mesh, Mesh& m);
 	// @@ End of creating mesh
+
+	void GetTextureData(FbxSurfaceMaterial* material);
 
 	void ClearData();
 	void CleanFBXResources();
@@ -80,4 +84,6 @@ private:
 	int numTabs = 0;
 
 	std::vector<Mesh> meshes;
+	
+	Assimp::Importer importer;
 };

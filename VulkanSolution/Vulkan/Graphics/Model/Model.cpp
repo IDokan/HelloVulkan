@@ -12,6 +12,9 @@ Creation Date: 09.27.2022
 #include <iostream>
 #include "Graphics/Model/Model.h"
 
+#include "assimp/Importer.hpp"
+#include "assimp/scene.h"
+#include "assimp/postprocess.h"
 #include "stb/stb_image.h"
 
 
@@ -28,6 +31,7 @@ Model::~Model()
 
 bool Model::LoadModel(const std::string& path)
 {
+	ClearData();
 	CleanFBXResources();
 
 	// It handles memory management.
@@ -53,6 +57,7 @@ bool Model::LoadModel(const std::string& path)
 
 	GetScene();
 
+	//meshes.clear();
 
 	//const aiScene* scene = importer.ReadFile(path, aiProcess_Triangulate | aiProcess_JoinIdenticalVertices | aiProcess_GenNormals);
 
@@ -62,7 +67,6 @@ bool Model::LoadModel(const std::string& path)
 	//	return isModelValid;
 	//}
 
-	//ClearData();
 	//if (scene->HasMeshes())
 	//{
 	//	ReadMesh(scene->mRootNode, scene);
@@ -71,29 +75,34 @@ bool Model::LoadModel(const std::string& path)
 	//{
 	//	ReadMaterial(scene, path);
 	//}
-	
+
 	isModelValid = true;
 	return isModelValid;
 }
 
-void* Model::GetVertexData()
+int Model::GetMeshSize()
 {
-	return reinterpret_cast<void*>(meshes[0].vertices.data());
+	return static_cast<int>(meshes.size());
 }
 
-int Model::GetVertexCount()
+void* Model::GetVertexData(int i)
 {
-	return static_cast<int>(meshes[0].vertices.size());
+	return reinterpret_cast<void*>(meshes[i].vertices.data());
 }
 
-void* Model::GetIndexData()
+int Model::GetVertexCount(int i)
 {
-	return reinterpret_cast<void*>(meshes[0].indices.data());
+	return static_cast<int>(meshes[i].vertices.size());
 }
 
-int Model::GetIndexCount()
+void* Model::GetIndexData(int i)
 {
-	return static_cast<int>(meshes[0].indices.size());
+	return reinterpret_cast<void*>(meshes[i].indices.data());
+}
+
+int Model::GetIndexCount(int i)
+{
+	return static_cast<int>(meshes[i].indices.size());
 }
 
 bool Model::IsModelValid()
@@ -240,6 +249,7 @@ void Model::GetScene(FbxNode* root)
 		{
 			GetScene(node);
 		}
+		
 	}
 }
 
@@ -258,9 +268,11 @@ void Model::GetMesh(FbxNode* node)
 
 	// Triangulate the mesh if needed.
 	FbxGeometryConverter gc{ lSdkManager };
-	mesh = static_cast<FbxMesh*>(gc.Triangulate(mesh, true));
 
-	if (!mesh || mesh->RemoveBadPolygons() < 0) 
+	mesh = static_cast<FbxMesh*>(gc.Triangulate(mesh, true));
+	
+
+	if (!mesh || mesh->RemoveBadPolygons() < 0)
 	{
 		return;
 	}
@@ -270,6 +282,17 @@ void Model::GetMesh(FbxNode* node)
 	if (GetMeshData(mesh, m))
 	{
 		meshes.emplace_back(m);
+	}
+
+	
+	int materialCount = node->GetSrcObjectCount<FbxSurfaceMaterial>();
+	if (materialCount > 0)
+	{
+		for (int i = 0; i < materialCount; i++)
+		{
+			FbxSurfaceMaterial* material = node->GetSrcObject<FbxSurfaceMaterial>(i);
+			GetTextureData(material);
+		}
 	}
 }
 
@@ -281,20 +304,40 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 		return false;
 	}
 
-	// Get Vertices
+	// @@ Get Vertices
 	const uint32_t verticesCount = mesh->GetControlPointsCount();
 	FbxVector4* vertices = mesh->GetControlPoints();
 	const uint32_t indicesCount = mesh->GetPolygonVertexCount();
 	int* indices = mesh->GetPolygonVertices();
+	// @@ End of getting vertices
 
 
-	// Import normals
+	// @@ Import normals
 	FbxArray<FbxVector4> normals;
 	// Calculate normals using FBX's built-in method, but only if no normal data is already there.
 
 	mesh->GenerateNormals();
 	mesh->GetPolygonVertexNormals(normals);
+
 	const uint32_t normalCount = normals.Size();
+	// @@ End of importing normals
+
+	// @@ Import Texture Coordinates
+	FbxStringList uvNames;
+	mesh->GetUVSetNames(uvNames);
+	const int uvSetCount = uvNames.GetCount();
+	FbxArray<FbxVector2> uvs;
+	int uvCount = 0;
+	// for (int i = 0; i < uvSetCount; i++)
+	{
+		if (mesh->GetPolygonVertexUVs(uvNames.GetStringAt(0), uvs))
+		{
+			std::cout << uvNames.GetStringAt(0);
+			uvCount = uvs.Size();
+		}
+	}
+	// @@ End of importing Texture Coordinates
+
 
 	if (!(verticesCount > 0 && vertices && indicesCount > 0 && indices && normalCount > 0))
 	{
@@ -303,7 +346,7 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 
 	m.indices.resize(indicesCount);
 
-	if (normalCount == indicesCount)
+	if (normalCount == indicesCount && uvCount == indicesCount)
 	{
 		for (size_t i = 0; i < indicesCount; i++)
 		{
@@ -313,8 +356,10 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 			m.vertices.emplace_back();
 			glm::vec3 position = glm::vec3(v[0], v[1], v[2]);
 			glm::vec3 normal = glm::vec3(normals[iInt][0], normals[iInt][1], normals[iInt][2]);
+			glm::vec2 uv = glm::vec2(uvs[iInt][0], uvs[iInt][1]);
 			m.vertices.back().position = position;
 			m.vertices.back().normal = normal;
+			m.vertices.back().texCoord = uv;
 
 			UpdateBoundingBox(position);
 		}
@@ -336,9 +381,7 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 			}
 			else
 			{
-
-				// @@ TODO: Figure out _scene_scale;
-				FbxVector4 v = vertices[vertexIndex] /* * _scene_scale */;
+				FbxVector4 v = vertices[vertexIndex];
 				m.indices[i] = static_cast<uint32_t>(m.vertices.size());
 				vertexRef[vertexIndex] = m.indices[i];
 				m.vertices.emplace_back();
@@ -356,11 +399,34 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 		return false;
 	}
 
-return true;
+	return true;
+}
+
+void Model::GetTextureData(FbxSurfaceMaterial* material)
+{
+	if (material == nullptr)
+	{
+		return;
+	}
+
+	FbxProperty prop = material->FindProperty(FbxSurfaceMaterial::sDiffuse);
+
+	// Directly get textures (Only diffuse)
+	int textureFileCount = prop.GetSrcObjectCount<FbxFileTexture>();
+	if (textureFileCount > 0)
+	{
+		FbxFileTexture* textureFile = FbxCast<FbxFileTexture>(prop.GetSrcObject<FbxFileTexture>(0));
+		diffuseImagePaths.push_back(textureFile->GetFileName());
+	}
+
 }
 
 void Model::ClearData()
 {
+	meshes.clear();
+	diffuseImagePaths.clear();
+	normalImagePaths.clear();
+
 	boundingBox[0] = glm::vec3(INFINITY);
 	boundingBox[1] = glm::vec3(-INFINITY);
 }
@@ -388,44 +454,53 @@ void Model::CleanFBXResources()
 
 void Model::ReadMesh(aiNode* node, const aiScene* scene)
 {
-	//// Process all the node's meshes (if any)
-	//for (unsigned int i = 0; i < node->mNumMeshes; i++)
-	//{
-	//	unsigned int baseIndex = static_cast<unsigned int>(vertices.size());
-	//	aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-	//	for(unsigned int j = 0; j < mesh->mNumVertices; j++)
-	//	{ 
-	//		Vertex vertex;
-	//		vertex.position = glm::vec3(mesh->mVertices[j].x, mesh->mVertices[j].y, mesh->mVertices[j].z);
 
-	//		if (mesh->HasNormals())
-	//		{
-	//			vertex.normal = glm::vec3(mesh->mNormals[j].x, mesh->mNormals[j].y, mesh->mNormals[j].z);
-	//		}
-	//		
-	//		// Temporary texture coordinate data
-	//		if (mesh->HasTextureCoords(0))
-	//		{
-	//			vertex.texCoord = glm::vec2(mesh->mTextureCoords[0][j]. x, mesh->mTextureCoords[0][j].y);
-	//		}
-	//		vertices.push_back(vertex);
-	//		UpdateBoundingBox(vertices.back().position);
-	//	}
-	//	for (unsigned int j = 0; j < mesh->mNumFaces; j++)
-	//	{
-	//		aiFace face = mesh->mFaces[j];
-	//		for (unsigned int k = 0; k < face.mNumIndices; k++)
-	//		{
-	//			indices.push_back(face.mIndices[k] + baseIndex);
-	//		}
-	//	}
-	//}
-	//
-	//// then do the same for each of its children
-	//for (unsigned int i = 0; i < node->mNumChildren; i++)
-	//{
-	//	ReadMesh(node->mChildren[i], scene);
-	//}
+	// Process all the node's meshes (if any)
+	for (unsigned int i = 0; i < node->mNumMeshes; i++)
+	{
+		int vertexSize = 0;
+		for (int i = 0; i < meshes.size(); i++)
+		{
+			vertexSize += meshes[i].vertices.size();
+		}
+		Mesh m;
+		unsigned int baseIndex = static_cast<unsigned int>(vertexSize);
+		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
+		for(unsigned int j = 0; j < mesh->mNumVertices; j++)
+		{ 
+			Vertex vertex;
+			vertex.position = glm::vec3(mesh->mVertices[j].x, mesh->mVertices[j].y, mesh->mVertices[j].z);
+
+			if (mesh->HasNormals())
+			{
+				vertex.normal = glm::vec3(mesh->mNormals[j].x, mesh->mNormals[j].y, mesh->mNormals[j].z);
+			}
+			
+			// Temporary texture coordinate data
+			if (mesh->HasTextureCoords(0))
+			{
+				vertex.texCoord = glm::vec2(mesh->mTextureCoords[0][j]. x, mesh->mTextureCoords[0][j].y);
+			}
+			m.vertices.push_back(vertex);
+			UpdateBoundingBox(m.vertices.back().position);
+		}
+		for (unsigned int j = 0; j < mesh->mNumFaces; j++)
+		{
+			aiFace face = mesh->mFaces[j];
+			for (unsigned int k = 0; k < face.mNumIndices; k++)
+			{
+				m.indices.push_back(face.mIndices[k] + baseIndex);
+			}
+		}
+		meshes.push_back(m);
+	}
+	
+
+	// then do the same for each of its children
+	for (unsigned int i = 0; i < node->mNumChildren; i++)
+	{
+		ReadMesh(node->mChildren[i], scene);
+	}
 }
 
 void Model::UpdateBoundingBox(glm::vec3 vertex)

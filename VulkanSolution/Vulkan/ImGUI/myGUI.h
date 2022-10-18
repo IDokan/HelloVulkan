@@ -22,6 +22,7 @@ namespace MyImGUI
 		VkCommandBuffer commandBuffer);
 
     void SendModelInfo(Model* model);
+    void SendRotationFlag(bool* isRotating);
 
     // Should be called before destruction of Vulkan
     void DestroyGUIResources();

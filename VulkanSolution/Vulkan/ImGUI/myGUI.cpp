@@ -31,6 +31,7 @@ namespace MyImGUI
 namespace
 {
     Model* model;
+    bool* isRotating;
 }
 
 namespace MyImGUI
@@ -172,12 +173,19 @@ void MyImGUI::Helper::ModelStats()
 {
     if (ImGui::CollapsingHeader("Basic Information", ImGuiTreeNodeFlags_::ImGuiTreeNodeFlags_DefaultOpen))
     {
-        ImGui::TextWrapped("Vertex Count: %d", model->GetVertexCount());
-        ImGui::TextWrapped("Triangle Count: %d", model->GetIndexCount() / 3);
+        ImGui::Checkbox("Is rotating?", isRotating);
+
+        // ImGui::TextWrapped("Vertex Count: %d", model->GetVertexCount());
+        // ImGui::TextWrapped("Triangle Count: %d", model->GetIndexCount() / 3);
     }
 }
 
 void MyImGUI::SendModelInfo(Model* _model)
 {
     model = _model;
+}
+
+void MyImGUI::SendRotationFlag(bool* _isRotating)
+{
+    isRotating = _isRotating;
 }

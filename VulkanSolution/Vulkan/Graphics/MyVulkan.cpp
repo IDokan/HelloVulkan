@@ -28,14 +28,14 @@ Creation Date: 06.12.2021
 #include "ImGUI/myGUI.h"
 
 MyVulkan::MyVulkan(Window* window)
-	: windowHolder(window), currentFrameID(0), model(nullptr)
+	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), isRotating(true), timer(0.f)
 {
 
 }
 
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
-	model = new Model("../Vulkan/Graphics/Model/models/stanford-bunny.fbx");
+	model = new Model("../Vulkan/Graphics/Model/models/Mutant.fbx");
 
 	if (CreateInstance(appName, appVersion) == false)
 	{
@@ -59,8 +59,8 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	{
 		return false;
 	}
-	// CreateTextures(model->GetDiffuseImagePaths());
-	// CreateTextureSampler();
+	CreateTextures(model->GetDiffuseImagePaths());
+	CreateTextureSampler();
 	CreateImageViews();
 	CreateRenderPass();
 	CreateBuffers();
@@ -96,8 +96,8 @@ void MyVulkan::CleanVulkan()
 
 	DestroySwapchain();
 
-	// DestroyTextureSampler();
-	// DestroyTextureImage();
+	DestroyTextureSampler();
+	DestroyTextureImage();
 
 	DestroyDescriptorPool();
 	DestroyDescriptorSetLayout();
@@ -117,8 +117,13 @@ void MyVulkan::CleanVulkan()
 	delete model;
 }
 
-void MyVulkan::DrawFrame()
+void MyVulkan::DrawFrame(float dt)
 {
+	if (isRotating)
+	{
+		timer += dt;
+	}
+
 	// Synchronize with GPU
 	vkWaitForFences(device, 1, &inFlightFences[currentFrameID], VK_TRUE, UINT64_MAX);
 
@@ -193,6 +198,15 @@ void MyVulkan::CreateBuffers()
 {
 	CreateModelBuffers();
 	CreateUniformBuffers();
+}
+
+void MyVulkan::ResizeModelBuffers(int size)
+{
+	vertexBuffers.resize(size);
+	vertexBufferMemories.resize(size);
+	indexBuffers.resize(size);
+	indexBufferMemories.resize(size);
+	indexCounts.resize(size);
 }
 
 void MyVulkan::CreateImages()
@@ -312,7 +326,7 @@ void MyVulkan::LoadNewModel()
 {
 	windowHolder->isPathDropped = false;
 	const char* newPath = windowHolder->path;
-	
+
 	if (model->LoadModel(newPath) == false)
 	{
 		windowHolder->DisplayMessage("Failed model loading!", model->GetErrorString());
@@ -324,8 +338,25 @@ void MyVulkan::LoadNewModel()
 	// Thus, wait until the submitted command buffer completed execution.
 	VulkanHelper::VkCheck(vkDeviceWaitIdle(device), "failed to make logical device idle");
 
+	DestroyTextureImage();
 	DestroyModelBuffers();
+	
+	int oldMeshSize = meshSize;
+	
 	CreateModelBuffers();
+	CreateTextures(model->GetDiffuseImagePaths());
+	if (meshSize > oldMeshSize)
+	{
+		DestroyDescriptorPool();
+		CreateDescriptorPool();
+		CreateDescriptorSets();
+	}
+	else
+	{
+		UpdateDescriptorSets();
+	}
+
+
 }
 /*
 void MyVulkan::CreateSwapChain()
@@ -574,7 +605,7 @@ void MyVulkan::CreateSimpleRenderpass()
 	// This is our color attachment. It's an R8G8B8A8_UNORM single sample image.
 	// We want to clear it at the start of the renderpass and save the contents when we are done.
 	// It starts in UNDEFINED layout, which is a key to Vulkan that it is allowed to throw the old content away,
-	// and we want to leave it in COLOR_ATTACHMENT_OPTIMAL state when we are done.	
+	// and we want to leave it in COLOR_ATTACHMENT_OPTIMAL state when we are done.
 
 	static const VkAttachmentDescription attachments[] =
 	{
@@ -646,6 +677,7 @@ void MyVulkan::InitGUI()
 	MyImGUI::InitImGUI(windowHolder->glfwWindow, device, instance, physicalDevice, queue, renderPass, commandBuffers.front());
 
 	MyImGUI::SendModelInfo(model);
+	MyImGUI::SendRotationFlag(&isRotating);
 }
 
 bool MyVulkan::CreateInstance(const char* appName, uint32_t appVersion)
@@ -700,7 +732,7 @@ void MyVulkan::CreatePhysicalDevice()
 	{
 		VkPhysicalDeviceProperties deviceProperties;
 		vkGetPhysicalDeviceProperties(physicalDeviceCandidate, &deviceProperties);
-		
+
 		if (deviceProperties.deviceType != VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU)
 		{
 			continue;
@@ -898,7 +930,7 @@ bool MyVulkan::CreateSwapchain()
 	{
 		imageCount = capabilities.maxImageCount;
 	}
-	
+
 	VkSwapchainCreateInfoKHR createInfo{};
 	createInfo.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
 	// the surface where the swapchain should be tied to.
@@ -1180,7 +1212,7 @@ void MyVulkan::CreateGraphicsPipeline()
 
 	/*
 	Bellow blending options would be this.
-	
+
 	finalColor.rgb = newAlpha * newColor + (1 - newAlpha) * oldColor;
 	finalColor.a = newAlpha.a;
 	*/
@@ -1274,7 +1306,7 @@ VkShaderModule MyVulkan::CreateShaderModule(const std::vector<char>& code)
 	createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
 	createInfo.codeSize = code.size();
 	createInfo.pCode = reinterpret_cast<const uint32_t*>(code.data());
-	
+
 	VkShaderModule shaderModule;
 	VulkanHelper::VkCheck(vkCreateShaderModule(device, &createInfo, nullptr, &shaderModule), "Creating shader module has failed!");
 
@@ -1300,7 +1332,7 @@ void MyVulkan::CreateFramebuffers()
 			swapchainImageViews[i],
 			depthImageView
 		};
-		
+
 		VkFramebufferCreateInfo framebufferInfo{};
 		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		framebufferInfo.renderPass = renderPass;
@@ -1350,8 +1382,8 @@ void MyVulkan::CreateSyncObjects()
 			, "Creating a synchronization object(inFlightFence) has failed!"
 		);
 	}
-		
-		
+
+
 }
 
 void MyVulkan::DestroySyncObjects()
@@ -1394,12 +1426,6 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
-	VkBuffer vertexBuffers[] = { vertexBuffer };
-	VkDeviceSize offsets[] = { 0 };
-	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-	vkCmdBindIndexBuffer(commandBuffer, indexBuffer, 0, VK_INDEX_TYPE_UINT32);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrameID], 0, nullptr);
-
 	VkViewport viewport{};
 	viewport.x = 0.f;
 	viewport.y = 0.f;
@@ -1414,7 +1440,16 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	scissor.extent = swapchainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	vkCmdDrawIndexed(commandBuffer, indexCount, 1, 0, 0, 0);
+	for (int i = 0; i < meshSize; i++)
+	{
+		VkBuffer VB[] = { vertexBuffers[i] };
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
+		vkCmdBindIndexBuffer(commandBuffer, indexBuffers[i], 0, VK_INDEX_TYPE_UINT32);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i * MAX_FRAMES_IN_FLIGHT + currentFrameID], 0, nullptr);
+
+		vkCmdDrawIndexed(commandBuffer, indexCounts[i], 1, 0, 0, 0);
+	}
 
 	MyImGUI::GUIRender(commandBuffer);
 
@@ -1604,7 +1639,7 @@ void MyVulkan::CleanupSwapchainResourcesForRecreation()
 	DestroySwapchain();
 }
 
-void MyVulkan::CreateVertexBuffer(int vertexCount, void* vertexData)
+void MyVulkan::CreateVertexBuffer(int vertexCount, void* vertexData, int i)
 {
 	// Use two buffers.
 	// One for writing vertex data, the other is actual vertex buffer which we cannot see and use(map) at CPU.
@@ -1621,9 +1656,9 @@ void MyVulkan::CreateVertexBuffer(int vertexCount, void* vertexData)
 	memcpy(data, vertexData, static_cast<size_t>(bufferSize));
 	vkUnmapMemory(device, stagingBufferMemory);
 
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffer, vertexBufferMemory);
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffers[i], vertexBufferMemories[i]);
 
-	CopyBuffer(stagingBuffer, vertexBuffer, bufferSize);
+	CopyBuffer(stagingBuffer, vertexBuffers[i], bufferSize);
 
 	DestroyBuffer(stagingBuffer);
 	FreeMemory(stagingBufferMemory);
@@ -1642,17 +1677,29 @@ void MyVulkan::DestroyBuffersAndFreeMemories()
 
 void MyVulkan::CreateModelBuffers()
 {
-	CreateVertexBuffer(model->GetVertexCount(), model->GetVertexData());
-	CreateIndexBuffer(model->GetIndexCount(), model->GetIndexData());
+	meshSize = model->GetMeshSize();
+
+	ResizeModelBuffers(meshSize);
+
+	for (int i = 0; i < meshSize; i++)
+	{
+		CreateVertexBuffer(model->GetVertexCount(i), model->GetVertexData(i), i);
+		CreateIndexBuffer(model->GetIndexCount(i), model->GetIndexData(i), i);
+	}
 }
 
 void MyVulkan::DestroyModelBuffers()
 {
-	DestroyBuffer(vertexBuffer);
-	FreeMemory(vertexBufferMemory);
+	int previousMeshSize = static_cast<int>(vertexBuffers.size());
 
-	DestroyBuffer(indexBuffer);
-	FreeMemory(indexBufferMemory);
+	for (int i = 0; i < previousMeshSize; i++)
+	{
+		DestroyBuffer(vertexBuffers[i]);
+		FreeMemory(vertexBufferMemories[i]);
+
+		DestroyBuffer(indexBuffers[i]);
+		FreeMemory(indexBufferMemories[i]);
+	}
 }
 
 void MyVulkan::DestroyBuffer(VkBuffer& buffer)
@@ -1738,9 +1785,9 @@ void MyVulkan::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize s
 	EndSingleTimeCommands(copyCommandBuffer);
 }
 
-void MyVulkan::CreateIndexBuffer(int indexCount, void* indexData)
+void MyVulkan::CreateIndexBuffer(int indexCount, void* indexData, int i)
 {
-	this->indexCount = indexCount;
+	indexCounts[i] = indexCount;
 	VkDeviceSize bufferSize = sizeof(int32_t) * indexCount;
 
 	VkBuffer stagingBuffer;
@@ -1754,9 +1801,9 @@ void MyVulkan::CreateIndexBuffer(int indexCount, void* indexData)
 	vkUnmapMemory(device, stagingBufferMemory);
 
 	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		indexBuffer, indexBufferMemory);
+		indexBuffers[i], indexBufferMemories[i]);
 
-	CopyBuffer(stagingBuffer, indexBuffer, bufferSize);
+	CopyBuffer(stagingBuffer, indexBuffers[i], bufferSize);
 
 	vkDestroyBuffer(device, stagingBuffer, nullptr);
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
@@ -1771,14 +1818,14 @@ void MyVulkan::CreateDescriptorSetLayout()
 	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 	uboLayoutBinding.pImmutableSamplers = nullptr;		// Optional
 
-	//VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-	//samplerLayoutBinding.binding = 1;
-	//samplerLayoutBinding.descriptorCount = 1;
-	//samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	//samplerLayoutBinding.pImmutableSamplers = nullptr;
-	//samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
+	samplerLayoutBinding.binding = 1;
+	samplerLayoutBinding.descriptorCount = 1;
+	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	samplerLayoutBinding.pImmutableSamplers = nullptr;
+	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	std::array<VkDescriptorSetLayoutBinding, /*2*/1> bindings = { uboLayoutBinding/*, samplerLayoutBinding */};
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
 
 	VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1808,13 +1855,9 @@ void MyVulkan::CreateUniformBuffers()
 
 void MyVulkan::UpdateUniformBuffer(uint32_t currentImage)
 {
-	static auto startTime = std::chrono::high_resolution_clock::now();
-	auto currentTime = std::chrono::high_resolution_clock::now();
-	float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
 	UniformBufferObject ubo;
-	ubo.model = glm::rotate(glm::mat4(1.f), time * glm::radians(90.f), glm::vec3(0.0f, 0.0f, 1.0f)) * 
-		glm::rotate(glm::mat4(1.f), glm::radians(90.f), glm::vec3(1.0f, 0.0f, 0.0f)) * 
+	ubo.model = glm::rotate(glm::mat4(1.f), timer * glm::radians(90.f), glm::vec3(0.0f, 0.0f, 1.0f)) *
+		glm::rotate(glm::mat4(1.f), glm::radians(90.f), glm::vec3(1.0f, 0.0f, 0.0f)) *
 		model->CalculateAdjustBoundingBoxMatrix();
 	ubo.view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
 	ubo.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 10.f);
@@ -1829,19 +1872,19 @@ void MyVulkan::UpdateUniformBuffer(uint32_t currentImage)
 
 void MyVulkan::CreateDescriptorPool()
 {
-	std::array<VkDescriptorPoolSize, /*2*/1> poolSizes{};
+	std::array<VkDescriptorPoolSize, 2> poolSizes{};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
 
-	//poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	//poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
 
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
 	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
 	poolInfo.pPoolSizes = poolSizes.data();
 	// maxSets is the maximum number of descriptor sets that can be allocated from the pool
-	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
 
 	VulkanHelper::VkCheck(vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool), "Creating descriptor pool has failed!");
 }
@@ -1853,54 +1896,61 @@ void MyVulkan::DestroyDescriptorPool()
 
 void MyVulkan::CreateDescriptorSets()
 {
-	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, descriptorSetLayout);
+	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * meshSize, descriptorSetLayout);
 	VkDescriptorSetAllocateInfo allocInfo{};
 	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
 	allocInfo.pNext = nullptr;
 	allocInfo.descriptorPool = descriptorPool;
-	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
 	allocInfo.pSetLayouts = layouts.data();
 
-	descriptorSets.resize(MAX_FRAMES_IN_FLIGHT);
+	descriptorSets.resize(MAX_FRAMES_IN_FLIGHT * meshSize);
 	// vkAllocateDescriptorSets may fail with the error code VK_ERROR_POOL_OUT_OF_MEMORY 
 		// if the pool is not sufficiently large, 
 		// but the driver may also try to solve the problem internally.
 
 	VulkanHelper::VkCheck(vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()), "Allocating descriptor sets has failed!");
 
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	UpdateDescriptorSets();
+}
+
+void MyVulkan::UpdateDescriptorSets()
+{
+	for (int i = 0; i < meshSize; i++)
 	{
-		VkDescriptorBufferInfo bufferInfo{};
-		bufferInfo.buffer = uniformBuffers[i];
-		bufferInfo.offset = 0;
-		bufferInfo.range = sizeof(UniformBufferObject);
+		for (int j = 0; j < MAX_FRAMES_IN_FLIGHT; j++)
+		{
+			VkDescriptorBufferInfo bufferInfo{};
+			bufferInfo.buffer = uniformBuffers[j];
+			bufferInfo.offset = 0;
+			bufferInfo.range = sizeof(UniformBufferObject);
 
-		//VkDescriptorImageInfo imageInfo{};
-		//imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-		//// @@ TODO: Multiple textures? or single textures?
-		//imageInfo.imageView = textureImageViews[0];
-		//imageInfo.sampler = textureSampler;
+			VkDescriptorImageInfo imageInfo{};
+			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+			imageInfo.imageView = textureImageViews[i];
+			imageInfo.sampler = textureSampler;
 
-		std::vector<VkWriteDescriptorSet> descriptorWrites(/*2*/1);
+			std::vector<VkWriteDescriptorSet> descriptorWrites(2);
 
-		descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		descriptorWrites[0].dstSet = descriptorSets[i];
-		descriptorWrites[0].dstBinding = 0;
-		// The starting element in that array
-		descriptorWrites[0].dstArrayElement = 0;
-		descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-		descriptorWrites[0].descriptorCount = 1;
-		descriptorWrites[0].pBufferInfo = &bufferInfo;
+			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[0].dstSet = descriptorSets[i * MAX_FRAMES_IN_FLIGHT + j];
+			descriptorWrites[0].dstBinding = 0;
+			// The starting element in that array
+			descriptorWrites[0].dstArrayElement = 0;
+			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptorWrites[0].descriptorCount = 1;
+			descriptorWrites[0].pBufferInfo = &bufferInfo;
 
-		//descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-		//descriptorWrites[1].dstSet = descriptorSets[i];
-		//descriptorWrites[1].dstBinding = 1;
-		//descriptorWrites[1].dstArrayElement = 0;
-		//descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-		//descriptorWrites[1].descriptorCount = 1;
-		//descriptorWrites[1].pImageInfo = &imageInfo;
+			descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[1].dstSet = descriptorSets[i * MAX_FRAMES_IN_FLIGHT + j];
+			descriptorWrites[1].dstBinding = 1;
+			descriptorWrites[1].dstArrayElement = 0;
+			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+			descriptorWrites[1].descriptorCount = 1;
+			descriptorWrites[1].pImageInfo = &imageInfo;
 
-		vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+			vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+		}
 	}
 }
 
@@ -1948,10 +1998,10 @@ void MyVulkan::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayo
 		abort();
 	}
 
-	
-	vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0, 
-		0, nullptr, 
-		0, nullptr, 
+
+	vkCmdPipelineBarrier(commandBuffer, sourceStage, destinationStage, 0,
+		0, nullptr,
+		0, nullptr,
 		1, &barrier);
 
 	EndSingleTimeCommands(commandBuffer);
@@ -2024,7 +2074,7 @@ void MyVulkan::CreateTextureSampler()
 	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
 	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	
+
 	// Anisotropy filter info
 	if (physicalDeviceFeatures.features.samplerAnisotropy == VK_TRUE)
 	{
@@ -2036,14 +2086,14 @@ void MyVulkan::CreateTextureSampler()
 		samplerInfo.anisotropyEnable = VK_FALSE;
 		samplerInfo.maxAnisotropy = 1.f;
 	}
-	
+
 	// [0, texWidth) vs [0, 1)
 	samplerInfo.unnormalizedCoordinates = VK_FALSE;
-	
+
 	// below info is mainly used for percentage-closer filtering on shadow maps.
 	samplerInfo.compareEnable = VK_FALSE;
 	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-	
+
 	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
 	samplerInfo.mipLodBias = 0.f;
 	samplerInfo.minLod = 0.f;
@@ -2061,6 +2111,9 @@ void MyVulkan::DestroyTextureImage()
 		vkDestroyImage(device, textureImages[i], nullptr);
 		vkFreeMemory(device, textureImageMemories[i], nullptr);
 	}
+	textureImageViews.clear();
+	textureImages.clear();
+	textureImageMemories.clear();
 }
 
 void MyVulkan::DestroyTextureSampler()
@@ -2118,7 +2171,7 @@ VkFormat MyVulkan::FindSupportedFormat(const std::vector<VkFormat>& candidates, 
 		{
 			return format;
 		}
-		else if(tiling == VK_IMAGE_TILING_OPTIMAL && (prop.optimalTilingFeatures & features) == features)
+		else if (tiling == VK_IMAGE_TILING_OPTIMAL && (prop.optimalTilingFeatures & features) == features)
 		{
 			return format;
 		}
@@ -2179,6 +2232,7 @@ void MyVulkan::CreateTextureImageAndImageView(const std::string& path)
 {
 	int texWidth, texHeight, texChannels;
 
+	stbi_set_flip_vertically_on_load(true);
 	stbi_uc* pixels = stbi_load(path.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 	constexpr int RGBA = 4;
 	VkDeviceSize imageSize = texWidth * texHeight * RGBA;
@@ -2203,7 +2257,7 @@ void MyVulkan::CreateTextureImageAndImageView(const std::string& path)
 	VkDeviceMemory textureImageMemory;
 
 	CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
-	
+
 	TransitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
 	CopyBufferToImage(stagingBuffer, textureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
 

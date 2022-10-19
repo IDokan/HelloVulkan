@@ -176,6 +176,7 @@ xcopy /y /d "$(FBX_SDK)\lib\vs2019\$(PlatformTarget)\$(Configuration)\*.dll" "$(
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Engines\Engine.cpp" />
+    <ClCompile Include="Engines\Input\Input.cpp" />
     <ClCompile Include="Engines\Window.cpp" />
     <ClCompile Include="Graphics\Allocator\Allocator.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
@@ -200,6 +201,7 @@ xcopy /y /d "$(FBX_SDK)\lib\vs2019\$(PlatformTarget)\$(Configuration)\*.dll" "$(
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engines\Engine.h" />
+    <ClInclude Include="Engines\Input\Input.h" />
     <ClInclude Include="Engines\Timer.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>

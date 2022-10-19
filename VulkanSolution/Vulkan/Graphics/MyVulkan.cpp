@@ -26,11 +26,11 @@ Creation Date: 06.12.2021
 #include "Graphics/Structures/Structs.h"
 #include "Graphics/Model/Model.h"
 #include "ImGUI/myGUI.h"
+#include "Engines/Input/Input.h"
 
 MyVulkan::MyVulkan(Window* window)
-	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), isRotating(true), timer(0.f)
+	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), isRotating(true), timer(0.f), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f))
 {
-
 }
 
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
@@ -76,6 +76,8 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 
 
 	CreateImages();
+
+	InitUniformBufferData();
 
 	return true;
 }
@@ -1629,6 +1631,10 @@ void MyVulkan::RecreateSwapchain()
 	CreateImageViews();
 	CreateDepthResources();
 	CreateFramebuffers();
+
+	uniformData.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 10.f);
+	// flip the sign of the element because GLM originally designed for OpenGL, where Y coordinate of the clip coorinates is inverted.
+	uniformData.proj[1][1] *= -1;
 }
 
 void MyVulkan::CleanupSwapchainResourcesForRecreation()
@@ -1853,20 +1859,48 @@ void MyVulkan::CreateUniformBuffers()
 	}
 }
 
+void MyVulkan::InitUniformBufferData()
+{
+	uniformData.model = model->CalculateAdjustBoundingBoxMatrix();
+	uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 0.f, 1.f));
+	uniformData.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 10.f);
+	// flip the sign of the element because GLM originally designed for OpenGL, where Y coordinate of the clip coorinates is inverted.
+	uniformData.proj[1][1] *= -1;
+}
+
 void MyVulkan::UpdateUniformBuffer(uint32_t currentImage)
 {
-	UniformBufferObject ubo;
-	ubo.model = glm::rotate(glm::mat4(1.f), timer * glm::radians(90.f), glm::vec3(0.0f, 0.0f, 1.0f)) *
-		glm::rotate(glm::mat4(1.f), glm::radians(90.f), glm::vec3(1.0f, 0.0f, 0.0f)) *
-		model->CalculateAdjustBoundingBoxMatrix();
-	ubo.view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
-	ubo.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 10.f);
-	// flip the sign of the element because GLM originally designed for OpenGL, where Y coordinate of the clip coorinates is inverted.
-	ubo.proj[1][1] *= -1;
+	const glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
+	if (input.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_1))
+	{
+		glm::ivec2 mouseDelta = input.GetMousePosition() - input.GetPresentMousePosition();
+
+		std::cout << mouseDelta.x << ", " << mouseDelta.y << std::endl;
+
+		uniformData.model = glm::rotate(glm::mat4(1.f), mouseDelta.x * glm::radians(1.f), glm::vec3(0.0f, view.z, -view.y)) *
+			glm::rotate(glm::mat4(1.f), mouseDelta.y * glm::radians(1.f), glm::vec3(-view.y, view.x, 0.0f)) *
+			uniformData.model;
+	}
+	
+	if (input.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_2))
+	{
+		glm::vec3 mousePosition = glm::vec3(input.GetMousePosition(), 0);
+		glm::vec3 previousPosition = glm::vec3(input.GetPresentMousePosition(), 0);
+
+		glm::vec3 cross = glm::cross(mousePosition, previousPosition);
+		int result = static_cast<int>(std::ceil(cross.z / 450.f));
+
+		uniformData.model = glm::rotate(glm::mat4(1.f), result * glm::radians(1.f), view) *
+			uniformData.model;
+	}
+
+	
+	cameraPoint = cameraPoint + (static_cast<float>(input.MouseWheelScroll()) * (targetPoint - cameraPoint) * 0.1f);
+	uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 0.f, 1.f));
 
 	void* data;
 	vkMapMemory(device, uniformBuffersMemory[currentFrameID], 0, sizeof(UniformBufferObject), 0, &data);
-	memcpy(data, &ubo, sizeof(UniformBufferObject));
+	memcpy(data, &uniformData, sizeof(UniformBufferObject));
 	vkUnmapMemory(device, uniformBuffersMemory[currentFrameID]);
 }
 

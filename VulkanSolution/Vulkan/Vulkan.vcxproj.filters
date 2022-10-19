@@ -34,6 +34,9 @@
     <Filter Include="ImGUI\backends">
       <UniqueIdentifier>{430da44c-c5e1-4d15-aac5-98b1fe0bc153}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Engines\Input">
+      <UniqueIdentifier>{1b90f54e-0ec4-4cf5-9283-da3069ce3429}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
@@ -75,6 +78,9 @@
     </ClCompile>
     <ClCompile Include="ImGUI\backends\imgui_impl_vulkan.cpp">
       <Filter>ImGUI\backends</Filter>
+    </ClCompile>
+    <ClCompile Include="Engines\Input\Input.cpp">
+      <Filter>Engines\Input</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -131,6 +137,9 @@
     </ClInclude>
     <ClInclude Include="ImGUI\backends\imgui_impl_vulkan.h">
       <Filter>ImGUI\backends</Filter>
+    </ClInclude>
+    <ClInclude Include="Engines\Input\Input.h">
+      <Filter>Engines\Input</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

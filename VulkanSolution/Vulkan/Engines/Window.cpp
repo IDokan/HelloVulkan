@@ -18,6 +18,8 @@ Creation Date: 06.08.2021
 #include <GLFW/glfw3native.h>
 #include <string>
 #include "Window.h"
+#include "Input/Input.h"
+#include <iostream>
 
 namespace CallbackFuncs
 {
@@ -35,6 +37,7 @@ namespace CallbackFuncs
 	{
 		auto app = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
 		app->SetWindowFramebufferResized(true);
+		app->SetWindowSize(width, height);
 	}
 
 	void DropCallback(GLFWwindow* window, int count, const char** paths)
@@ -44,6 +47,29 @@ namespace CallbackFuncs
 		{
 			app->SetDroppedPath(paths[i]);
 		}
+	}
+
+	void MousePositionCallback(GLFWwindow* window, double xPos, double yPos)
+	{
+		Window* app = reinterpret_cast<Window*>(glfwGetWindowUserPointer(window));
+		const glm::ivec2 size = app->GetWindowSize();
+
+		xPos = xPos - (size.x / 2);
+		yPos = (size.y / 2) - yPos;
+
+		input.SetMousePos(window, static_cast<int>(xPos), static_cast<int>(yPos));
+	}
+	void MouseWheelScrollCallback(GLFWwindow* window, double xOffset, double yOffset)
+	{
+		input.SetMouseWheel(xOffset, yOffset);
+	}
+	void MouseButtonCallback(GLFWwindow*, int button, int action, int)
+	{
+		input.SetMouseButtonInput(button, action);
+	}
+	void KeyCallback(GLFWwindow*, int key, int, int action, int)
+	{
+		input.SetKeyboardInput(key, action);
 	}
 }
 
@@ -62,12 +88,18 @@ bool Window::CreateWindowGLFW(const int& width, const int& height, const char* t
 	glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 	glfwSetErrorCallback(CallbackFuncs::onError);
 
+	SetWindowSize(width, height);
 	glfwWindow = glfwCreateWindow(width, height, title, monitor, share);
 
 	glfwSetWindowUserPointer(glfwWindow, this);
 	glfwSetWindowCloseCallback(glfwWindow, CallbackFuncs::WindowClose);
 	glfwSetFramebufferSizeCallback(glfwWindow, CallbackFuncs::FramebufferResizeCallback);
 	glfwSetDropCallback(glfwWindow, CallbackFuncs::DropCallback);
+
+	glfwSetCursorPosCallback(glfwWindow, CallbackFuncs::MousePositionCallback);
+	glfwSetScrollCallback(glfwWindow, CallbackFuncs::MouseWheelScrollCallback);
+	glfwSetMouseButtonCallback(glfwWindow, CallbackFuncs::MouseButtonCallback);
+	glfwSetKeyCallback(glfwWindow, CallbackFuncs::KeyCallback);
 
 	if (!glfwVulkanSupported())
 	{
@@ -146,4 +178,15 @@ void Window::DisplayMessage(std::string title, std::string message)
 	std::wstring messageW = std::wstring(message.begin(), message.end());
 
 	MessageBox(glfwGetWin32Window(glfwWindow), messageW.c_str(), titleW.c_str(), MB_OK | MB_ICONERROR);
+}
+
+glm::ivec2 Window::GetWindowSize()
+{
+	return windowSize;
+}
+
+void Window::SetWindowSize(int width, int height)
+{
+	windowSize.x = width;
+	windowSize.y = height;
 }

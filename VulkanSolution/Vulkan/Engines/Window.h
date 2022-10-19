@@ -10,6 +10,7 @@ Creation Date: 06.08.2021
 ******************************************************************************/
 #pragma once
 #include <string>
+#include <glm/vec2.hpp>
 
 struct GLFWwindow;
 struct GLFWmonitor;
@@ -40,6 +41,9 @@ public:
 	bool IsPathDropped();
 
 	void DisplayMessage(std::string title, std::string message);
+
+	glm::ivec2 GetWindowSize();
+	void SetWindowSize(int width, int height);
 private:
 	GLFWwindow* glfwWindow;
 
@@ -47,4 +51,6 @@ private:
 
 	bool isPathDropped;
 	char* path;
+
+	glm::ivec2 windowSize;
 };

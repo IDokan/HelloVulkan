@@ -19,6 +19,7 @@ Creation Date: 06.08.2021
 #include "Graphics/MyVulkan.h"
 #include "vulkan/vulkan_core.h"
 #include "ImGUI/myGUI.h"
+#include "Input/Input.h"
 
 Engine::Engine()
 	: isUpdate(true), window(new Window()), VK(new MyVulkan(window))
@@ -67,6 +68,7 @@ void Engine::Update()
 	Timer::GetTimer()->Reset();
 
 	// Update window
+	input.Update(dt);
 	window->PollWindowEvents();
 
 	if (window->IsPathDropped())

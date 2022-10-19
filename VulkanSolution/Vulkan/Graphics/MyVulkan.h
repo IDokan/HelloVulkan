@@ -131,6 +131,7 @@ private:
 	void DestroyDescriptorSetLayout();
 
 	void CreateUniformBuffers();
+	void InitUniformBufferData();
 	void UpdateUniformBuffer(uint32_t currentImage);
 
 	void CreateDescriptorPool();
@@ -231,4 +232,8 @@ private:
 
 	bool isRotating;
 	float timer;
+	glm::vec3 cameraPoint;
+	glm::vec3 targetPoint;
+
+	UniformBufferObject uniformData;
 };

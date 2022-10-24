@@ -232,6 +232,7 @@ private:
 
 	bool isRotating;
 	float timer;
+	glm::vec3 rightMouseCenter;
 	glm::vec3 cameraPoint;
 	glm::vec3 targetPoint;
 

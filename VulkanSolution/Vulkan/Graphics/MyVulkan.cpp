@@ -29,7 +29,7 @@ Creation Date: 06.12.2021
 #include "Engines/Input/Input.h"
 
 MyVulkan::MyVulkan(Window* window)
-	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), isRotating(true), timer(0.f), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f))
+	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), isRotating(true), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f))
 {
 }
 
@@ -1870,10 +1870,34 @@ void MyVulkan::InitUniformBufferData()
 
 void MyVulkan::UpdateUniformBuffer(uint32_t currentImage)
 {
-	const glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
-	if (input.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_1))
+	const bool isMousePressed = input.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_1);
+	const bool isLeftAltPressed = input.IsKeyPressed(GLFW_KEY_LEFT_ALT);
+	glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
+	glm::vec2 mouseDelta = input.GetMousePosition() - input.GetPresentMousePosition();
+
+	if (isMousePressed && isLeftAltPressed)
 	{
-		glm::ivec2 mouseDelta = input.GetMousePosition() - input.GetPresentMousePosition();
+		static constexpr glm::vec3 globalUp = glm::vec3(0.f, 0.f, 1.f);
+
+
+		glm::vec3 newX = glm::normalize(glm::cross(globalUp, view));
+		glm::vec3 newY = glm::cross(newX, view);
+
+		const glm::vec3 delta = (newX * mouseDelta.x + newY * mouseDelta.y) * 0.01f;
+		targetPoint += delta;
+		cameraPoint += delta;
+
+		glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
+	}
+	else if (input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_MIDDLE))
+	{
+		targetPoint = glm::vec3(0.f, 0.f, 0.f);
+		cameraPoint = glm::vec3(0.f, 2.f, 2.f);
+	}
+
+
+	if (isMousePressed && !isLeftAltPressed)
+	{
 
 		std::cout << mouseDelta.x << ", " << mouseDelta.y << std::endl;
 
@@ -1882,13 +1906,21 @@ void MyVulkan::UpdateUniformBuffer(uint32_t currentImage)
 			uniformData.model;
 	}
 	
-	if (input.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_2))
+	if (input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_2))
 	{
-		glm::vec3 mousePosition = glm::vec3(input.GetMousePosition(), 0);
-		glm::vec3 previousPosition = glm::vec3(input.GetPresentMousePosition(), 0);
+		rightMouseCenter = glm::vec3(input.GetMousePosition(), 0);
+	}
+	else if (input.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_2))
+	{
+		glm::vec3 mousePosition = glm::vec3(input.GetMousePosition(), 0) - rightMouseCenter;
+		glm::vec3 previousPosition = glm::vec3(input.GetPresentMousePosition(), 0) - rightMouseCenter;
 
 		glm::vec3 cross = glm::cross(mousePosition, previousPosition);
-		int result = static_cast<int>(std::ceil(cross.z / 450.f));
+		float result = 0;
+		if (abs(cross.z) >= std::numeric_limits<float>().epsilon())
+		{
+			result = (cross.z / abs(cross.z)) * glm::length(mouseDelta) * 0.45f;
+		}
 
 		uniformData.model = glm::rotate(glm::mat4(1.f), result * glm::radians(1.f), view) *
 			uniformData.model;

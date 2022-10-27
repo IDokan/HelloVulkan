@@ -82,6 +82,9 @@
     <ClCompile Include="Engines\Input\Input.cpp">
       <Filter>Engines\Input</Filter>
     </ClCompile>
+    <ClCompile Include="Graphics\Model\AnimationSystem.cpp">
+      <Filter>Graphics\Model</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GLMath.h">
@@ -141,6 +144,9 @@
     <ClInclude Include="Engines\Input\Input.h">
       <Filter>Engines\Input</Filter>
     </ClInclude>
+    <ClInclude Include="Graphics\Model\AnimationSystem.h">
+      <Filter>Graphics\Model</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Notes\Chp1.OverviewOfVulkan.txt">
@@ -179,6 +185,12 @@
       <Filter>Graphics\Shaders</Filter>
     </CustomBuild>
     <CustomBuild Include="Graphics\Shaders\vertexShader.vert">
+      <Filter>Graphics\Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Graphics\Shaders\skeleton.frag">
+      <Filter>Graphics\Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Graphics\Shaders\skeleton.vert">
       <Filter>Graphics\Shaders</Filter>
     </CustomBuild>
   </ItemGroup>

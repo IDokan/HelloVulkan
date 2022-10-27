@@ -16,16 +16,19 @@ Creation Date: 09.27.2022
 #include "assimp/scene.h"
 #include "assimp/postprocess.h"
 #include "stb/stb_image.h"
+#include "Graphics/Model/AnimationSystem.h"
 
 
 Model::Model(const std::string& path)
-	: isModelValid(true), lSdkManager(nullptr), ios(nullptr), lImporter(nullptr)
+	: isModelValid(true), lSdkManager(nullptr), ios(nullptr), lImporter(nullptr), animationSystem(nullptr)
 {
+	animationSystem = new AnimationSystem();
 	LoadModel(path);
 }
 
 Model::~Model()
 {
+	delete animationSystem;
 	CleanFBXResources();
 }
 
@@ -52,10 +55,15 @@ bool Model::LoadModel(const std::string& path)
 
 	lImporter->Import(lScene);
 
+
+	GetScene();
+	GetAnimation();
+
+	InitBoneData();
+
 	lImporter->Destroy();
 	lImporter = nullptr;
 
-	GetScene();
 
 	//meshes.clear();
 
@@ -108,6 +116,16 @@ int Model::GetIndexCount(int i)
 bool Model::IsModelValid()
 {
 	return isModelValid;
+}
+
+size_t Model::GetBoneCount()
+{
+	return animationSystem->GetBoneCount();
+}
+
+void* Model::GetBoneDataForDrawing()
+{
+	return reinterpret_cast<void*>(bones.data());
 }
 
 const char* Model::GetErrorString()
@@ -229,6 +247,8 @@ void Model::GetScene(FbxNode* root)
 		{
 			return;
 		}
+
+		animationSystem->ImportSkeleton(root);
 	}
 
 	const uint32_t numNodes = static_cast<uint32_t>(root->GetChildCount());
@@ -240,6 +260,8 @@ void Model::GetScene(FbxNode* root)
 		{
 			continue;
 		}
+
+		animationSystem->ImportSkeleton(node, root);
 
 		if (node->GetMesh())
 		{
@@ -402,6 +424,82 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 	return true;
 }
 
+void Model::InitBoneData()
+{
+	size_t boneCount = animationSystem->GetBoneCount();
+	bones.resize(boneCount * 2);
+
+	const int boneDataSize = 2 * static_cast<int>(boneCount);
+	for (int i = 0; i < boneCount; i++)
+	{
+		bones[i * 2] = glm::vec3(0.f, 0.f, 0.f);
+		bones[i * 2 + 1] = glm::vec3(0.f, 10.f, 0.f);
+	}
+}
+
+void Model::GetAnimation()
+{
+	FbxNode* rootNode = lScene->GetRootNode();
+
+	if (rootNode == nullptr)
+	{
+		return;
+	}
+
+	double frameRate = FbxTime::GetFrameRate(lScene->GetGlobalSettings().GetTimeMode());
+	FbxDocument* document = dynamic_cast<FbxDocument*>(lScene);
+	FbxDocument* betterDocument = lScene->GetDocument();
+
+	if (document == nullptr)
+	{
+		return;
+	}
+
+	FbxArray<FbxString*> animNameArray;
+	document->FillAnimStackNameArray(animNameArray);
+
+	const int animStackCount = lImporter->GetAnimStackCount();
+	for (int i = 0; i < animStackCount; i++)
+	{
+		// Take is technically an Animation. It's an Autodesk naming convention.
+		FbxTakeInfo* animationInfo = lImporter->GetTakeInfo(i);
+		std::string animationName = animationInfo->mName.Buffer();
+
+		FbxTimeSpan span = animationInfo->mLocalTimeSpan;
+		double startTime = span.GetStart().GetSecondDouble();
+		double endTime = span.GetStop().GetSecondDouble();
+
+		animationSystem->AddAnimation(animationName, animationSystem->GetBoneCount(), static_cast<float>(endTime - startTime));
+		animationSystem->SetAnimationIndex(i);
+		// When animation has a time to run, 
+		if (startTime < endTime)
+		{
+			// This method interpolate transform data at loading.
+			// It may not give you the specific key frames determined by artists.
+			// Thus, key frame is not the key frame given by artists, it is interpolated key frame by multiplication between running time and frame rate.
+			int keyFrames = static_cast<int>((endTime - startTime) * frameRate);
+
+			AddTracksRecursively(rootNode, frameRate, startTime, endTime, keyFrames);
+		}
+	}
+}
+
+void Model::AddTracksRecursively(FbxNode* node, double frameRate, double startTime, double endTime, int keyFrames)
+{
+	if (node == nullptr)
+	{
+		return;
+	}
+
+	animationSystem->AddTrack(node, animationSystem->FindBoneIDByName(node->GetName()), frameRate, startTime, endTime, keyFrames);
+
+	int childCount = node->GetChildCount();
+	for (int i = 0; i < childCount; i++)
+	{
+		AddTracksRecursively(node->GetChild(i), frameRate, startTime, endTime, keyFrames);
+	}
+}
+
 void Model::GetTextureData(FbxSurfaceMaterial* material)
 {
 	if (material == nullptr)
@@ -426,6 +524,8 @@ void Model::ClearData()
 	meshes.clear();
 	diffuseImagePaths.clear();
 	normalImagePaths.clear();
+
+	animationSystem->Clear();
 
 	boundingBox[0] = glm::vec3(INFINITY);
 	boundingBox[1] = glm::vec3(-INFINITY);
@@ -458,13 +558,13 @@ void Model::ReadMesh(aiNode* node, const aiScene* scene)
 	// Process all the node's meshes (if any)
 	for (unsigned int i = 0; i < node->mNumMeshes; i++)
 	{
-		int vertexSize = 0;
+		unsigned int vertexSize = 0;
 		for (int i = 0; i < meshes.size(); i++)
 		{
-			vertexSize += meshes[i].vertices.size();
+			vertexSize += static_cast<unsigned int>(meshes[i].vertices.size());
 		}
 		Mesh m;
-		unsigned int baseIndex = static_cast<unsigned int>(vertexSize);
+		unsigned int baseIndex = vertexSize;
 		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
 		for(unsigned int j = 0; j < mesh->mNumVertices; j++)
 		{ 
@@ -516,6 +616,12 @@ void Model::UpdateBoundingBox(glm::vec3 vertex)
 glm::vec3 Model::GetModelScale()
 {
 	return boundingBox[1] - boundingBox[0];
+}
+
+void Model::GetAnimationData(int animIndex, float t, std::vector<glm::mat4>& data)
+{
+	animationSystem->SetAnimationIndex(animIndex);
+	animationSystem->GetAnimationData(t, data);
 }
 
 glm::vec3 Model::GetModelCentroid()

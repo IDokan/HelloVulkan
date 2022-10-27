@@ -16,6 +16,7 @@ Creation Date: 09.27.2022
 
 struct aiNode;
 struct aiScene;
+class AnimationSystem;
 
 class Model
 {
@@ -34,6 +35,10 @@ public:
 	
 	bool IsModelValid();
 
+	size_t GetBoneCount();
+	void* GetBoneDataForDrawing();
+	void GetAnimationData(int animIndex, float t, std::vector<glm::mat4>& data);
+
 	const char* GetErrorString();
 
 	// Return matrix to transfrom model in [-1,-1,-1] and [1,1,1]
@@ -50,11 +55,17 @@ private:
 	FbxString GetAttributeTypeName(FbxNodeAttribute::EType type);
 	// @@ End of printing
 
-	// @@ Creating Mesh data
+	// @@ Get Mesh data
 	void GetScene(FbxNode* node = nullptr);
 	void GetMesh(FbxNode* node);
 	bool GetMeshData(FbxMesh* mesh, Mesh& m);
-	// @@ End of creating mesh
+	// @@ End of getting mesh
+
+	// @@ Get Animation Data
+	void InitBoneData();
+	void GetAnimation();
+	void AddTracksRecursively(FbxNode* node, double frameRate, double startTime, double endTime, int keyFrames);
+	// @@ End of animation data
 
 	void GetTextureData(FbxSurfaceMaterial* material);
 
@@ -84,6 +95,8 @@ private:
 	int numTabs = 0;
 
 	std::vector<Mesh> meshes;
+	std::vector<glm::vec3> bones;
+	AnimationSystem* animationSystem;
 	
 	Assimp::Importer importer;
 };

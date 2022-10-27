@@ -29,13 +29,13 @@ Creation Date: 06.12.2021
 #include "Engines/Input/Input.h"
 
 MyVulkan::MyVulkan(Window* window)
-	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), isRotating(true), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f))
+	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), isRotating(true), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), animationUniformBufferSize(0)
 {
 }
 
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
-	model = new Model("../Vulkan/Graphics/Model/models/Mutant.fbx");
+	model = new Model("../Vulkan/Graphics/Model/models/Walking.fbx");
 
 	if (CreateInstance(appName, appVersion) == false)
 	{
@@ -68,7 +68,9 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	CreateDescriptorSetLayout();
 	CreateDescriptorSets();
 	CreateDepthResources();
+
 	CreateGraphicsPipeline();
+	CreateLinePipeline();
 
 	CreateFramebuffers();
 
@@ -144,6 +146,7 @@ void MyVulkan::DrawFrame(float dt)
 	}
 
 	UpdateUniformBuffer(currentFrameID);
+	 UpdateAnimationUniformBuffer();
 
 	// Prevent deadlock, delay ResetFences
 	vkResetFences(device, 1, &inFlightFences[currentFrameID]);
@@ -198,8 +201,10 @@ void MyVulkan::DrawFrame(float dt)
 
 void MyVulkan::CreateBuffers()
 {
+	CreateSkeletonBuffer();
 	CreateModelBuffers();
 	CreateUniformBuffers();
+	CreateAnimationUniformBuffers();
 }
 
 void MyVulkan::ResizeModelBuffers(int size)
@@ -342,9 +347,13 @@ void MyVulkan::LoadNewModel()
 
 	DestroyTextureImage();
 	DestroyModelBuffers();
-	
+	DestroySkeletonBuffer();
+	DestroyAnimationUniformBuffers();
+
 	int oldMeshSize = meshSize;
-	
+
+	CreateSkeletonBuffer();
+	CreateAnimationUniformBuffers();
 	CreateModelBuffers();
 	CreateTextures(model->GetDiffuseImagePaths());
 	if (meshSize > oldMeshSize)
@@ -1319,6 +1328,10 @@ void MyVulkan::DestroyPipeline()
 {
 	vkDestroyPipeline(device, pipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+
+	vkDestroyPipeline(device, linePipeline, nullptr);
+	vkDestroyPipelineLayout(device, linePipelineLayout, nullptr);
+
 	vkDestroyRenderPass(device, renderPass, nullptr);
 }
 
@@ -1426,8 +1439,6 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
 	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-
 	VkViewport viewport{};
 	viewport.x = 0.f;
 	viewport.y = 0.f;
@@ -1442,15 +1453,11 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	scissor.extent = swapchainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	for (int i = 0; i < meshSize; i++)
-	{
-		VkBuffer VB[] = { vertexBuffers[i] };
-		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
-		vkCmdBindIndexBuffer(commandBuffer, indexBuffers[i], 0, VK_INDEX_TYPE_UINT32);
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i * MAX_FRAMES_IN_FLIGHT + currentFrameID], 0, nullptr);
+	RecordDrawMeshCall(commandBuffer);
 
-		vkCmdDrawIndexed(commandBuffer, indexCounts[i], 1, 0, 0, 0);
+	if (boneSize > 0)
+	{
+		 RecordDrawSkeletonCall(commandBuffer);
 	}
 
 	MyImGUI::GUIRender(commandBuffer);
@@ -1645,7 +1652,7 @@ void MyVulkan::CleanupSwapchainResourcesForRecreation()
 	DestroySwapchain();
 }
 
-void MyVulkan::CreateVertexBuffer(int vertexCount, void* vertexData, int i)
+void MyVulkan::CreateVertexBuffer(int vertexCount, void* vertexData, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
 {
 	// Use two buffers.
 	// One for writing vertex data, the other is actual vertex buffer which we cannot see and use(map) at CPU.
@@ -1662,9 +1669,9 @@ void MyVulkan::CreateVertexBuffer(int vertexCount, void* vertexData, int i)
 	memcpy(data, vertexData, static_cast<size_t>(bufferSize));
 	vkUnmapMemory(device, stagingBufferMemory);
 
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, vertexBuffers[i], vertexBufferMemories[i]);
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer, bufferMemory);
 
-	CopyBuffer(stagingBuffer, vertexBuffers[i], bufferSize);
+	CopyBuffer(stagingBuffer, buffer, bufferSize);
 
 	DestroyBuffer(stagingBuffer);
 	FreeMemory(stagingBufferMemory);
@@ -1672,8 +1679,10 @@ void MyVulkan::CreateVertexBuffer(int vertexCount, void* vertexData, int i)
 
 void MyVulkan::DestroyBuffersAndFreeMemories()
 {
+	DestroySkeletonBuffer();
 	DestroyModelBuffers();
 
+	DestroyAnimationUniformBuffers();
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
 		DestroyBuffer(uniformBuffers[i]);
@@ -1689,7 +1698,7 @@ void MyVulkan::CreateModelBuffers()
 
 	for (int i = 0; i < meshSize; i++)
 	{
-		CreateVertexBuffer(model->GetVertexCount(i), model->GetVertexData(i), i);
+		CreateVertexBuffer(model->GetVertexCount(i), model->GetVertexData(i), vertexBuffers[i], vertexBufferMemories[i]);
 		CreateIndexBuffer(model->GetIndexCount(i), model->GetIndexData(i), i);
 	}
 }
@@ -1831,7 +1840,14 @@ void MyVulkan::CreateDescriptorSetLayout()
 	samplerLayoutBinding.pImmutableSamplers = nullptr;
 	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, samplerLayoutBinding };
+	VkDescriptorSetLayoutBinding animationLayoutBinding{};
+	animationLayoutBinding.binding = 2;
+	animationLayoutBinding.descriptorCount = 1;
+	animationLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	animationLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	animationLayoutBinding.pImmutableSamplers = nullptr;
+
+	std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uboLayoutBinding, samplerLayoutBinding, animationLayoutBinding };
 
 	VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -1851,6 +1867,7 @@ void MyVulkan::CreateUniformBuffers()
 	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 	uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
 	uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
+
 
 	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
 	{
@@ -1899,13 +1916,11 @@ void MyVulkan::UpdateUniformBuffer(uint32_t currentImage)
 	if (isMousePressed && !isLeftAltPressed)
 	{
 
-		std::cout << mouseDelta.x << ", " << mouseDelta.y << std::endl;
-
 		uniformData.model = glm::rotate(glm::mat4(1.f), mouseDelta.x * glm::radians(1.f), glm::vec3(0.0f, view.z, -view.y)) *
 			glm::rotate(glm::mat4(1.f), mouseDelta.y * glm::radians(1.f), glm::vec3(-view.y, view.x, 0.0f)) *
 			uniformData.model;
 	}
-	
+
 	if (input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_2))
 	{
 		rightMouseCenter = glm::vec3(input.GetMousePosition(), 0);
@@ -1926,7 +1941,7 @@ void MyVulkan::UpdateUniformBuffer(uint32_t currentImage)
 			uniformData.model;
 	}
 
-	
+
 	cameraPoint = cameraPoint + (static_cast<float>(input.MouseWheelScroll()) * (targetPoint - cameraPoint) * 0.1f);
 	uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 0.f, 1.f));
 
@@ -1938,12 +1953,15 @@ void MyVulkan::UpdateUniformBuffer(uint32_t currentImage)
 
 void MyVulkan::CreateDescriptorPool()
 {
-	std::array<VkDescriptorPoolSize, 2> poolSizes{};
+	std::array<VkDescriptorPoolSize, 3> poolSizes{};
 	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
 	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
 
 	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
+
+	poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
 
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1996,7 +2014,15 @@ void MyVulkan::UpdateDescriptorSets()
 			imageInfo.imageView = textureImageViews[i];
 			imageInfo.sampler = textureSampler;
 
-			std::vector<VkWriteDescriptorSet> descriptorWrites(2);
+			VkDescriptorBufferInfo animationBufferInfo{};
+			if (boneSize > 0)
+			{
+				animationBufferInfo.buffer = animationUniformBuffers[j];
+			}
+			animationBufferInfo.offset = 0;
+			animationBufferInfo.range = animationUniformBufferSize;
+
+			std::vector<VkWriteDescriptorSet> descriptorWrites(3);
 
 			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
 			descriptorWrites[0].dstSet = descriptorSets[i * MAX_FRAMES_IN_FLIGHT + j];
@@ -2014,6 +2040,14 @@ void MyVulkan::UpdateDescriptorSets()
 			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
 			descriptorWrites[1].descriptorCount = 1;
 			descriptorWrites[1].pImageInfo = &imageInfo;
+
+			descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[2].dstSet = descriptorSets[j];
+			descriptorWrites[2].dstBinding = 2;
+			descriptorWrites[2].dstArrayElement = 0;
+			descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptorWrites[2].descriptorCount = 1;
+			descriptorWrites[2].pBufferInfo = &animationBufferInfo;
 
 			vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 		}
@@ -2187,6 +2221,217 @@ void MyVulkan::DestroyTextureSampler()
 	vkDestroySampler(device, textureSampler, nullptr);
 }
 
+void MyVulkan::CreateLinePipeline()
+{
+	VkShaderModule vertModule = CreateShaderModule(readFile("spv/skeleton.vert.spv"));
+	VkShaderModule fragModule = CreateShaderModule(readFile("spv/skeleton.frag.spv"));
+
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertShaderStageInfo.module = vertModule;
+	vertShaderStageInfo.pName = "main";
+	// pSpecializationInfo which is an optional allows you to specify values for shader constants.
+
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragShaderStageInfo.module = fragModule;
+	fragShaderStageInfo.pName = "main";
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+	std::vector<VkDynamicState> dynamicStates = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR,
+	};
+	VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo{};
+	dynamicStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicStateCreateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+	dynamicStateCreateInfo.pDynamicStates = dynamicStates.data();
+
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	const VkVertexInputBindingDescription& bindingDescription = LineVertex::GetBindingDescription();
+	const std::vector<VkVertexInputAttributeDescription>& attributeDescription = LineVertex::GetAttributeDescriptions();
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescription.size());
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescription.data();
+
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
+	inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+	inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
+
+	VkPipelineViewportStateCreateInfo viewportState{};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.scissorCount = 1;
+
+	VkPipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	// If it is true, then fragments that are beyond the near and far planes are clamped to them as opposed to discarding them.
+	// It is useful in some special cases like shadow maps which requires enabling a GPU feature.
+	rasterizer.depthClampEnable = VK_FALSE;
+	// If it is true, then geometry never passes through the rasterizer stage.
+	// It is basically disables any output to the framebuffer.
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	// It determines how fragments are generated for geometry.
+	// Using VK_POLYGON_MODE_LINE, MODE_POINT requires enabling a GPU feature.
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterizer.lineWidth = 1.f;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizer.depthBiasEnable = VK_FALSE;
+	rasterizer.depthBiasConstantFactor = 0.0f;
+	rasterizer.depthBiasClamp = 0.0f;
+	rasterizer.depthBiasSlopeFactor = 0.0f;
+
+	VkPipelineMultisampleStateCreateInfo multisampling{};
+	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampling.sampleShadingEnable = VK_FALSE;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.minSampleShading = 1.f;
+	multisampling.pSampleMask = nullptr;
+	multisampling.alphaToCoverageEnable = VK_FALSE;
+	multisampling.alphaToOneEnable = VK_FALSE;
+
+	VkPipelineDepthStencilStateCreateInfo depthStencil{};
+	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depthStencil.depthTestEnable = VK_FALSE;
+	depthStencil.depthWriteEnable = VK_FALSE;
+	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+	depthStencil.depthBoundsTestEnable = VK_FALSE;
+	depthStencil.minDepthBounds = 0.f;
+	depthStencil.maxDepthBounds = 1.f;
+	depthStencil.stencilTestEnable = VK_FALSE;
+
+
+	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	colorBlendAttachment.blendEnable = VK_TRUE;
+	// Bellow settings are optional, unless blendEnable is VK_FALSE.
+	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+	VkPipelineColorBlendStateCreateInfo colorBlending{};
+	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlending.logicOpEnable = VK_FALSE;
+	colorBlending.logicOp = VK_LOGIC_OP_COPY;
+	colorBlending.attachmentCount = 1;
+	colorBlending.pAttachments = &colorBlendAttachment;
+	colorBlending.blendConstants[0] = 0.0f;
+	colorBlending.blendConstants[1] = 0.0f;
+	colorBlending.blendConstants[2] = 0.0f;
+	colorBlending.blendConstants[3] = 0.0f;
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+	pipelineLayoutInfo.pushConstantRangeCount = 0;
+	pipelineLayoutInfo.pPushConstantRanges = nullptr;
+
+	VulkanHelper::VkCheck(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &linePipelineLayout), "Creating pipelineLayout has failed!");
+
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	// shader stages
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.stageCount = 2;
+	pipelineInfo.pStages = shaderStages;
+	// Fixed-function states
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssemblyInfo;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pDepthStencilState = &depthStencil;
+	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.pDynamicState = &dynamicStateCreateInfo;
+	// Pipeline layout
+	pipelineInfo.layout = linePipelineLayout;
+	// Render pass
+	pipelineInfo.renderPass = renderPass;
+	pipelineInfo.subpass = 0;
+	// Below parameters are used for specify parent pipeline to handle derived multiple pipelines, which we don't use it here.
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineInfo.basePipelineIndex = -1;
+
+	VulkanHelper::VkCheck(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &linePipeline), "Creating graphics pipeline has failed!");
+
+
+
+	vkDestroyShaderModule(device, vertModule, nullptr);
+	vkDestroyShaderModule(device, fragModule, nullptr);
+}
+
+void MyVulkan::CreateSkeletonBuffer()
+{	
+	boneSize = static_cast<int>(model->GetBoneCount());
+
+	if (boneSize <= 0)
+	{
+		return;
+	}
+
+	CreateVertexBuffer(2 * boneSize, model->GetBoneDataForDrawing(), skeletonLineBuffer, skeletonLineBufferMemory);
+}
+
+void MyVulkan::DestroySkeletonBuffer()
+{
+	DestroyBuffer(skeletonLineBuffer);
+	FreeMemory(skeletonLineBufferMemory);
+}
+
+void MyVulkan::UpdateAnimationUniformBuffer()
+{
+	if (boneSize <= 0)
+	{
+		return;
+	}
+
+	std::vector<glm::mat4> animationBufferData;
+	// Currently draw only the first animation
+	model->GetAnimationData(0, 0.f, animationBufferData);
+
+	void* data;
+	vkMapMemory(device, animationUniformBufferMemories[currentFrameID], 0, animationUniformBufferSize, 0, &data);
+	memcpy(data, animationBufferData.data(), animationUniformBufferSize);
+	vkUnmapMemory(device, animationUniformBufferMemories[currentFrameID]);
+}
+
+void MyVulkan::CreateAnimationUniformBuffers()
+{
+	if (boneSize <= 0)
+	{
+		return;
+	}
+
+	animationUniformBufferSize = sizeof(glm::mat4) * boneSize;
+	animationUniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
+	animationUniformBufferMemories.resize(MAX_FRAMES_IN_FLIGHT);
+
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		CreateBuffer(animationUniformBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			animationUniformBuffers[i], animationUniformBufferMemories[i]);
+	}
+}
+
+void MyVulkan::DestroyAnimationUniformBuffers()
+{
+	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
+	{
+		DestroyBuffer(animationUniformBuffers[i]);
+		FreeMemory(animationUniformBufferMemories[i]);
+	}
+}
+
 VkValidationFeaturesEXT MyVulkan::EnableBestPracticesValidation()
 {
 	VkValidationFeatureEnableEXT enables[] = { VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT };
@@ -2282,6 +2527,35 @@ void MyVulkan::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
 	vkQueueWaitIdle(queue);
 
 	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
+}
+
+void MyVulkan::RecordDrawSkeletonCall(VkCommandBuffer commandBuffer)
+{
+
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipeline);
+
+	VkBuffer VB[] = { skeletonLineBuffer };
+	VkDeviceSize offsets[] = { 0 };
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipelineLayout, 0, 1, &descriptorSets[currentFrameID], 0, nullptr);
+
+	vkCmdDraw(commandBuffer, boneSize * 2, 1, 0, 0);
+}
+
+void MyVulkan::RecordDrawMeshCall(VkCommandBuffer commandBuffer)
+{
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
+
+	for (int i = 0; i < meshSize; i++)
+	{
+		VkBuffer VB[] = { vertexBuffers[i] };
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
+		vkCmdBindIndexBuffer(commandBuffer, indexBuffers[i], 0, VK_INDEX_TYPE_UINT32);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i * MAX_FRAMES_IN_FLIGHT + currentFrameID], 0, nullptr);
+
+		vkCmdDrawIndexed(commandBuffer, indexCounts[i], 1, 0, 0, 0);
+	}
 }
 
 void MyVulkan::CreateTextures(const std::vector<std::string>& imagePaths)

@@ -107,7 +107,7 @@ private:
 
 	void CreateBuffers();
 	void ResizeModelBuffers(int size);
-	void CreateVertexBuffer(int vertexCount, void* vertexData, int i);
+	void CreateVertexBuffer(int vertexCount, void* vertexData, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 	void DestroyBuffersAndFreeMemories();
 	void CreateModelBuffers();
 	void DestroyModelBuffers();
@@ -149,6 +149,9 @@ private:
 
 	VkCommandBuffer BeginSingleTimeCommands();
 	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
+
+	void RecordDrawSkeletonCall(VkCommandBuffer commandBuffer);
+	void RecordDrawMeshCall(VkCommandBuffer commandBuffer);
 
 	// @@@@@ Texture functions & resources
 	void CreateTextures(const std::vector<std::string>& imagePaths);
@@ -222,6 +225,7 @@ private:
 	
 	std::vector<VkBuffer> uniformBuffers;
 	std::vector<VkDeviceMemory> uniformBuffersMemory;
+	
 
 	int meshSize;
 	Model* model;
@@ -237,4 +241,26 @@ private:
 	glm::vec3 targetPoint;
 
 	UniformBufferObject uniformData;
+
+
+	// @@ Line drawing variables
+	int boneSize;
+
+	void CreateLinePipeline();
+	VkPipelineLayout linePipelineLayout;
+	VkPipeline linePipeline;
+
+	void CreateSkeletonBuffer();
+	void DestroySkeletonBuffer();
+	VkBuffer skeletonLineBuffer;
+	VkDeviceMemory skeletonLineBufferMemory;
+
+	int animationCount;
+	void UpdateAnimationUniformBuffer();
+	VkDeviceSize animationUniformBufferSize;
+	void CreateAnimationUniformBuffers();
+	void DestroyAnimationUniformBuffers();
+	std::vector<VkBuffer> animationUniformBuffers;
+	std::vector<VkDeviceMemory> animationUniformBufferMemories;
+	// @@ Skeleton drawings
 };

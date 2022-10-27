@@ -14,18 +14,17 @@ Creation Date: 09.27.2022
 #include <GLMath.h>
 #include <string>
 
-struct TutorialVertex {
-	TutorialVertex(glm::vec2 position, glm::vec3 color)
-		:position(position), color(color)
+struct LineVertex {
+	LineVertex(glm::vec3 position)
+		:position(position)
 	{}
-	glm::vec2 position;
-	glm::vec3 color;
+	glm::vec3 position;
 
 	static const VkVertexInputBindingDescription& GetBindingDescription()
 	{
 		static VkVertexInputBindingDescription bindingDescription{};
 		bindingDescription.binding = 0;
-		bindingDescription.stride = sizeof(TutorialVertex);
+		bindingDescription.stride = sizeof(LineVertex);
 		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
 
 		return bindingDescription;
@@ -33,19 +32,12 @@ struct TutorialVertex {
 
 	static const std::vector<VkVertexInputAttributeDescription>& GetAttributeDescriptions()
 	{
-		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(2);
+		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(1);
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
-		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;		// two 32-bit floats
-		attributeDescriptions[0].offset = offsetof(TutorialVertex, position);
-
-		attributeDescriptions[1].binding = 0;
-		attributeDescriptions[1].location = 1;
-		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;		// two 32-bit floats
-		attributeDescriptions[1].offset = offsetof(TutorialVertex, color);
-
-
+		attributeDescriptions[0].format = VK_FORMAT_R32G32B32_SFLOAT;		// three 32-bit floats
+		attributeDescriptions[0].offset = offsetof(LineVertex, position);
 
 		return attributeDescriptions;
 	}
@@ -146,4 +138,48 @@ struct Mesh
 	std::string meshName;
 	std::vector<uint32_t> indices;
 	std::vector<Vertex> vertices;
+};
+
+struct Bone
+{
+	std::string name;
+	int parentID;
+};
+
+class Skeleton
+{
+public:
+	void AddBone(std::string name, int parentID);
+	int FindBoneIDByName(const std::string& name);
+	const Bone& GetBoneByBoneID(int boneID);
+	size_t GetSkeletonSize();
+	void Clear();
+private:
+	std::vector<Bone> bones;
+};
+
+struct KeyFrame
+{
+	float time;
+	glm::mat4 toModelFromBone;
+};
+
+struct Track
+{
+	std::vector<KeyFrame> keyFrames;
+};
+
+struct Animation
+{
+	Animation();
+	Animation(std::string animationName, float duration, size_t trackSize);
+	Animation(const Animation& m);
+	Animation(Animation&& m);
+	Animation& operator=(const Animation& m);
+	Animation& operator=(Animation&& m);
+
+
+	std::string animationName;
+	float duration;
+	std::vector<Track> tracks;
 };

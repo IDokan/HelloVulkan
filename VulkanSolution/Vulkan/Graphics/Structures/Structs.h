@@ -13,6 +13,7 @@ Creation Date: 09.27.2022
 #include "Vulkan/vulkan.h"
 #include <GLMath.h>
 #include <string>
+#include <map>
 
 struct LineVertex {
 	LineVertex(glm::vec3 position)
@@ -142,20 +143,38 @@ struct Mesh
 
 struct Bone
 {
+	Bone();
+	Bone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4());
+	Bone(const Bone& b);
+	Bone(Bone&& b);
+	Bone& operator=(const Bone& b);
+	Bone& operator=(Bone&& b);
+
 	std::string name;
 	int parentID;
+	int id;
+	glm::mat4 toBoneFromUnit;
+	glm::mat4 toModelFromBone;
 };
 
 class Skeleton
 {
 public:
+	Skeleton();
 	void AddBone(std::string name, int parentID);
-	int FindBoneIDByName(const std::string& name);
+	int GetBoneIDByName(const std::string& name);
+	// Return empty bone when bone ID is invalid
 	const Bone& GetBoneByBoneID(int boneID);
+	const Bone& GetBoneByName(const std::string& name);
+	Bone& GetBoneReferenceByName(const std::string& name);
 	size_t GetSkeletonSize();
 	void Clear();
+
+	void GetToBoneFromUnit(std::vector<glm::mat4>& data);
+	void GetToModelFromBone(std::vector<glm::mat4>& data);
 private:
 	std::vector<Bone> bones;
+	int boneSize;
 };
 
 struct KeyFrame

@@ -10,7 +10,7 @@ Mesh::Mesh(const std::string& name, const std::vector<uint32_t>& indices, const 
 }
 
 Mesh::Mesh(const Mesh& m)
-	:meshName(m.meshName), indices(m.indices), vertices(m.vertices)
+	: meshName(m.meshName), indices(m.indices), vertices(m.vertices)
 {
 }
 
@@ -35,12 +35,18 @@ Mesh& Mesh::operator=(Mesh&& m)
 	return *this;
 }
 
-void Skeleton::AddBone(std::string name, int parentID)
+Skeleton::Skeleton()
+	:bones(), boneSize(0)
 {
-	bones.push_back(Bone(name, parentID));
 }
 
-int Skeleton::FindBoneIDByName(const std::string& name)
+void Skeleton::AddBone(std::string name, int parentID)
+{
+	bones.push_back(Bone(name, parentID, boneSize));
+	boneSize += 1;
+}
+
+int Skeleton::GetBoneIDByName(const std::string& name)
 {
 	int id = 0;
 	for (const Bone& bone : bones)
@@ -60,14 +66,53 @@ const Bone& Skeleton::GetBoneByBoneID(int boneID)
 	return bones[boneID];
 }
 
+const Bone& Skeleton::GetBoneByName(const std::string& name)
+{
+	int id = 0;
+	for (const Bone& bone : bones)
+	{
+		if (bone.name.compare(name) == 0)
+		{
+			return bone;
+		}
+		id++;
+	}
+
+	return bones.front();
+}
+
+Bone& Skeleton::GetBoneReferenceByName(const std::string& name)
+{
+	return const_cast<Bone&>(GetBoneByName(name));
+}
+
 size_t Skeleton::GetSkeletonSize()
 {
-	return bones.size();
+	return boneSize;
 }
 
 void Skeleton::Clear()
 {
 	bones.clear();
+	boneSize = 0;
+}
+
+void Skeleton::GetToBoneFromUnit(std::vector<glm::mat4>& data)
+{
+	data.resize(boneSize);
+	for (int i = 0; i < boneSize; i++)
+	{
+		data[i] = bones[i].toBoneFromUnit;
+	}
+}
+
+void Skeleton::GetToModelFromBone(std::vector<glm::mat4>& data)
+{
+	data.resize(boneSize);
+	for (int i = 0; i < boneSize; i++)
+	{
+		data[i] = bones[i].toModelFromBone;
+	}
 }
 
 Animation::Animation()
@@ -76,7 +121,7 @@ Animation::Animation()
 }
 
 Animation::Animation(std::string animationName, float duration, size_t trackSize)
-	:animationName(animationName), duration(duration)
+	: animationName(animationName), duration(duration)
 {
 	tracks.resize(trackSize);
 }
@@ -106,5 +151,46 @@ Animation& Animation::operator=(Animation&& m)
 	duration = m.duration;
 	tracks = m.tracks;
 
+	return *this;
+}
+
+Bone::Bone()
+	: name(), parentID(-1), id(-1), toBoneFromUnit(), toModelFromBone()
+{
+}
+
+Bone::Bone(std::string _name, int _parentID, int _id, glm::mat4 _toBoneFromModel, glm::mat4 _toModelFromBone)
+	: name(_name), parentID(_parentID), id(_id), toBoneFromUnit(_toBoneFromModel), toModelFromBone(_toModelFromBone)
+{
+
+}
+
+Bone::Bone(const Bone& b)
+	: name(b.name), parentID(b.parentID), id(b.id), toBoneFromUnit(b.toBoneFromUnit), toModelFromBone(b.toModelFromBone)
+{
+}
+
+Bone::Bone(Bone&& b)
+	: name(b.name), parentID(b.parentID), id(b.id), toBoneFromUnit(b.toBoneFromUnit), toModelFromBone(b.toModelFromBone)
+{
+}
+
+Bone& Bone::operator=(const Bone& b)
+{
+	name = b.name;
+	parentID = b.parentID;
+	id = b.id;
+	toBoneFromUnit = b.toBoneFromUnit;
+	toModelFromBone = b.toModelFromBone;
+	return *this;
+}
+
+Bone& Bone::operator=(Bone&& b)
+{
+	name = b.name;
+	parentID = b.parentID;
+	id = b.id;
+	toBoneFromUnit = b.toBoneFromUnit;
+	toModelFromBone = b.toModelFromBone;
 	return *this;
 }

@@ -34,10 +34,18 @@ public:
 
 	void GetAnimationData(float t, std::vector<glm::mat4>& data);
 
+	void GetToBoneFromUnit(std::vector<glm::mat4>& data);
+	void GetToModelFromBone(std::vector<glm::mat4>& data);
 	size_t GetBoneCount();
-	int FindBoneIDByName(const std::string& name);
+	int GetBoneIDByName(const std::string& name);
+
+	// Gate function for cluster data (Gate function indicates precede function to get another data)
+	void GetDeformerData(FbxMesh* mesh);
 private:
 
+	// @@ Get Cluster (toBindPoseMatrix, bone weights, bone ID)
+	void GetClusterData(FbxSkin* skin);
+	// @@ End of cluster data
 	glm::mat4 ConvertFbxMatrixToGLM(FbxAMatrix fbxMatrix);
 
 	unsigned int selectedAnimation;

@@ -26,7 +26,7 @@ void AnimationSystem::ImportSkeleton(FbxNode* node, FbxNode* parentNode)
 	}
 	else
 	{
-		skeleton.AddBone(node->GetName(), skeleton.FindBoneIDByName(parentNode->GetName()));
+		skeleton.AddBone(node->GetName(), skeleton.GetBoneIDByName(parentNode->GetName()));
 	}
 }
 
@@ -104,14 +104,77 @@ void AnimationSystem::GetAnimationData(float t, std::vector<glm::mat4>& data)
 	}
 }
 
+void AnimationSystem::GetToBoneFromUnit(std::vector<glm::mat4>& data)
+{
+	skeleton.GetToBoneFromUnit(data);
+}
+
+void AnimationSystem::GetToModelFromBone(std::vector<glm::mat4>& data)
+{
+	skeleton.GetToModelFromBone(data);
+}
+
 size_t AnimationSystem::GetBoneCount()
 {
 	return skeleton.GetSkeletonSize();
 }
 
-int AnimationSystem::FindBoneIDByName(const std::string& name)
+int AnimationSystem::GetBoneIDByName(const std::string& name)
 {
-	return skeleton.FindBoneIDByName(name);
+	return skeleton.GetBoneIDByName(name);
+}
+
+void AnimationSystem::GetDeformerData(FbxMesh* mesh)
+{
+	const int deformerCount = mesh->GetDeformerCount();
+	if (deformerCount <= 0)
+	{
+		return;
+	}
+
+	for (int i = 0; i < deformerCount; i++)
+	{
+		FbxSkin* skinDeformer = reinterpret_cast<FbxSkin*>(mesh->GetDeformer(i, FbxDeformer::eSkin));
+		if (skinDeformer == nullptr)
+		{
+			continue;
+		}
+
+		GetClusterData(skinDeformer);
+	}
+}
+
+void AnimationSystem::GetClusterData(FbxSkin* skin)
+{
+	const int clusterCount = skin->GetClusterCount();
+	for (int i = 0; i < clusterCount; i++)
+	{
+		FbxCluster* cluster = skin->GetCluster(i);
+
+		if (cluster == nullptr)
+		{
+			continue;
+		}
+
+		FbxNode* bone = cluster->GetLink();
+		if (bone == nullptr)
+		{
+			continue;
+		}
+
+		FbxAMatrix toModelFromBone, toBoneFromUnit, meshTransform;
+
+		// Return the transfromation of the mesh at binding time.
+		cluster->GetTransformMatrix(meshTransform);
+		cluster->GetTransformLinkMatrix(toBoneFromUnit);
+
+		toBoneFromUnit = toBoneFromUnit * meshTransform;
+		toModelFromBone = toBoneFromUnit.Inverse();
+
+		Bone& t = skeleton.GetBoneReferenceByName(bone->GetName());
+		t.toModelFromBone = ConvertFbxMatrixToGLM(toModelFromBone);
+		t.toBoneFromUnit = ConvertFbxMatrixToGLM(toBoneFromUnit);
+	}
 }
 
 glm::mat4 AnimationSystem::ConvertFbxMatrixToGLM(FbxAMatrix fbxMatrix)

@@ -2395,9 +2395,14 @@ void MyVulkan::UpdateAnimationUniformBuffer()
 		return;
 	}
 
-	std::vector<glm::mat4> animationBufferData;
+	std::vector<glm::mat4> animationBufferData, toModelFromBone;
 	// Currently draw only the first animation
 	model->GetAnimationData(0, 0.f, animationBufferData);
+	model->GetToModelFromBone(toModelFromBone);
+	for (int i = 0; i < animationBufferData.size(); i++)
+	{
+		animationBufferData[i] = animationBufferData[i] * toModelFromBone[i];
+	}
 
 	void* data;
 	vkMapMemory(device, animationUniformBufferMemories[currentFrameID], 0, animationUniformBufferSize, 0, &data);

@@ -37,6 +37,8 @@ public:
 
 	size_t GetBoneCount();
 	void* GetBoneDataForDrawing();
+	void GetToBoneFromUnit(std::vector<glm::mat4>& data);
+	void GetToModelFromBone(std::vector<glm::mat4>& data);
 	void GetAnimationData(int animIndex, float t, std::vector<glm::mat4>& data);
 
 	const char* GetErrorString();
@@ -62,10 +64,12 @@ private:
 	// @@ End of getting mesh
 
 	// @@ Get Animation Data
+	void GetSkeleton(FbxNode* root = nullptr);
 	void InitBoneData();
 	void GetAnimation();
 	void AddTracksRecursively(FbxNode* node, double frameRate, double startTime, double endTime, int keyFrames);
 	// @@ End of animation data
+
 
 	void GetTextureData(FbxSurfaceMaterial* material);
 

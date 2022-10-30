@@ -55,7 +55,7 @@ bool Model::LoadModel(const std::string& path)
 
 	lImporter->Import(lScene);
 
-
+	GetSkeleton();
 	GetScene();
 	GetAnimation();
 
@@ -247,8 +247,6 @@ void Model::GetScene(FbxNode* root)
 		{
 			return;
 		}
-
-		animationSystem->ImportSkeleton(root);
 	}
 
 	const uint32_t numNodes = static_cast<uint32_t>(root->GetChildCount());
@@ -261,8 +259,7 @@ void Model::GetScene(FbxNode* root)
 			continue;
 		}
 
-		animationSystem->ImportSkeleton(node, root);
-
+		// If mesh data is valid,
 		if (node->GetMesh())
 		{
 			GetMesh(node);
@@ -316,6 +313,8 @@ void Model::GetMesh(FbxNode* node)
 			GetTextureData(material);
 		}
 	}
+
+	animationSystem->GetDeformerData(mesh);
 }
 
 bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
@@ -424,16 +423,48 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 	return true;
 }
 
+void Model::GetSkeleton(FbxNode* root)
+{
+	if (!root)
+	{
+		root = lScene->GetRootNode();
+		if (!root)
+		{
+			return;
+		}
+
+		animationSystem->ImportSkeleton(root);
+	}
+
+	const uint32_t numNodes = static_cast<uint32_t>(root->GetChildCount());
+	for (uint32_t i = 0; i < numNodes; i++)
+	{
+		FbxNode* node = root->GetChild(i);
+
+		if (!node)
+		{
+			continue;
+		}
+
+		animationSystem->ImportSkeleton(node, root);
+
+		GetSkeleton(node);
+	}
+}
+
 void Model::InitBoneData()
 {
+	std::vector<glm::mat4> toBoneFromUnit;
+	animationSystem->GetToBoneFromUnit(toBoneFromUnit);
+
 	size_t boneCount = animationSystem->GetBoneCount();
 	bones.resize(boneCount * 2);
 
 	const int boneDataSize = 2 * static_cast<int>(boneCount);
 	for (int i = 0; i < boneCount; i++)
 	{
-		bones[i * 2] = glm::vec3(0.f, 0.f, 0.f);
-		bones[i * 2 + 1] = glm::vec3(0.f, 10.f, 0.f);
+		bones[i * 2] = toBoneFromUnit[i] * glm::vec4(0.f, 1.f, 0.f, 1.f);
+		bones[i * 2 + 1] = toBoneFromUnit[i] * glm::vec4(0.f, 0.f, 0.f, 1.f);
 	}
 }
 
@@ -491,7 +522,7 @@ void Model::AddTracksRecursively(FbxNode* node, double frameRate, double startTi
 		return;
 	}
 
-	animationSystem->AddTrack(node, animationSystem->FindBoneIDByName(node->GetName()), frameRate, startTime, endTime, keyFrames);
+	animationSystem->AddTrack(node, animationSystem->GetBoneIDByName(node->GetName()), frameRate, startTime, endTime, keyFrames);
 
 	int childCount = node->GetChildCount();
 	for (int i = 0; i < childCount; i++)
@@ -618,6 +649,11 @@ glm::vec3 Model::GetModelScale()
 	return boundingBox[1] - boundingBox[0];
 }
 
+void Model::GetToBoneFromUnit(std::vector<glm::mat4>& data)
+{
+	animationSystem->GetToBoneFromUnit(data);
+}
+
 void Model::GetAnimationData(int animIndex, float t, std::vector<glm::mat4>& data)
 {
 	animationSystem->SetAnimationIndex(animIndex);
@@ -627,6 +663,11 @@ void Model::GetAnimationData(int animIndex, float t, std::vector<glm::mat4>& dat
 glm::vec3 Model::GetModelCentroid()
 {
 	return (boundingBox[0] + boundingBox[1]) * 0.5f;
+}
+
+void Model::GetToModelFromBone(std::vector<glm::mat4>& data)
+{
+	animationSystem->GetToModelFromBone(data);
 }
 
 void Model::ReadMaterial(const aiScene* scene, const std::string& path)

@@ -35,7 +35,7 @@ MyVulkan::MyVulkan(Window* window)
 
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
-	model = new Model("../Vulkan/Graphics/Model/models/Walking.fbx");
+	model = new Model("../Vulkan/Graphics/Model/models/Bomber.fbx");
 
 	if (CreateInstance(appName, appVersion) == false)
 	{
@@ -146,7 +146,7 @@ void MyVulkan::DrawFrame(float dt)
 	}
 
 	UpdateUniformBuffer(currentFrameID);
-	 UpdateAnimationUniformBuffer();
+	UpdateAnimationUniformBuffer();
 
 	// Prevent deadlock, delay ResetFences
 	vkResetFences(device, 1, &inFlightFences[currentFrameID]);
@@ -1431,7 +1431,7 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
 	// Since VkClearValue is union, use appropriate member variable name for usage.
 	std::array<VkClearValue, 2> clearValues{};
-	clearValues[0].color = { {0.f, 0.f, 0.f, 1.f} };
+	clearValues[0].color = { { 0.4f, 0.f, 0.f, 1.f} };
 	clearValues[1].depthStencil = { 1.f, 0 };
 
 	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
@@ -1457,7 +1457,7 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
 	if (boneSize > 0)
 	{
-		 RecordDrawSkeletonCall(commandBuffer);
+		RecordDrawSkeletonCall(commandBuffer);
 	}
 
 	MyImGUI::GUIRender(commandBuffer);
@@ -1961,7 +1961,7 @@ void MyVulkan::CreateDescriptorPool()
 	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
 
 	poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+	poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
 
 	VkDescriptorPoolCreateInfo poolInfo{};
 	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -2042,7 +2042,7 @@ void MyVulkan::UpdateDescriptorSets()
 			descriptorWrites[1].pImageInfo = &imageInfo;
 
 			descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[2].dstSet = descriptorSets[j];
+			descriptorWrites[2].dstSet = descriptorSets[i * MAX_FRAMES_IN_FLIGHT + j];
 			descriptorWrites[2].dstBinding = 2;
 			descriptorWrites[2].dstArrayElement = 0;
 			descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -2371,7 +2371,7 @@ void MyVulkan::CreateLinePipeline()
 }
 
 void MyVulkan::CreateSkeletonBuffer()
-{	
+{
 	boneSize = static_cast<int>(model->GetBoneCount());
 
 	if (boneSize <= 0)

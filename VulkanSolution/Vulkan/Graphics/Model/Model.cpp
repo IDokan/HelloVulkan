@@ -300,6 +300,9 @@ void Model::GetMesh(FbxNode* node)
 	m.meshName = (node->GetName()[0] != '\0') ? node->GetName() : mesh->GetName();
 	if (GetMeshData(mesh, m))
 	{
+
+		animationSystem->GetDeformerData(mesh, m);
+
 		meshes.emplace_back(m);
 	}
 
@@ -314,7 +317,6 @@ void Model::GetMesh(FbxNode* node)
 		}
 	}
 
-	animationSystem->GetDeformerData(mesh);
 }
 
 bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
@@ -366,7 +368,8 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 	}
 
 	m.indices.resize(indicesCount);
-
+	// small vertices but more normals and uv data.
+	// Expand vertices
 	if (normalCount == indicesCount && uvCount == indicesCount)
 	{
 		for (size_t i = 0; i < indicesCount; i++)

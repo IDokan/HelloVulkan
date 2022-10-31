@@ -50,23 +50,27 @@ struct Vertex {
 		position = glm::vec3(0.f, 0.f, 0.f);
 		normal = glm::vec3(0.f, 0.f, 0.f);
 		texCoord = glm::vec2(0.f, 0.f);
+		boneIDs = glm::ivec4(0);
+		boneWeights = glm::vec4(0.f);
 	}
-	Vertex(glm::vec3 position, glm::vec3 normal, glm::vec2 texCoord)
-		:position(position), normal(normal), texCoord(texCoord)
+	Vertex(glm::vec3 position, glm::vec3 normal, glm::vec2 texCoord, glm::ivec4 boneIDs, glm::vec4 boneWeights)
+		:position(position), normal(normal), texCoord(texCoord), boneIDs(boneIDs), boneWeights(boneWeights)
 	{}
 
 	Vertex(const Vertex& v)
-		:position(v.position), normal(v.normal), texCoord(v.texCoord)
+		:position(v.position), normal(v.normal), texCoord(v.texCoord), boneIDs(v.boneIDs), boneWeights(v.boneWeights)
 	{}
 
 	Vertex(Vertex&& v)
-		:position(v.position), normal(v.normal), texCoord(v.texCoord)
+		:position(v.position), normal(v.normal), texCoord(v.texCoord), boneIDs(v.boneIDs), boneWeights(v.boneWeights)
 	{}
 	Vertex& operator=(const Vertex& v)
 	{
 		position = v.position;
 		normal = v.normal;
 		texCoord = v.texCoord;
+		boneIDs = v.boneIDs;
+		boneWeights = v.boneWeights;
 		return *this;
 	}
 	Vertex& operator=(Vertex&& v)
@@ -74,13 +78,16 @@ struct Vertex {
 		position = v.position;
 		normal = v.normal;
 		texCoord = v.texCoord;
+		boneIDs = v.boneIDs;
+		boneWeights = v.boneWeights;
 		return *this;
 	}
 
-
-		glm::vec3 position;
-		glm::vec3 normal;
-		glm::vec2 texCoord;
+	glm::vec3 position;
+	glm::vec3 normal;
+	glm::vec2 texCoord;
+	glm::ivec4 boneIDs;
+	glm::vec4 boneWeights;
 
 	static const VkVertexInputBindingDescription& GetBindingDescription()
 	{
@@ -94,7 +101,7 @@ struct Vertex {
 
 	static const std::vector<VkVertexInputAttributeDescription>& GetAttributeDescriptions()
 	{
-		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(3);
+		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(5);
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
@@ -108,8 +115,18 @@ struct Vertex {
 
 		attributeDescriptions[2].binding = 0;
 		attributeDescriptions[2].location = 2;
-		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;		// three 32-bit floats
+		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;		// two 32-bit floats
 		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+
+		attributeDescriptions[3].binding = 0;
+		attributeDescriptions[3].location = 3;
+		attributeDescriptions[3].format = VK_FORMAT_R32G32B32A32_SINT;		// four 32-bit unsigned int
+		attributeDescriptions[3].offset = offsetof(Vertex, boneIDs);
+
+		attributeDescriptions[4].binding = 0;
+		attributeDescriptions[4].location = 4;
+		attributeDescriptions[4].format = VK_FORMAT_R32G32B32A32_SFLOAT;		// Four 32-bit floats
+		attributeDescriptions[4].offset = offsetof(Vertex, boneWeights);
 
 		return attributeDescriptions;
 	}

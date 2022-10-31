@@ -1,6 +1,7 @@
 #include "Structs.h"
 
 Mesh::Mesh()
+	:meshName(), indices(), vertices()
 {
 }
 

@@ -40,11 +40,11 @@ public:
 	int GetBoneIDByName(const std::string& name);
 
 	// Gate function for cluster data (Gate function indicates precede function to get another data)
-	void GetDeformerData(FbxMesh* mesh);
+	void GetDeformerData(FbxMesh* mesh, Mesh& m);
 private:
 
 	// @@ Get Cluster (toBindPoseMatrix, bone weights, bone ID)
-	void GetClusterData(FbxSkin* skin);
+	void GetClusterData(FbxSkin* skin, Mesh& mesh);
 	// @@ End of cluster data
 	glm::mat4 ConvertFbxMatrixToGLM(FbxAMatrix fbxMatrix);
 

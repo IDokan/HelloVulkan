@@ -124,7 +124,7 @@ int AnimationSystem::GetBoneIDByName(const std::string& name)
 	return skeleton.GetBoneIDByName(name);
 }
 
-void AnimationSystem::GetDeformerData(FbxMesh* mesh)
+void AnimationSystem::GetDeformerData(FbxMesh* mesh, Mesh& m)
 {
 	const int deformerCount = mesh->GetDeformerCount();
 	if (deformerCount <= 0)
@@ -140,16 +140,25 @@ void AnimationSystem::GetDeformerData(FbxMesh* mesh)
 			continue;
 		}
 
-		GetClusterData(skinDeformer);
+		GetClusterData(skinDeformer, m);
 	}
 }
 
-void AnimationSystem::GetClusterData(FbxSkin* skin)
+void AnimationSystem::GetClusterData(FbxSkin* skin, Mesh& mesh)
 {
+	// temporary container for boneID, bone weights.
+	// There were no appropriate solution to pass these data directly to the vertex data.
+		// Set default data to -1 to this temporary container and pass only appropriate data to the real vertex data.
+			// Why we should use temporary, set -1 to vertex data and pass them GPU might cause out of bound error.
+	const int meshVertexCount = static_cast<int>(mesh.vertices.size());
+	std::vector<glm::ivec4> boneVertexID(meshVertexCount, glm::ivec4(-1));
+	std::vector<glm::vec4> boneVertexWeight(meshVertexCount);
+
 	const int clusterCount = skin->GetClusterCount();
-	for (int i = 0; i < clusterCount; i++)
+	// Joint == Cluster
+	for (int jointID = 0; jointID < clusterCount; jointID++)
 	{
-		FbxCluster* cluster = skin->GetCluster(i);
+		FbxCluster* cluster = skin->GetCluster(jointID);
 
 		if (cluster == nullptr)
 		{
@@ -174,6 +183,45 @@ void AnimationSystem::GetClusterData(FbxSkin* skin)
 		Bone& t = skeleton.GetBoneReferenceByName(bone->GetName());
 		t.toModelFromBone = ConvertFbxMatrixToGLM(toModelFromBone);
 		t.toBoneFromUnit = ConvertFbxMatrixToGLM(toBoneFromUnit);
+
+		const int vertexIdCount = cluster->GetControlPointIndicesCount();
+		int* vertexIds = cluster->GetControlPointIndices();
+		double* boneWeights = cluster->GetControlPointWeights();
+
+		// save boneID, boneWeights to temporary container.
+		for (int i = 0; i < vertexIdCount; i++)
+		{
+			int id = vertexIds[i];
+			double weights = boneWeights[i];
+			
+			for (int index = 0; index < 4; index++)
+			{
+				if (boneVertexID[id][index] == -1)
+				{
+					boneVertexID[id][index] = t.id;
+					boneVertexWeight[id][index] = static_cast<float>(weights);
+					break;
+				}
+			}
+		}
+	}
+
+	// Pass boneID, boneWeights data to the vertex data.
+	for (int i = 0; i < meshVertexCount; i++)
+	{
+		for (int vectorIndex = 0; vectorIndex < 4; vectorIndex++)
+		{
+			if (boneVertexID[i][vectorIndex] >= 0 && mesh.vertices[i].boneIDs[vectorIndex] <= 0)
+			{
+				mesh.vertices[i].boneIDs[vectorIndex] = boneVertexID[i][vectorIndex];
+				mesh.vertices[i].boneWeights[vectorIndex] = boneVertexWeight[i][vectorIndex];
+			}
+			else
+			{
+				mesh.vertices[i].boneIDs[vectorIndex] = 0;
+				mesh.vertices[i].boneWeights[vectorIndex] = 0.f;
+			}
+		}
 	}
 }
 

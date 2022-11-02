@@ -679,6 +679,11 @@ unsigned int Model::GetSelectedAnimationIndex()
 
 void Model::SetAnimationIndex(int i)
 {
+	if (const unsigned int animationCount = animationSystem->GetAnimationCount();
+		i >= animationCount)
+	{
+		i = animationCount - 1;
+	}
 	animationSystem->SetAnimationIndex(i);
 }
 

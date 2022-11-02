@@ -235,7 +235,6 @@ private:
 	VkDeviceMemory depthImageMemory;
 	VkImageView depthImageView;
 
-	bool isRotating;
 	float timer;
 	glm::vec3 rightMouseCenter;
 	glm::vec3 cameraPoint;
@@ -263,5 +262,8 @@ private:
 	void DestroyAnimationUniformBuffers();
 	std::vector<VkBuffer> animationUniformBuffers;
 	std::vector<VkDeviceMemory> animationUniformBufferMemories;
+
+	bool bindPoseFlag;
+	bool showSkeletonFlag;
 	// @@ Skeleton drawings
 };

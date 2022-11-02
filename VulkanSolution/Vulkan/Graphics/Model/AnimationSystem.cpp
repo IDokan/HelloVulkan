@@ -91,20 +91,40 @@ void AnimationSystem::AddTrack(FbxNode* node, int boneID, double frameRate, doub
 
 void AnimationSystem::GetAnimationData(float t, std::vector<glm::mat4>& data)
 {
-	const std::vector<Track> tracks = animations[selectedAnimation].tracks;
-	size_t size = tracks.size();
-	data.resize(size);
+	const std::vector<Track>& tracks = animations[selectedAnimation].tracks;
+	size_t trackSize = tracks.size();
+	data.resize(trackSize);
 	
-	for (size_t i = 0; i < size; i++)
+	for (size_t trackIndex = 0; trackIndex < trackSize; trackIndex++)
 	{
-		if (int parentID = skeleton.GetBoneByBoneID(static_cast<int>(i)).parentID;
-			parentID >= 0)
+		const std::vector<KeyFrame>& keyFrames = tracks[trackIndex].keyFrames;
+		size_t keyFrameSize = keyFrames.size();
+		for (size_t keyFrameIndex = 0; keyFrameIndex < keyFrameSize; keyFrameIndex++)
 		{
-			data[i] = data[parentID] * tracks[i].keyFrames[0].toModelFromBone;
-		}
-		else
-		{
-			data[i] = tracks[i].keyFrames[0].toModelFromBone;
+			// If keyFrameIndex is appropriate index to interpolate.
+				// or it is the last index
+			if (t < keyFrames[keyFrameIndex].time || keyFrameIndex == keyFrameSize - 1)
+			{
+				int transformIndex1 = static_cast<int>((keyFrameIndex == 0) ? 0 : (keyFrameIndex - 1));
+				int transformIndex2 = static_cast<int>(keyFrameIndex);
+
+				float interpolateT = (t - keyFrames[transformIndex1].time) / (keyFrames[transformIndex2].time - keyFrames[transformIndex1].time);
+
+				glm::mat4 transform = (1.f - interpolateT) * keyFrames[transformIndex1].toModelFromBone + (interpolateT)*keyFrames[transformIndex2].toModelFromBone;
+
+				if (int parentID = skeleton.GetBoneByBoneID(static_cast<int>(trackIndex)).parentID;
+					parentID >= 0)
+				{
+					data[trackIndex] = data[parentID] * transform;
+				}
+				else
+				{
+					data[trackIndex] = transform;
+				}
+
+				// Go to next track if data is filled.
+				break;
+			}
 		}
 	}
 }

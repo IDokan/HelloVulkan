@@ -29,7 +29,7 @@ Creation Date: 06.12.2021
 #include "Engines/Input/Input.h"
 
 MyVulkan::MyVulkan(Window* window)
-	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), animationUniformBufferSize(0)
+	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), animationUniformBufferSize(0), bindPoseFlag(false), showSkeletonFlag(true)
 {
 }
 
@@ -688,7 +688,8 @@ void MyVulkan::InitGUI()
 	MyImGUI::InitImGUI(windowHolder->glfwWindow, device, instance, physicalDevice, queue, renderPass, commandBuffers.front());
 
 	MyImGUI::SendModelInfo(model);
-	MyImGUI::SendAnimationInfo(&timer);
+	MyImGUI::SendSkeletonInfo(&showSkeletonFlag);
+	MyImGUI::SendAnimationInfo(&timer, &bindPoseFlag);
 	MyImGUI::UpdateAnimationNameList();
 }
 
@@ -1466,7 +1467,7 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
 	RecordDrawMeshCall(commandBuffer);
 
-	if (boneSize > 0)
+	if (boneSize > 0 && showSkeletonFlag)
 	{
 		RecordDrawSkeletonCall(commandBuffer);
 	}
@@ -2407,12 +2408,25 @@ void MyVulkan::UpdateAnimationUniformBuffer()
 	}
 
 	std::vector<glm::mat4> animationBufferData, toModelFromBone;
-	// Currently draw only the first animation
-	model->GetAnimationData(0.f, animationBufferData);
-	model->GetToModelFromBone(toModelFromBone);
-	for (int i = 0; i < animationBufferData.size(); i++)
+
+	if (bindPoseFlag)
 	{
-		animationBufferData[i] = animationBufferData[i] * toModelFromBone[i];
+		size_t boneCount = model->GetBoneCount();
+		animationBufferData.resize(boneCount);
+
+		for (int i = 0; i < boneCount; i++)
+		{
+			animationBufferData[i] = glm::identity<glm::mat4>();
+		}
+	}
+	else
+	{	// Get animation key frame data
+		model->GetAnimationData(timer, animationBufferData);
+		model->GetToModelFromBone(toModelFromBone);
+		for (int i = 0; i < animationBufferData.size(); i++)
+		{
+			animationBufferData[i] = animationBufferData[i] * toModelFromBone[i];
+		}
 	}
 
 	void* data;

@@ -25,6 +25,7 @@ namespace MyImGUI
     namespace Helper
     {
         void ModelStats();
+        void Skeleton();
         void Animation();
     }
 }
@@ -34,6 +35,9 @@ namespace
     Model* model;
     float* worldTimer;
     std::vector<std::string> animationNameList;
+    bool* bindPoseFlag;
+
+    bool* showSkeletonFlag;
 }
 
 namespace MyImGUI
@@ -155,11 +159,13 @@ void MyImGUI::DrawGUI()
 {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
-    ImGui::ShowDemoWindow();
+    //ImGui::ShowDemoWindow();
+    
 
     ImGui::Begin("Controller");
 
     Helper::ModelStats();
+    Helper::Skeleton();
     Helper::Animation();
 
     ImGui::End();
@@ -190,14 +196,28 @@ void MyImGUI::Helper::ModelStats()
     }
 }
 
+void MyImGUI::Helper::Skeleton()
+{
+    if (ImGui::CollapsingHeader("Skeleton"))
+    {
+        ImGui::Checkbox("Show skeleton", showSkeletonFlag);
+    }
+}
+
 void MyImGUI::SendModelInfo(Model* _model)
 {
     model = _model;
 }
 
-void MyImGUI::SendAnimationInfo(float* _worldTimer)
+void MyImGUI::SendSkeletonInfo(bool* _showSkeletonFlag)
+{
+    showSkeletonFlag = _showSkeletonFlag;
+}
+
+void MyImGUI::SendAnimationInfo(float* _worldTimer, bool* _bindPoseFlag)
 {
     worldTimer = _worldTimer;
+    bindPoseFlag = _bindPoseFlag;
 }
 
 void MyImGUI::UpdateAnimationNameList()
@@ -205,7 +225,9 @@ void MyImGUI::UpdateAnimationNameList()
     int selectedAnimation = model->GetSelectedAnimationIndex();
 
     const unsigned int animationCount = model->GetAnimationCount();
-    animationNameList.resize(animationCount);
+
+    // 1 is for bind pose
+    animationNameList.resize(animationCount + 1);
 
     // Extract animation names
     for (unsigned int i = 0; i < animationCount; ++i)
@@ -213,6 +235,8 @@ void MyImGUI::UpdateAnimationNameList()
         model->SetAnimationIndex(i);
         animationNameList[i] = model->GetAnimationName();
     }
+
+    animationNameList[animationCount] = "Bind Pose";
 
     // Recover selected animation index
     model->SetAnimationIndex(selectedAnimation);
@@ -224,22 +248,34 @@ void MyImGUI::Helper::Animation()
     if (ImGui::CollapsingHeader("Animation"))
     {
         ImGui::TextWrapped("Select animation by Name");
+        ImGui::Indent();
+        static int selected = -1;
+        const unsigned int animationCount = model->GetAnimationCount();
+        for (unsigned int n = 0; n <= animationCount; n++)
         {
-            static int selected = -1;
-
-            for (int n = 0; n < model->GetAnimationCount(); n++)
+            if (ImGui::Selectable(animationNameList[n].c_str(), selected == n))
             {
-                if (ImGui::Selectable(animationNameList[n].c_str(), selected == n))
+                selected = n;
+                if (selected == animationCount)
                 {
-                    selected = n;
+                    *bindPoseFlag = true;
+                }
+                else
+                {
                     model->SetAnimationIndex(selected);
+                    *bindPoseFlag = false;
                 }
             }
         }
+        ImGui::Unindent();
 
-        ImGui::TextWrapped("Duration:");
-        float duration = model->GetAnimationDuration();
-        ImGui::TextWrapped(("\t" + std::to_string(duration)).c_str());
-        ImGui::SliderFloat("Animation Time", worldTimer, 0.f, duration);
+        if (*bindPoseFlag == false)
+        {
+            ImGui::Separator();
+            ImGui::TextWrapped("Duration:");
+            float duration = model->GetAnimationDuration();
+            ImGui::TextWrapped(("\t" + std::to_string(duration)).c_str());
+            ImGui::SliderFloat("Animation Time", worldTimer, 0.f, duration);
+        }
     }
 }

@@ -22,7 +22,8 @@ namespace MyImGUI
 		VkCommandBuffer commandBuffer);
 
     void SendModelInfo(Model* model);
-    void SendAnimationInfo(float* worldTimer);
+    void SendSkeletonInfo(bool* showSkeletonFlag);
+    void SendAnimationInfo(float* worldTimer, bool* bindPoseFlag);
 
     void UpdateAnimationNameList();
 

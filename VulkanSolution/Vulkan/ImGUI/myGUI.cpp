@@ -25,13 +25,15 @@ namespace MyImGUI
     namespace Helper
     {
         void ModelStats();
+        void Animation();
     }
 }
 
 namespace
 {
     Model* model;
-    bool* isRotating;
+    float* worldTimer;
+    std::vector<std::string> animationNameList;
 }
 
 namespace MyImGUI
@@ -153,11 +155,12 @@ void MyImGUI::DrawGUI()
 {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
-    // ImGui::ShowDemoWindow();
+    ImGui::ShowDemoWindow();
 
     ImGui::Begin("Controller");
 
     Helper::ModelStats();
+    Helper::Animation();
 
     ImGui::End();
     ImGui::EndFrame();
@@ -171,12 +174,19 @@ void MyImGUI::GUIRender(VkCommandBuffer commandBuffer)
 
 void MyImGUI::Helper::ModelStats()
 {
-    if (ImGui::CollapsingHeader("Basic Information", ImGuiTreeNodeFlags_::ImGuiTreeNodeFlags_DefaultOpen))
+    if (ImGui::CollapsingHeader("Basic Information"))
     {
-        ImGui::Checkbox("Is rotating?", isRotating);
+        const int meshSize = model->GetMeshSize();
+        for (int i = 0; i < meshSize; i++)
+        {
+            if (ImGui::TreeNode(model->GetMeshName(i).c_str()))
+            {
+                ImGui::TextWrapped("Vertex Count: %d", model->GetVertexCount(i));
+                ImGui::TextWrapped("Triangle Count: %d", model->GetIndexCount(i) / 3);
 
-        // ImGui::TextWrapped("Vertex Count: %d", model->GetVertexCount());
-        // ImGui::TextWrapped("Triangle Count: %d", model->GetIndexCount() / 3);
+                ImGui::TreePop();
+            }
+        }
     }
 }
 
@@ -185,7 +195,51 @@ void MyImGUI::SendModelInfo(Model* _model)
     model = _model;
 }
 
-void MyImGUI::SendRotationFlag(bool* _isRotating)
+void MyImGUI::SendAnimationInfo(float* _worldTimer)
 {
-    isRotating = _isRotating;
+    worldTimer = _worldTimer;
+}
+
+void MyImGUI::UpdateAnimationNameList()
+{
+    int selectedAnimation = model->GetSelectedAnimationIndex();
+
+    const unsigned int animationCount = model->GetAnimationCount();
+    animationNameList.resize(animationCount);
+
+    // Extract animation names
+    for (unsigned int i = 0; i < animationCount; ++i)
+    {
+        model->SetAnimationIndex(i);
+        animationNameList[i] = model->GetAnimationName();
+    }
+
+    // Recover selected animation index
+    model->SetAnimationIndex(selectedAnimation);
+}
+
+
+void MyImGUI::Helper::Animation()
+{
+    if (ImGui::CollapsingHeader("Animation"))
+    {
+        ImGui::TextWrapped("Select animation by Name");
+        {
+            static int selected = -1;
+
+            for (int n = 0; n < model->GetAnimationCount(); n++)
+            {
+                if (ImGui::Selectable(animationNameList[n].c_str(), selected == n))
+                {
+                    selected = n;
+                    model->SetAnimationIndex(selected);
+                }
+            }
+        }
+
+        ImGui::TextWrapped("Duration:");
+        float duration = model->GetAnimationDuration();
+        ImGui::TextWrapped(("\t" + std::to_string(duration)).c_str());
+        ImGui::SliderFloat("Animation Time", worldTimer, 0.f, duration);
+    }
 }

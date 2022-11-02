@@ -60,6 +60,7 @@ public:
 	void SetupSeparateVertexAttribute();
 
 	void InitGUI();
+	void UpdateTimer(float dt);
 
 private:
 	bool CreateInstance(const char* appName, uint32_t appVersion);

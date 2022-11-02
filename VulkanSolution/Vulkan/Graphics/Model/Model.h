@@ -27,6 +27,7 @@ public:
 
 	int GetMeshSize();
 
+	std::string GetMeshName(int i);
 	void* GetVertexData(int i);
 	int GetVertexCount(int i);
 
@@ -39,7 +40,15 @@ public:
 	void* GetBoneDataForDrawing();
 	void GetToBoneFromUnit(std::vector<glm::mat4>& data);
 	void GetToModelFromBone(std::vector<glm::mat4>& data);
-	void GetAnimationData(int animIndex, float t, std::vector<glm::mat4>& data);
+
+	// @@ Getter&Setter of animation system
+	unsigned int GetAnimationCount();
+	unsigned int GetSelectedAnimationIndex();
+	void SetAnimationIndex(int i);
+	void GetAnimationData(float t, std::vector<glm::mat4>& data);
+	std::string GetAnimationName();
+	float GetAnimationDuration();
+	// @@ End of getter & setter.
 
 	const char* GetErrorString();
 

@@ -93,6 +93,11 @@ int Model::GetMeshSize()
 	return static_cast<int>(meshes.size());
 }
 
+std::string Model::GetMeshName(int i)
+{
+	return meshes[i].meshName;
+}
+
 void* Model::GetVertexData(int i)
 {
 	return reinterpret_cast<void*>(meshes[i].vertices.data());
@@ -298,11 +303,11 @@ void Model::GetMesh(FbxNode* node)
 
 	Mesh m;
 	m.meshName = (node->GetName()[0] != '\0') ? node->GetName() : mesh->GetName();
+	
+	animationSystem->GetDeformerData(mesh);
+
 	if (GetMeshData(mesh, m))
 	{
-
-		animationSystem->GetDeformerData(mesh, m);
-
 		meshes.emplace_back(m);
 	}
 
@@ -381,9 +386,14 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 			glm::vec3 position = glm::vec3(v[0], v[1], v[2]);
 			glm::vec3 normal = glm::vec3(normals[iInt][0], normals[iInt][1], normals[iInt][2]);
 			glm::vec2 uv = glm::vec2(uvs[iInt][0], uvs[iInt][1]);
-			m.vertices.back().position = position;
-			m.vertices.back().normal = normal;
-			m.vertices.back().texCoord = uv;
+			glm::ivec4 boneID = animationSystem->GetBoneIndex(indices[i]);
+			glm::vec4 boneWeights = animationSystem->GetBoneWeight(indices[i]);
+			Vertex& vertex = m.vertices.back();
+			vertex.position = position;
+			vertex.normal = normal;
+			vertex.texCoord = uv;
+			vertex.boneIDs = boneID;
+			vertex.boneWeights = boneWeights;
 
 			UpdateBoundingBox(position);
 		}
@@ -657,10 +667,34 @@ void Model::GetToBoneFromUnit(std::vector<glm::mat4>& data)
 	animationSystem->GetToBoneFromUnit(data);
 }
 
-void Model::GetAnimationData(int animIndex, float t, std::vector<glm::mat4>& data)
+unsigned int Model::GetAnimationCount()
 {
-	animationSystem->SetAnimationIndex(animIndex);
+	return animationSystem->GetAnimationCount();
+}
+
+unsigned int Model::GetSelectedAnimationIndex()
+{
+	return animationSystem->GetSelectedAnimationIndex();
+}
+
+void Model::SetAnimationIndex(int i)
+{
+	animationSystem->SetAnimationIndex(i);
+}
+
+void Model::GetAnimationData(float t, std::vector<glm::mat4>& data)
+{
 	animationSystem->GetAnimationData(t, data);
+}
+
+std::string Model::GetAnimationName()
+{
+	return animationSystem->GetAnimationName();
+}
+
+float Model::GetAnimationDuration()
+{
+	return animationSystem->GetAnimationDuration();
 }
 
 glm::vec3 Model::GetModelCentroid()

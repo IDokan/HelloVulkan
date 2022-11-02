@@ -27,6 +27,7 @@ public:
 	void Clear();
 
 	void SetAnimationCount(unsigned int animationCount);
+	unsigned int GetSelectedAnimationIndex();
 	void SetAnimationIndex(unsigned int index);
 	
 	void AddAnimation(std::string animationName, size_t skeletonCount, float duration);
@@ -40,11 +41,18 @@ public:
 	int GetBoneIDByName(const std::string& name);
 
 	// Gate function for cluster data (Gate function indicates precede function to get another data)
-	void GetDeformerData(FbxMesh* mesh, Mesh& m);
+	void GetDeformerData(FbxMesh* mesh);
+
+	glm::ivec4 GetBoneIndex(int vertexIndex);
+	glm::vec4 GetBoneWeight(int vertexIndex);
+	
+	unsigned int GetAnimationCount();
+	std::string GetAnimationName();
+	float GetAnimationDuration();
 private:
 
 	// @@ Get Cluster (toBindPoseMatrix, bone weights, bone ID)
-	void GetClusterData(FbxSkin* skin, Mesh& mesh);
+	void GetClusterData(FbxSkin* skin);
 	// @@ End of cluster data
 	glm::mat4 ConvertFbxMatrixToGLM(FbxAMatrix fbxMatrix);
 
@@ -54,4 +62,7 @@ private:
 	std::vector<Animation> animations;
 
 	Skeleton skeleton;
+
+	std::vector<glm::ivec4> boneVertexID;
+	std::vector<glm::vec4> boneVertexWeights;
 };

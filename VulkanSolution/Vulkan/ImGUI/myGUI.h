@@ -22,7 +22,9 @@ namespace MyImGUI
 		VkCommandBuffer commandBuffer);
 
     void SendModelInfo(Model* model);
-    void SendRotationFlag(bool* isRotating);
+    void SendAnimationInfo(float* worldTimer);
+
+    void UpdateAnimationNameList();
 
     // Should be called before destruction of Vulkan
     void DestroyGUIResources();

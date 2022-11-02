@@ -29,13 +29,14 @@ Creation Date: 06.12.2021
 #include "Engines/Input/Input.h"
 
 MyVulkan::MyVulkan(Window* window)
-	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), isRotating(true), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), animationUniformBufferSize(0)
+	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), animationUniformBufferSize(0)
 {
 }
 
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
-	model = new Model("../Vulkan/Graphics/Model/models/Bomber.fbx");
+	model = new Model("../Vulkan/Graphics/Model/models/Walking.fbx");
+	model->SetAnimationIndex(0);
 
 	if (CreateInstance(appName, appVersion) == false)
 	{
@@ -123,10 +124,7 @@ void MyVulkan::CleanVulkan()
 
 void MyVulkan::DrawFrame(float dt)
 {
-	if (isRotating)
-	{
-		timer += dt;
-	}
+	UpdateTimer(dt);
 
 	// Synchronize with GPU
 	vkWaitForFences(device, 1, &inFlightFences[currentFrameID], VK_TRUE, UINT64_MAX);
@@ -351,6 +349,8 @@ void MyVulkan::LoadNewModel()
 	DestroyAnimationUniformBuffers();
 
 	int oldMeshSize = meshSize;
+
+	MyImGUI::UpdateAnimationNameList();
 
 	CreateSkeletonBuffer();
 	CreateAnimationUniformBuffers();
@@ -688,7 +688,18 @@ void MyVulkan::InitGUI()
 	MyImGUI::InitImGUI(windowHolder->glfwWindow, device, instance, physicalDevice, queue, renderPass, commandBuffers.front());
 
 	MyImGUI::SendModelInfo(model);
-	MyImGUI::SendRotationFlag(&isRotating);
+	MyImGUI::SendAnimationInfo(&timer);
+	MyImGUI::UpdateAnimationNameList();
+}
+
+void MyVulkan::UpdateTimer(float dt)
+{
+	timer += dt;
+
+	if (timer > model->GetAnimationDuration())
+	{
+		timer = 0.f;
+	}
 }
 
 bool MyVulkan::CreateInstance(const char* appName, uint32_t appVersion)
@@ -2397,7 +2408,7 @@ void MyVulkan::UpdateAnimationUniformBuffer()
 
 	std::vector<glm::mat4> animationBufferData, toModelFromBone;
 	// Currently draw only the first animation
-	model->GetAnimationData(0, 0.f, animationBufferData);
+	model->GetAnimationData(0.f, animationBufferData);
 	model->GetToModelFromBone(toModelFromBone);
 	for (int i = 0; i < animationBufferData.size(); i++)
 	{

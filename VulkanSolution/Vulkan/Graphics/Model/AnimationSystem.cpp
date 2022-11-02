@@ -12,7 +12,7 @@ Creation Date: 10.25.2022
 #include "../Structures/Structs.h"
 
 AnimationSystem::AnimationSystem(unsigned int animationCount)
-	: selectedAnimation(0), animationCount(animationCount)
+	: selectedAnimation(0), animationCount(animationCount), boneVertexID(), boneVertexWeights()
 {
 	animations.resize(animationCount);
 }
@@ -41,6 +41,11 @@ void AnimationSystem::SetAnimationCount(unsigned int _animationCount)
 	selectedAnimation = 0;
 	animationCount = _animationCount;
 	animations.resize(animationCount);
+}
+
+unsigned int AnimationSystem::GetSelectedAnimationIndex()
+{
+	return selectedAnimation;
 }
 
 void AnimationSystem::SetAnimationIndex(unsigned int index)
@@ -124,13 +129,21 @@ int AnimationSystem::GetBoneIDByName(const std::string& name)
 	return skeleton.GetBoneIDByName(name);
 }
 
-void AnimationSystem::GetDeformerData(FbxMesh* mesh, Mesh& m)
+void AnimationSystem::GetDeformerData(FbxMesh* mesh)
 {
 	const int deformerCount = mesh->GetDeformerCount();
 	if (deformerCount <= 0)
 	{
 		return;
 	}
+
+	// temporary container for boneID, bone weights.
+	// There were no appropriate solution to pass these data directly to the vertex data.
+		// Set default data to -1 to this temporary container and pass only appropriate data to the real vertex data.
+			// Why we should use temporary, set -1 to vertex data and pass them GPU might cause out of bound error.
+	const uint32_t verticesCount = mesh->GetControlPointsCount();
+	boneVertexID.resize(verticesCount, glm::ivec4(-1));
+	boneVertexWeights.resize(verticesCount, glm::vec4(0.f));
 
 	for (int i = 0; i < deformerCount; i++)
 	{
@@ -140,19 +153,47 @@ void AnimationSystem::GetDeformerData(FbxMesh* mesh, Mesh& m)
 			continue;
 		}
 
-		GetClusterData(skinDeformer, m);
+		GetClusterData(skinDeformer);
 	}
 }
 
-void AnimationSystem::GetClusterData(FbxSkin* skin, Mesh& mesh)
+glm::ivec4 AnimationSystem::GetBoneIndex(int vertexIndex)
 {
-	// temporary container for boneID, bone weights.
-	// There were no appropriate solution to pass these data directly to the vertex data.
-		// Set default data to -1 to this temporary container and pass only appropriate data to the real vertex data.
-			// Why we should use temporary, set -1 to vertex data and pass them GPU might cause out of bound error.
-	const int meshVertexCount = static_cast<int>(mesh.vertices.size());
-	std::vector<glm::ivec4> boneVertexID(meshVertexCount, glm::ivec4(-1));
-	std::vector<glm::vec4> boneVertexWeight(meshVertexCount);
+	glm::ivec4 result = boneVertexID[vertexIndex];
+
+	for (int i = 0; i < 4; i++)
+	{
+		if (result[i] == -1)
+		{
+			result[i] = 0;
+		}
+	}
+
+	return result;
+}
+
+glm::vec4 AnimationSystem::GetBoneWeight(int vertexIndex)
+{
+	return boneVertexWeights[vertexIndex];
+}
+
+unsigned int AnimationSystem::GetAnimationCount()
+{
+	return animationCount;
+}
+
+std::string AnimationSystem::GetAnimationName()
+{
+	return animations[selectedAnimation].animationName;
+}
+
+float AnimationSystem::GetAnimationDuration()
+{
+	return animations[selectedAnimation].duration;
+}
+
+void AnimationSystem::GetClusterData(FbxSkin* skin)
+{
 
 	const int clusterCount = skin->GetClusterCount();
 	// Joint == Cluster
@@ -199,27 +240,9 @@ void AnimationSystem::GetClusterData(FbxSkin* skin, Mesh& mesh)
 				if (boneVertexID[id][index] == -1)
 				{
 					boneVertexID[id][index] = t.id;
-					boneVertexWeight[id][index] = static_cast<float>(weights);
+					boneVertexWeights[id][index] = static_cast<float>(weights);
 					break;
 				}
-			}
-		}
-	}
-
-	// Pass boneID, boneWeights data to the vertex data.
-	for (int i = 0; i < meshVertexCount; i++)
-	{
-		for (int vectorIndex = 0; vectorIndex < 4; vectorIndex++)
-		{
-			if (boneVertexID[i][vectorIndex] >= 0 && mesh.vertices[i].boneIDs[vectorIndex] <= 0)
-			{
-				mesh.vertices[i].boneIDs[vectorIndex] = boneVertexID[i][vectorIndex];
-				mesh.vertices[i].boneWeights[vectorIndex] = boneVertexWeight[i][vectorIndex];
-			}
-			else
-			{
-				mesh.vertices[i].boneIDs[vectorIndex] = 0;
-				mesh.vertices[i].boneWeights[vectorIndex] = 0.f;
 			}
 		}
 	}

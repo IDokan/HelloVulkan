@@ -31,16 +31,16 @@ layout(location = 2) out vec2 fragTexCoord;
 
 void main()
 {
-	// mat4 animationTransform = data.item[boneIDs[0]].model/* * boneWeights[0]*/;
-	// animationTransform += data.item[boneIDs[1]].model * boneWeights[1];
-	// animationTransform += data.item[boneIDs[2]].model * boneWeights[2];
-	// animationTransform += data.item[boneIDs[3]].model * boneWeights[3];
+	mat4 animationTransform = data.item[boneIDs[0]].model * boneWeights[0];
+	animationTransform += data.item[boneIDs[1]].model * boneWeights[1];
+	animationTransform += data.item[boneIDs[2]].model * boneWeights[2];
+	animationTransform += data.item[boneIDs[3]].model * boneWeights[3];
 
-	gl_Position = ubo.proj * ubo.view * ubo.model * /*animationTransform * */vec4(inPosition, 1.0);
-	normal = normalize(vec3(transpose(inverse(ubo.model)) * /*animationTransform * */vec4(inNormal, 1.f)));
+	gl_Position = ubo.proj * ubo.view * ubo.model * animationTransform * vec4(inPosition, 1.0);
+	normal = normalize(vec3(transpose(inverse(ubo.model)) * animationTransform * vec4(inNormal, 0.f)));
 	fragTexCoord = inTexCoord;
 
-	vec3 fragPos = vec3(ubo.model * /*animationTransform * */vec4(inPosition, 1.f));
+	vec3 fragPos = vec3(ubo.model * animationTransform * vec4(inPosition, 1.f));
 
 	viewVector = normalize(vec3(2, 2, 2) - fragPos);
 }

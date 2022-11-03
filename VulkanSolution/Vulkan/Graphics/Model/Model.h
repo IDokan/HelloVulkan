@@ -45,7 +45,7 @@ public:
 	unsigned int GetAnimationCount();
 	unsigned int GetSelectedAnimationIndex();
 	void SetAnimationIndex(int i);
-	void GetAnimationData(float t, std::vector<glm::mat4>& data);
+	void GetAnimationData(float t, std::vector<glm::mat4>& data, bool bindPoseFlag = false);
 	std::string GetAnimationName();
 	float GetAnimationDuration();
 	// @@ End of getter & setter.

@@ -693,8 +693,22 @@ void Model::SetAnimationIndex(int i)
 	animationSystem->SetAnimationIndex(i);
 }
 
-void Model::GetAnimationData(float t, std::vector<glm::mat4>& data)
+void Model::GetAnimationData(float t, std::vector<glm::mat4>& data, bool bindPoseFlag)
 {
+	
+	if (bindPoseFlag || animationSystem->GetAnimationCount() <= 0)
+	{
+		size_t boneCount = GetBoneCount();
+		data.resize(boneCount);
+
+		for (int i = 0; i < boneCount; i++)
+		{
+			data[i] = glm::identity<glm::mat4>();
+		}
+
+		return;
+	}
+
 	animationSystem->GetAnimationData(t, data);
 }
 

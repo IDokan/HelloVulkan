@@ -73,10 +73,7 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 
 	VkShaderModule vertModule = CreateShaderModule(readFile("spv/vertexShader.vert.spv"));
 	VkShaderModule fragModule = CreateShaderModule(readFile("spv/fragShader.frag.spv"));
-	CreateGraphicsPipeline(vertModule, fragModule, staticModelPipeline, staticModelPipelineLayout);
-	VkShaderModule animationVertex = CreateShaderModule(readFile("spv/animationShader.vert.spv"));
-	VkShaderModule animationFrag = CreateShaderModule(readFile("spv/animationShader.frag.spv"));
-	CreateGraphicsPipeline(animationVertex, animationFrag, animationPipeline, animationPipelineLayout);
+	CreateGraphicsPipeline(vertModule, fragModule, pipeline, pipelineLayout);
 	CreateLinePipeline();
 
 	CreateFramebuffers();
@@ -1341,11 +1338,8 @@ VkShaderModule MyVulkan::CreateShaderModule(const std::vector<char>& code)
 
 void MyVulkan::DestroyPipeline()
 {
-	vkDestroyPipeline(device, staticModelPipeline, nullptr);
-	vkDestroyPipelineLayout(device, staticModelPipelineLayout, nullptr);
-
-	vkDestroyPipeline(device, animationPipeline, nullptr);
-	vkDestroyPipelineLayout(device, animationPipelineLayout, nullptr);
+	vkDestroyPipeline(device, pipeline, nullptr);
+	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 
 	vkDestroyPipeline(device, linePipeline, nullptr);
 	vkDestroyPipelineLayout(device, linePipelineLayout, nullptr);
@@ -1471,14 +1465,8 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	scissor.extent = swapchainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	if (model->GetAnimationCount() <= 0)
-	{
-		RecordDrawMeshCall(commandBuffer, staticModelPipeline, staticModelPipelineLayout);
-	}
-	else
-	{
-		RecordDrawMeshCall(commandBuffer, animationPipeline, animationPipelineLayout);
-	}
+
+	RecordDrawMeshCall(commandBuffer, pipeline, pipelineLayout);
 
 	if (boneSize > 0 && showSkeletonFlag)
 	{
@@ -2420,27 +2408,11 @@ void MyVulkan::UpdateAnimationUniformBuffer()
 		return;
 	}
 
-	std::vector<glm::mat4> animationBufferData, toModelFromBone;
+	std::vector<glm::mat4> animationBufferData;
 
-	if (bindPoseFlag)
-	{
-		size_t boneCount = model->GetBoneCount();
-		animationBufferData.resize(boneCount);
+	// Get animation key frame data
+	model->GetAnimationData(timer, animationBufferData, bindPoseFlag);
 
-		for (int i = 0; i < boneCount; i++)
-		{
-			animationBufferData[i] = glm::identity<glm::mat4>();
-		}
-	}
-	else
-	{	// Get animation key frame data
-		model->GetAnimationData(timer, animationBufferData);
-		model->GetToModelFromBone(toModelFromBone);
-		for (int i = 0; i < animationBufferData.size(); i++)
-		{
-			animationBufferData[i] = animationBufferData[i] * toModelFromBone[i];
-		}
-	}
 
 	void* data;
 	vkMapMemory(device, animationUniformBufferMemories[currentFrameID], 0, animationUniformBufferSize, 0, &data);

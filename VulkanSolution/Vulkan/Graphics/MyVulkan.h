@@ -196,8 +196,8 @@ private:
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;
-	VkPipelineLayout staticModelPipelineLayout;
-	VkPipeline staticModelPipeline;
+	VkPipelineLayout pipelineLayout;
+	VkPipeline pipeline;
 	std::vector<VkFramebuffer>  swapchainFramebuffers;
 
 	// synchronization objects
@@ -265,10 +265,4 @@ private:
 
 	bool bindPoseFlag;
 	bool showSkeletonFlag;
-	// @@ Skeleton drawings
-
-	// @@ Animation Pipeline
-	VkPipelineLayout animationPipelineLayout;
-	VkPipeline animationPipeline;
-	// @@ End of animation Pipeline
 };

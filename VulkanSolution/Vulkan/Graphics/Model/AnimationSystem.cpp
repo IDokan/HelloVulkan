@@ -142,6 +142,12 @@ void AnimationSystem::GetAnimationData(float t, std::vector<glm::mat4>& data)
 			}
 		}
 	}
+
+	// Multiply toModelFromBone matrix at here.
+	for (size_t i = 0; i < trackSize; i++)
+	{
+		data[i] = data[i] * skeleton.GetBoneByBoneID(static_cast<size_t>(i)).toModelFromBone;
+	}
 }
 
 void AnimationSystem::GetToBoneFromUnit(std::vector<glm::mat4>& data)

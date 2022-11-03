@@ -38,6 +38,7 @@ namespace
     bool* bindPoseFlag;
 
     bool* showSkeletonFlag;
+    int selected = 0;
 }
 
 namespace MyImGUI
@@ -222,7 +223,7 @@ void MyImGUI::SendAnimationInfo(float* _worldTimer, bool* _bindPoseFlag)
 
 void MyImGUI::UpdateAnimationNameList()
 {
-    int selectedAnimation = model->GetSelectedAnimationIndex();
+    int previousSelected = model->GetSelectedAnimationIndex();
 
     const unsigned int animationCount = model->GetAnimationCount();
 
@@ -239,7 +240,11 @@ void MyImGUI::UpdateAnimationNameList()
     animationNameList[animationCount] = "Bind Pose";
 
     // Recover selected animation index
-    model->SetAnimationIndex(selectedAnimation);
+    model->SetAnimationIndex(previousSelected);
+
+    // Default selection is always bind pose
+    selected = animationCount;
+    *bindPoseFlag = true;
 }
 
 
@@ -249,7 +254,6 @@ void MyImGUI::Helper::Animation()
     {
         ImGui::TextWrapped("Select animation by Name");
         ImGui::Indent();
-        static int selected = -1;
         const unsigned int animationCount = model->GetAnimationCount();
         for (unsigned int n = 0; n <= animationCount; n++)
         {

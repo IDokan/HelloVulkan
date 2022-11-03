@@ -34,6 +34,11 @@ void AnimationSystem::Clear()
 {
 	skeleton.Clear();
 	animations.clear();
+	selectedAnimation = 0;
+	animationCount = 0;
+
+	boneVertexID.clear();
+	boneVertexWeights.clear();
 }
 
 void AnimationSystem::SetAnimationCount(unsigned int _animationCount)
@@ -50,6 +55,11 @@ unsigned int AnimationSystem::GetSelectedAnimationIndex()
 
 void AnimationSystem::SetAnimationIndex(unsigned int index)
 {
+	if (index < 0 || animationCount <= 0)
+	{
+		return;
+	}
+
 	if (index >= animationCount)
 	{
 		index %= animationCount;
@@ -91,6 +101,11 @@ void AnimationSystem::AddTrack(FbxNode* node, int boneID, double frameRate, doub
 
 void AnimationSystem::GetAnimationData(float t, std::vector<glm::mat4>& data)
 {
+	if (animationCount <= 0)
+	{
+		return;
+	}
+
 	const std::vector<Track>& tracks = animations[selectedAnimation].tracks;
 	size_t trackSize = tracks.size();
 	data.resize(trackSize);
@@ -204,11 +219,21 @@ unsigned int AnimationSystem::GetAnimationCount()
 
 std::string AnimationSystem::GetAnimationName()
 {
+	if (animationCount <= 0)
+	{
+		return std::string();
+	}
+
 	return animations[selectedAnimation].animationName;
 }
 
 float AnimationSystem::GetAnimationDuration()
 {
+	if (animationCount <= 0)
+	{
+		return 0.f;
+	}
+
 	return animations[selectedAnimation].duration;
 }
 

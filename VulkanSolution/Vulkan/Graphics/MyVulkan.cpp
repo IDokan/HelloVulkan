@@ -35,7 +35,7 @@ MyVulkan::MyVulkan(Window* window)
 
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
-	model = new Model("../Vulkan/Graphics/Model/models/Walking.fbx");
+	model = new Model("../Vulkan/Graphics/Model/models/Remy.fbx");
 	model->SetAnimationIndex(0);
 
 	if (CreateInstance(appName, appVersion) == false)
@@ -70,7 +70,13 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	CreateDescriptorSets();
 	CreateDepthResources();
 
-	CreateGraphicsPipeline();
+
+	VkShaderModule vertModule = CreateShaderModule(readFile("spv/vertexShader.vert.spv"));
+	VkShaderModule fragModule = CreateShaderModule(readFile("spv/fragShader.frag.spv"));
+	CreateGraphicsPipeline(vertModule, fragModule, staticModelPipeline, staticModelPipelineLayout);
+	VkShaderModule animationVertex = CreateShaderModule(readFile("spv/animationShader.vert.spv"));
+	VkShaderModule animationFrag = CreateShaderModule(readFile("spv/animationShader.frag.spv"));
+	CreateGraphicsPipeline(animationVertex, animationFrag, animationPipeline, animationPipelineLayout);
 	CreateLinePipeline();
 
 	CreateFramebuffers();
@@ -1146,11 +1152,8 @@ void MyVulkan::CreateRenderPass()
 
 }
 
-void MyVulkan::CreateGraphicsPipeline()
+void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout)
 {
-	VkShaderModule vertModule = CreateShaderModule(readFile("spv/vertexShader.vert.spv"));
-	VkShaderModule fragModule = CreateShaderModule(readFile("spv/fragShader.frag.spv"));
-
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
 	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
@@ -1338,8 +1341,11 @@ VkShaderModule MyVulkan::CreateShaderModule(const std::vector<char>& code)
 
 void MyVulkan::DestroyPipeline()
 {
-	vkDestroyPipeline(device, pipeline, nullptr);
-	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
+	vkDestroyPipeline(device, staticModelPipeline, nullptr);
+	vkDestroyPipelineLayout(device, staticModelPipelineLayout, nullptr);
+
+	vkDestroyPipeline(device, animationPipeline, nullptr);
+	vkDestroyPipelineLayout(device, animationPipelineLayout, nullptr);
 
 	vkDestroyPipeline(device, linePipeline, nullptr);
 	vkDestroyPipelineLayout(device, linePipelineLayout, nullptr);
@@ -1465,7 +1471,14 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	scissor.extent = swapchainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	RecordDrawMeshCall(commandBuffer);
+	if (model->GetAnimationCount() <= 0)
+	{
+		RecordDrawMeshCall(commandBuffer, staticModelPipeline, staticModelPipelineLayout);
+	}
+	else
+	{
+		RecordDrawMeshCall(commandBuffer, animationPipeline, animationPipelineLayout);
+	}
 
 	if (boneSize > 0 && showSkeletonFlag)
 	{
@@ -2572,7 +2585,7 @@ void MyVulkan::RecordDrawSkeletonCall(VkCommandBuffer commandBuffer)
 	vkCmdDraw(commandBuffer, boneSize * 2, 1, 0, 0);
 }
 
-void MyVulkan::RecordDrawMeshCall(VkCommandBuffer commandBuffer)
+void MyVulkan::RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipeline, VkPipelineLayout pipelineLayout)
 {
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 

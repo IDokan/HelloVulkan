@@ -492,7 +492,6 @@ void Model::GetAnimation()
 
 	double frameRate = FbxTime::GetFrameRate(lScene->GetGlobalSettings().GetTimeMode());
 	FbxDocument* document = dynamic_cast<FbxDocument*>(lScene);
-	FbxDocument* betterDocument = lScene->GetDocument();
 
 	if (document == nullptr)
 	{
@@ -513,15 +512,21 @@ void Model::GetAnimation()
 		double startTime = span.GetStart().GetSecondDouble();
 		double endTime = span.GetStop().GetSecondDouble();
 
+		// This method interpolate transform data at loading.
+		// It may not give you the specific key frames determined by artists.
+		// Thus, key frame is not the key frame given by artists, it is interpolated key frame by multiplication between running time and frame rate.
+		int keyFrames = static_cast<int>((endTime - startTime) * frameRate);
+
+		if (keyFrames <= 1)
+		{
+			continue;
+		}
+
 		animationSystem->AddAnimation(animationName, animationSystem->GetBoneCount(), static_cast<float>(endTime - startTime));
 		animationSystem->SetAnimationIndex(i);
 		// When animation has a time to run, 
 		if (startTime < endTime)
 		{
-			// This method interpolate transform data at loading.
-			// It may not give you the specific key frames determined by artists.
-			// Thus, key frame is not the key frame given by artists, it is interpolated key frame by multiplication between running time and frame rate.
-			int keyFrames = static_cast<int>((endTime - startTime) * frameRate);
 
 			AddTracksRecursively(rootNode, frameRate, startTime, endTime, keyFrames);
 		}
@@ -566,6 +571,7 @@ void Model::GetTextureData(FbxSurfaceMaterial* material)
 void Model::ClearData()
 {
 	meshes.clear();
+	bones.clear();
 	diffuseImagePaths.clear();
 	normalImagePaths.clear();
 

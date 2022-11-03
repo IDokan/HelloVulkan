@@ -85,7 +85,7 @@ private:
 
 	void CreateRenderPass();
 
-	void CreateGraphicsPipeline();
+	void CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
 	static std::vector<char> readFile(const std::string& filename);
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 	void DestroyPipeline();
@@ -152,7 +152,7 @@ private:
 	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 
 	void RecordDrawSkeletonCall(VkCommandBuffer commandBuffer);
-	void RecordDrawMeshCall(VkCommandBuffer commandBuffer);
+	void RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipeline, VkPipelineLayout pipelineLayout);
 
 	// @@@@@ Texture functions & resources
 	void CreateTextures(const std::vector<std::string>& imagePaths);
@@ -196,8 +196,8 @@ private:
 	VkDescriptorSetLayout descriptorSetLayout;
 	VkDescriptorPool descriptorPool;
 	std::vector<VkDescriptorSet> descriptorSets;
-	VkPipelineLayout pipelineLayout;
-	VkPipeline pipeline;
+	VkPipelineLayout staticModelPipelineLayout;
+	VkPipeline staticModelPipeline;
 	std::vector<VkFramebuffer>  swapchainFramebuffers;
 
 	// synchronization objects
@@ -266,4 +266,9 @@ private:
 	bool bindPoseFlag;
 	bool showSkeletonFlag;
 	// @@ Skeleton drawings
+
+	// @@ Animation Pipeline
+	VkPipelineLayout animationPipelineLayout;
+	VkPipeline animationPipeline;
+	// @@ End of animation Pipeline
 };

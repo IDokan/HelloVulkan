@@ -265,4 +265,15 @@ private:
 
 	bool bindPoseFlag;
 	bool showSkeletonFlag;
+
+	// @@ No texture pipeline (WaxPipeline).
+
+	void CreateWaxDescriptorPool();
+	void CreateWaxDescriptorSetLayout();
+	void CreateWaxDescriptorSets();
+	void UpdateWaxDescriptorSets();
+
+	VkPipeline waxPipeline;
+	VkPipelineLayout waxPipelineLayout;
+	// @@ End of no texture pipeline
 };

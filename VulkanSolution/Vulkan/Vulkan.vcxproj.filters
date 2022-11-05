@@ -193,6 +193,12 @@
     <CustomBuild Include="Graphics\Shaders\skeleton.vert">
       <Filter>Graphics\Shaders</Filter>
     </CustomBuild>
+    <CustomBuild Include="Graphics\Shaders\waxShader.frag">
+      <Filter>Graphics\Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Graphics\Shaders\waxShader.vert">
+      <Filter>Graphics\Shaders</Filter>
+    </CustomBuild>
   </ItemGroup>
   <ItemGroup>
     <None Include="ImGUI\.editorconfig">

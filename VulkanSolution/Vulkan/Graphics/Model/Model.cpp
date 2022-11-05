@@ -695,7 +695,6 @@ void Model::SetAnimationIndex(int i)
 
 void Model::GetAnimationData(float t, std::vector<glm::mat4>& data, bool bindPoseFlag)
 {
-	
 	if (bindPoseFlag || animationSystem->GetAnimationCount() <= 0)
 	{
 		size_t boneCount = GetBoneCount();

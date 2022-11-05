@@ -35,7 +35,7 @@ MyVulkan::MyVulkan(Window* window)
 
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
-	model = new Model("../Vulkan/Graphics/Model/models/Remy.fbx");
+	model = new Model("../Vulkan/Graphics/Model/models/Sitting Laughing.fbx");
 	model->SetAnimationIndex(0);
 
 	if (CreateInstance(appName, appVersion) == false)
@@ -65,15 +65,29 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	CreateImageViews();
 	CreateRenderPass();
 	CreateBuffers();
-	CreateDescriptorPool();
-	CreateDescriptorSetLayout();
-	CreateDescriptorSets();
+	if (textureImageViews.size() <= 0)
+	{
+		CreateWaxDescriptorPool();
+		CreateWaxDescriptorSetLayout();
+		CreateWaxDescriptorSets();
+	}
+	else
+	{
+		CreateDescriptorPool();
+		CreateDescriptorSetLayout();
+		CreateDescriptorSets();
+	}
 	CreateDepthResources();
 
 
 	VkShaderModule vertModule = CreateShaderModule(readFile("spv/vertexShader.vert.spv"));
 	VkShaderModule fragModule = CreateShaderModule(readFile("spv/fragShader.frag.spv"));
 	CreateGraphicsPipeline(vertModule, fragModule, pipeline, pipelineLayout);
+
+	VkShaderModule waxVertModule = CreateShaderModule(readFile("spv/waxShader.vert.spv"));
+	VkShaderModule waxFragModule = CreateShaderModule(readFile("spv/waxShader.frag.spv"));
+	CreateGraphicsPipeline(waxVertModule, waxFragModule, waxPipeline, waxPipelineLayout);
+
 	CreateLinePipeline();
 
 	CreateFramebuffers();
@@ -359,17 +373,36 @@ void MyVulkan::LoadNewModel()
 	CreateAnimationUniformBuffers();
 	CreateModelBuffers();
 	CreateTextures(model->GetDiffuseImagePaths());
-	if (meshSize > oldMeshSize)
+
+	//// It is an old code when there was no wax descriptor sets.
+	//// Currently, Create descriptor sets at everytime, which might not be good.
+	//// Solve two different functions, merge together and recover this functionality back.
+	//if (meshSize > oldMeshSize)
+	//{
+	//	DestroyDescriptorPool();
+	//	CreateDescriptorPool();
+	//	CreateDescriptorSets();
+	//}
+	//else
+	//{
+	//	UpdateDescriptorSets();
+	//}
+
+
+	DestroyDescriptorPool();
+	DestroyDescriptorSetLayout();
+	if (textureImageViews.size() <= 0)
 	{
-		DestroyDescriptorPool();
-		CreateDescriptorPool();
-		CreateDescriptorSets();
+		CreateWaxDescriptorPool();
+		CreateWaxDescriptorSetLayout();
+		CreateWaxDescriptorSets();
 	}
 	else
 	{
-		UpdateDescriptorSets();
+		CreateDescriptorPool();
+		CreateDescriptorSetLayout();
+		CreateDescriptorSets();
 	}
-
 
 }
 /*
@@ -1341,6 +1374,9 @@ void MyVulkan::DestroyPipeline()
 	vkDestroyPipeline(device, pipeline, nullptr);
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 
+	vkDestroyPipeline(device, waxPipeline, nullptr);
+	vkDestroyPipelineLayout(device, waxPipelineLayout, nullptr);
+
 	vkDestroyPipeline(device, linePipeline, nullptr);
 	vkDestroyPipelineLayout(device, linePipelineLayout, nullptr);
 
@@ -1465,8 +1501,23 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	scissor.extent = swapchainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-
-	RecordDrawMeshCall(commandBuffer, pipeline, pipelineLayout);
+	// VUID-VkGraphicsPipelineCreateInfo-layout-00756(ERROR / SPEC): msgNum: 1165064310 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-00756 ] Object 0: handle = 0x1d201ae3c70, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0x45717876 | Shader uses descriptor slot 0.2 (expected `VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK`) but not declared in pipeline layout The Vulkan spec states: layout must be consistent with all shaders specified in pStages (https://vulkan.lunarg.com/doc/view/1.3.204.1/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-00756)
+	// Objects: 1
+	// [0]  0x1d201ae3c70, type : 3, name : NULL
+	// VUID - VkGraphicsPipelineCreateInfo - layout - 00756(ERROR / SPEC) : msgNum : 1165064310 - Validation Error : [VUID - VkGraphicsPipelineCreateInfo - layout - 00756] Object 0 : handle = 0x1d201ae3c70, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0x45717876 | Shader uses descriptor slot 0.1 but descriptor not accessible from stage VK_SHADER_STAGE_FRAGMENT_BIT The Vulkan spec states : layout must be consistent with all shaders specified in pStages(https ://vulkan.lunarg.com/doc/view/1.3.204.1/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-00756)
+	// 	Objects : 1
+	// 	[0]  0x1d201ae3c70, type : 3, name : NULL
+	// 	VUID - VkGraphicsPipelineCreateInfo - layout - 00756(ERROR / SPEC) : msgNum : 1165064310 - Validation Error : [VUID - VkGraphicsPipelineCreateInfo - layout - 00756] Object 0 : handle = 0x1d201ae3c70, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0x45717876 | Shader uses descriptor slot 0.2 (expected `VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK`) but not declared in pipeline layout The Vulkan spec states : layout must be consistent with all shaders specified in pStages(https ://vulkan.lunarg.com/doc/view/1.3.204.1/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-00756)
+	// 		Objects : 1
+	// @@ TODO: Happened. Solve it!
+	if (textureImageViews.size() <= 0)
+	{
+		RecordDrawMeshCall(commandBuffer, waxPipeline, waxPipelineLayout);
+	}
+	else
+	{
+		RecordDrawMeshCall(commandBuffer, pipeline, pipelineLayout);
+	}
 
 	if (boneSize > 0 && showSkeletonFlag)
 	{
@@ -2664,73 +2715,107 @@ void MyVulkan::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkI
 	vkBindImageMemory(device, image, imageMemory, 0);
 }
 
-/*
-void MyVulkan::DescribeVertexInputData()
+void MyVulkan::CreateWaxDescriptorPool()
 {
-	typedef struct vertex_t
-	{
-		glm::vec4 position;
-		glm::vec3 normal;
-		glm::vec2 texcoord;
-	} vertex;
+	std::array<VkDescriptorPoolSize, 2> poolSizes{};
+	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
 
-	static const VkVertexInputBindingDescription vertexInputBindings[] =
-	{
-		{ 0, sizeof(vertex), VK_VERTEX_INPUT_RATE_VERTEX }		// Buffer
-	};
+	poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
 
-	// need to improve to use comfortably
-	static const VkVertexInputAttributeDescription vertexAttributes[] =
-	{
-		{ 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 0 },																	// position
-		{ 1, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(vertex, normal) },								// normal
-		{ 2, 0, VK_FORMAT_R32G32B32A32_SFLOAT, offsetof(vertex, texcoord) }								// texcoord
-	};
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+	poolInfo.pPoolSizes = poolSizes.data();
+	// maxSets is the maximum number of descriptor sets that can be allocated from the pool
+	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
 
-	static const VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo =
-	{
-		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		nullptr,
-		0,
-		RTL_NUMBER_OF_V2(vertexInputBindings),
-		vertexInputBindings,
-		RTL_NUMBER_OF_V2(vertexAttributes),
-		vertexAttributes
-	};
+	VulkanHelper::VkCheck(vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool), "Creating descriptor pool has failed!");
 }
 
-void MyVulkan::SetupSeparateVertexAttribute()
+void MyVulkan::CreateWaxDescriptorSetLayout()
 {
-	typedef struct vertex_t
-	{
-		glm::vec3 normal;
-		glm::vec2 texcoord;
-	} vertex;
+	VkDescriptorSetLayoutBinding uboLayoutBinding{};
+	uboLayoutBinding.binding = 0;
+	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	uboLayoutBinding.descriptorCount = 1;
+	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	uboLayoutBinding.pImmutableSamplers = nullptr;		// Optional
 
-	static const VkVertexInputBindingDescription vertexInputBindings[] =
-	{
-		{0, sizeof(glm::vec4), VK_VERTEX_INPUT_RATE_VERTEX},		// Buffer 1
-		{1, sizeof(vertex), VK_VERTEX_INPUT_RATE_VERTEX}				// Buffer 2
-	};
+	VkDescriptorSetLayoutBinding animationLayoutBinding{};
+	animationLayoutBinding.binding = 1;
+	animationLayoutBinding.descriptorCount = 1;
+	animationLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+	animationLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+	animationLayoutBinding.pImmutableSamplers = nullptr;
 
-	static const VkVertexInputAttributeDescription vertexAttributes[] =
-	{
-		{ 0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 0 },					// Position
-		{ 1, 1, VK_FORMAT_R32G32B32_SFLOAT, 0 },						// Normal
-		{ 2, 1, VK_FORMAT_R32G32_SFLOAT, sizeof(glm::vec3) }		// Tex Coord
-	};
+	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, animationLayoutBinding };
 
-	static const VkPipelineVertexInputStateCreateInfo vertexInputStateCreateInfo =
-	{
-		VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO,
-		nullptr,
-		0,
-		RTL_NUMBER_OF_V2(vertexInputBindings),
-		vertexInputBindings,
-		RTL_NUMBER_OF_V2(vertexAttributes),
-		vertexAttributes
-	};
+	VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
+	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutCreateInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+	layoutCreateInfo.pBindings = bindings.data();
 
+	VulkanHelper::VkCheck(vkCreateDescriptorSetLayout(device, &layoutCreateInfo, nullptr, &descriptorSetLayout), "Creating descriptor set layout has failed!");
 }
 
-*/
+void MyVulkan::CreateWaxDescriptorSets()
+{
+	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * meshSize, descriptorSetLayout);
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.pNext = nullptr;
+	allocInfo.descriptorPool = descriptorPool;
+	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
+	allocInfo.pSetLayouts = layouts.data();
+
+	descriptorSets.resize(MAX_FRAMES_IN_FLIGHT * meshSize);
+	// vkAllocateDescriptorSets may fail with the error code VK_ERROR_POOL_OUT_OF_MEMORY 
+		// if the pool is not sufficiently large, 
+		// but the driver may also try to solve the problem internally.
+
+	VulkanHelper::VkCheck(vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()), "Allocating descriptor sets has failed!");
+
+	UpdateWaxDescriptorSets();
+}
+
+void MyVulkan::UpdateWaxDescriptorSets()
+{
+	for (int i = 0; i < meshSize; i++)
+	{
+		for (int j = 0; j < MAX_FRAMES_IN_FLIGHT; j++)
+		{
+			VkDescriptorBufferInfo bufferInfo{};
+			bufferInfo.buffer = uniformBuffers[j];
+			bufferInfo.offset = 0;
+			bufferInfo.range = sizeof(UniformBufferObject);
+
+			VkDescriptorBufferInfo animationBufferInfo{};
+			animationBufferInfo.buffer = animationUniformBuffers[j];
+			animationBufferInfo.offset = 0;
+			animationBufferInfo.range = animationUniformBufferSize;
+
+			std::vector<VkWriteDescriptorSet> descriptorWrites(2);
+
+			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[0].dstSet = descriptorSets[i * MAX_FRAMES_IN_FLIGHT + j];
+			descriptorWrites[0].dstBinding = 0;
+			// The starting element in that array
+			descriptorWrites[0].dstArrayElement = 0;
+			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptorWrites[0].descriptorCount = 1;
+			descriptorWrites[0].pBufferInfo = &bufferInfo;
+
+			descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+			descriptorWrites[1].dstSet = descriptorSets[i * MAX_FRAMES_IN_FLIGHT + j];
+			descriptorWrites[1].dstBinding = 1;
+			descriptorWrites[1].dstArrayElement = 0;
+			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+			descriptorWrites[1].descriptorCount = 1;
+			descriptorWrites[1].pBufferInfo = &animationBufferInfo;
+
+			vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+		}
+	}
+}

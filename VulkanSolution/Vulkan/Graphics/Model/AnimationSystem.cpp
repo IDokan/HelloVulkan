@@ -200,6 +200,11 @@ void AnimationSystem::GetDeformerData(FbxMesh* mesh)
 
 glm::ivec4 AnimationSystem::GetBoneIndex(int vertexIndex)
 {
+	if (vertexIndex >= boneVertexID.size())
+	{
+		return glm::ivec4(0);
+	}
+
 	glm::ivec4 result = boneVertexID[vertexIndex];
 
 	for (int i = 0; i < 4; i++)
@@ -215,6 +220,11 @@ glm::ivec4 AnimationSystem::GetBoneIndex(int vertexIndex)
 
 glm::vec4 AnimationSystem::GetBoneWeight(int vertexIndex)
 {
+	if (vertexIndex >= boneVertexWeights.size())
+	{
+		return glm::vec4(0.25f);
+	}
+
 	return boneVertexWeights[vertexIndex];
 }
 

@@ -17,6 +17,7 @@ Creation Date: 06.12.2021
 
 class Model;
 class Window;
+class DescriptorSet;
 
 class MyVulkan
 {
@@ -39,25 +40,6 @@ public:
 	void FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize length, const float value);
 
 	void LoadNewModel();
-	/*
-	void CreateSwapChain();
-
-	void TransitionImageLayout();
-
-	void SavingPipelineCacheDataToFile(VkDevice device, VkPipelineCache cache, const char* fileName);
-
-	void CreateDescriptorSetLayout();
-
-	void CreatePipelineLayout();
-	*/
-
-	// void CreateSimpleRenderpass();
-
-	//void CreateSimpleGraphicsPipeline();
-
-	void DescribeVertexInputData();
-
-	void SetupSeparateVertexAttribute();
 
 	void InitGUI();
 	void UpdateTimer(float dt);
@@ -85,7 +67,7 @@ private:
 
 	void CreateRenderPass();
 
-	void CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
+	void CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
 	static std::vector<char> readFile(const std::string& filename);
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 	void DestroyPipeline();
@@ -128,17 +110,17 @@ private:
 	
 	void CreateIndexBuffer(int indexCount, void* indexData, int i);
 
-	void CreateDescriptorSetLayout();
-	void DestroyDescriptorSetLayout();
-
 	void CreateUniformBuffers();
 	void InitUniformBufferData();
 	void UpdateUniformBuffer(uint32_t currentImage);
 
-	void CreateDescriptorPool();
-	void DestroyDescriptorPool();
-	void CreateDescriptorSets();
-	void UpdateDescriptorSets();
+	void CreateDescriptorSet();
+	void WriteDescriptorSet();
+	void DestroyDescriptorSet();
+
+	void CreateWaxDescriptorSet();
+	void WriteWaxDescriptorSet();
+	void DestroyWaxDescriptorSet();
 
 	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
@@ -152,7 +134,7 @@ private:
 	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
 
 	void RecordDrawSkeletonCall(VkCommandBuffer commandBuffer);
-	void RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipeline, VkPipelineLayout pipelineLayout);
+	void RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipeline, VkPipelineLayout pipelineLayout, DescriptorSet* descriptorSet);
 
 	// @@@@@ Texture functions & resources
 	void CreateTextures(const std::vector<std::string>& imagePaths);
@@ -192,10 +174,9 @@ private:
 	VkExtent2D swapchainExtent;
 	std::vector<VkImageView> swapchainImageViews;
 
+	DescriptorSet* descriptorSet;
+	DescriptorSet* waxDescriptorSet;
 	VkRenderPass renderPass;
-	VkDescriptorSetLayout descriptorSetLayout;
-	VkDescriptorPool descriptorPool;
-	std::vector<VkDescriptorSet> descriptorSets;
 	VkPipelineLayout pipelineLayout;
 	VkPipeline pipeline;
 	std::vector<VkFramebuffer>  swapchainFramebuffers;
@@ -267,11 +248,6 @@ private:
 	bool showSkeletonFlag;
 
 	// @@ No texture pipeline (WaxPipeline).
-
-	void CreateWaxDescriptorPool();
-	void CreateWaxDescriptorSetLayout();
-	void CreateWaxDescriptorSets();
-	void UpdateWaxDescriptorSets();
 
 	VkPipeline waxPipeline;
 	VkPipelineLayout waxPipelineLayout;

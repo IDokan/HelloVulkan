@@ -85,6 +85,9 @@
     <ClCompile Include="Graphics\Model\AnimationSystem.cpp">
       <Filter>Graphics\Model</Filter>
     </ClCompile>
+    <ClCompile Include="Graphics\DescriptorSet.cpp">
+      <Filter>Graphics</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GLMath.h">
@@ -146,6 +149,9 @@
     </ClInclude>
     <ClInclude Include="Graphics\Model\AnimationSystem.h">
       <Filter>Graphics\Model</Filter>
+    </ClInclude>
+    <ClInclude Include="Graphics\DescriptorSet.h">
+      <Filter>Graphics</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

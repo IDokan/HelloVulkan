@@ -12,7 +12,7 @@ Creation Date 11.05.2022
 #include "Graphics/DescriptorSet.h"
 #include "Helper/VulkanHelper.h"
 
-DescriptorSet::DescriptorSet(unsigned int descriptorSetSize, VkDevice device, std::vector<VkDescriptorSetLayoutBinding> layoutBindings)
+DescriptorSet::DescriptorSet(VkDevice device, unsigned int descriptorSetSize, std::vector<VkDescriptorSetLayoutBinding> layoutBindings)
 	:descriptorSetSize(descriptorSetSize), device(device), descriptorPool(0), descriptorSetLayout(0), descriptorSets(descriptorSetSize), bindingTable(layoutBindings)
 {
 	/// @@ Create Descriptor Set Layout
@@ -62,6 +62,16 @@ DescriptorSet::~DescriptorSet()
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 }
 
+VkDescriptorSetLayout* DescriptorSet::GetDescriptorSetLayoutPtr()
+{
+	return &descriptorSetLayout;
+}
+
+VkDescriptorSet* DescriptorSet::GetDescriptorSetPtr(size_t index)
+{
+	return &descriptorSets[index];
+}
+
 void DescriptorSet::Write(size_t descriptorIndex, uint32_t dstBinding, const VkBuffer& buffer, VkDeviceSize range)
 {
 	VkDescriptorBufferInfo bufferInfo{};
@@ -103,8 +113,6 @@ void DescriptorSet::Write(size_t descriptorIndex, uint32_t dstBinding, const VkI
 
 void DescriptorSet::CreateDescriptorPoolSize(std::vector<VkDescriptorPoolSize>& poolSizes)
 {
-	poolSizes.resize(bindingTable.size());
-
 	for (auto bindingIter = bindingTable.cbegin(); bindingIter != bindingTable.cend(); ++bindingIter)
 	{
 		bool duplicatedType = false;

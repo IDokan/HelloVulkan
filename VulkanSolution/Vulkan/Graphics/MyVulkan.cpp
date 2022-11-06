@@ -25,6 +25,7 @@ Creation Date: 06.12.2021
 #include "Engines/Window.h"
 #include "Graphics/Structures/Structs.h"
 #include "Graphics/Model/Model.h"
+#include "Graphics/DescriptorSet.h"
 #include "ImGUI/myGUI.h"
 #include "Engines/Input/Input.h"
 
@@ -35,7 +36,7 @@ MyVulkan::MyVulkan(Window* window)
 
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
-	model = new Model("../Vulkan/Graphics/Model/models/Sitting Laughing.fbx");
+	model = new Model("../Vulkan/Graphics/Model/models/stanford-bunny.fbx");
 	model->SetAnimationIndex(0);
 
 	if (CreateInstance(appName, appVersion) == false)
@@ -65,28 +66,18 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	CreateImageViews();
 	CreateRenderPass();
 	CreateBuffers();
-	if (textureImageViews.size() <= 0)
-	{
-		CreateWaxDescriptorPool();
-		CreateWaxDescriptorSetLayout();
-		CreateWaxDescriptorSets();
-	}
-	else
-	{
-		CreateDescriptorPool();
-		CreateDescriptorSetLayout();
-		CreateDescriptorSets();
-	}
+	CreateDescriptorSet();
+	CreateWaxDescriptorSet();
 	CreateDepthResources();
 
 
 	VkShaderModule vertModule = CreateShaderModule(readFile("spv/vertexShader.vert.spv"));
 	VkShaderModule fragModule = CreateShaderModule(readFile("spv/fragShader.frag.spv"));
-	CreateGraphicsPipeline(vertModule, fragModule, pipeline, pipelineLayout);
+	CreateGraphicsPipeline(vertModule, fragModule, descriptorSet->GetDescriptorSetLayoutPtr(), pipeline, pipelineLayout);
 
 	VkShaderModule waxVertModule = CreateShaderModule(readFile("spv/waxShader.vert.spv"));
 	VkShaderModule waxFragModule = CreateShaderModule(readFile("spv/waxShader.frag.spv"));
-	CreateGraphicsPipeline(waxVertModule, waxFragModule, waxPipeline, waxPipelineLayout);
+	CreateGraphicsPipeline(waxVertModule, waxFragModule, waxDescriptorSet->GetDescriptorSetLayoutPtr(), waxPipeline, waxPipelineLayout);
 
 	CreateLinePipeline();
 
@@ -121,8 +112,8 @@ void MyVulkan::CleanVulkan()
 	DestroyTextureSampler();
 	DestroyTextureImage();
 
-	DestroyDescriptorPool();
-	DestroyDescriptorSetLayout();
+	DestroyDescriptorSet();
+	DestroyWaxDescriptorSet();
 
 	DestroyBuffersAndFreeMemories();
 
@@ -360,12 +351,14 @@ void MyVulkan::LoadNewModel()
 	// Thus, wait until the submitted command buffer completed execution.
 	VulkanHelper::VkCheck(vkDeviceWaitIdle(device), "failed to make logical device idle");
 
+	const int oldTextureViewSize = static_cast<const int>(textureImageViews.size());
+
 	DestroyTextureImage();
 	DestroyModelBuffers();
 	DestroySkeletonBuffer();
 	DestroyAnimationUniformBuffers();
 
-	int oldMeshSize = meshSize;
+	const int oldMeshSize = meshSize;
 
 	MyImGUI::UpdateAnimationNameList();
 
@@ -373,351 +366,38 @@ void MyVulkan::LoadNewModel()
 	CreateAnimationUniformBuffers();
 	CreateModelBuffers();
 	CreateTextures(model->GetDiffuseImagePaths());
+	InitUniformBufferData();
 
-	//// It is an old code when there was no wax descriptor sets.
-	//// Currently, Create descriptor sets at everytime, which might not be good.
-	//// Solve two different functions, merge together and recover this functionality back.
-	//if (meshSize > oldMeshSize)
-	//{
-	//	DestroyDescriptorPool();
-	//	CreateDescriptorPool();
-	//	CreateDescriptorSets();
-	//}
-	//else
-	//{
-	//	UpdateDescriptorSets();
-	//}
-
-
-	DestroyDescriptorPool();
-	DestroyDescriptorSetLayout();
+	// If loaded data is waxing model(do not have texture data),
 	if (textureImageViews.size() <= 0)
 	{
-		CreateWaxDescriptorPool();
-		CreateWaxDescriptorSetLayout();
-		CreateWaxDescriptorSets();
+		if (meshSize > oldMeshSize)
+		{
+			DestroyWaxDescriptorSet();
+			CreateWaxDescriptorSet();
+		}
+		else
+		{
+			WriteWaxDescriptorSet();
+		}
+
+		return;
+	}
+
+	// It is an old code when there was no wax descriptor sets.
+	// Currently, Create descriptor sets at everytime, which might not be good.
+	// Solve two different functions, merge together and recover this functionality back.
+	if (meshSize > oldMeshSize || textureImageViews.size() > oldTextureViewSize)
+	{
+		DestroyDescriptorSet();
+		CreateDescriptorSet();
 	}
 	else
 	{
-		CreateDescriptorPool();
-		CreateDescriptorSetLayout();
-		CreateDescriptorSets();
+		WriteDescriptorSet();
 	}
 
 }
-/*
-void MyVulkan::CreateSwapChain()
-{
-	// First, we create the swap chain.
-	VkSwapchainCreateInfoKHR swapchainCreateInfo =
-	{
-		VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR,		// sType
-		nullptr,																									// pNext
-		0,																											// flags
-		m_mainSurface,																					// surface
-		2, 																										// minImageCount
-		VK_FORMAT_R8G8B8A8_UNORM,													// imageFormat
-		VK_COLORSPACE_SRGB_NONLINEAR_KHR,								// imageColorSpace
-		{1024, 768},																							// imageExtent
-		1,																											// imageArrayLayers
-		VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT,							// imageUsage
-		VK_SHARING_MODE_EXCLUSIVE,													// imageSharingMode
-		0,																											// queueFamilyIndexCount
-		nullptr,																									// pQueueFamilyIndices
-		VK_SURFACE_TRANSFORM_INHERIT_BIT_KHR,							// preTransform
-		VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR,								// compositeAlpha
-		VK_PRESENT_MODE_FIFO_KHR,													// presentMode
-		VK_TRUE,																							// clipped
-		m_swapChain																						// oldSwapchain
-	};
-
-	VulkanHelper::VkCheck(
-		vkCreateSwapchainKHR(
-		logicalDevices.front(),
-			&swapchainCreateInfo,
-			&myAllocator,
-			&m_swapChain
-		),
-		"vkCreateSwapchainKHR is failed!");
-
-	// Next, we query the swap chain for the number of images it actaully contains.
-	uint32_t swapchainImageCount = 0;
-	VulkanHelper::VkCheck(
-		vkGetSwapchainImagesKHR(
-			logicalDevices.front(),
-			m_swapChain,
-			&swapchainImageCount,
-			nullptr
-		),
-		"vkGetSwapchainImagesKHR is failed!"
-	);
-	// Now we resize our image array and retrieve the image handles from the swap chain.
-	m_swapChainImages.resize(swapchainImageCount);
-	VulkanHelper::VkCheck(
-		vkGetSwapchainImagesKHR(
-			logicalDevices.front(),
-			m_swapChain,
-			&swapchainImageCount,
-			m_swapChainImages.data()
-		),
-		"vkGetSwapchainImagesKHR is failed!"
-	);
-}
-
-void MyVulkan::TransitionImageLayout()
-{
-	const VkImageMemoryBarrier barrier =
-	{
-		VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,			//	sType
-		nullptr, 																							//	pNext
-		VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT,				//	srcAccessMask
-		VK_ACCESS_MEMORY_READ_BIT,										//	dstAccessMask
-		VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL,		//	oldLayout
-		VK_IMAGE_LAYOUT_PRESENT_SRC_KHR,							//	newLayout
-		0,																									//	srcQueueFamilyIndex
-		0,																									//	dstQueueFamilyIndex
-		sourceImage,																				//	image
-		{																									//	subresourceRange
-			VK_IMAGE_ASPECT_COLOR_BIT,										//	aspectMask
-			0,																								//	baseMipLevel
-			1,																								//	levelCount
-			0,																								//	baseArrayLayer
-			1																								//	layerCount
-		}
-	};
-
-	vkCmdPipelineBarrier(
-		cmdBuffer,
-		VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
-		VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
-		0,
-		0, nullptr,
-		0, nullptr,
-		1, &barrier
-		);
-}
-
-void MyVulkan::SavingPipelineCacheDataToFile(VkDevice device, VkPipelineCache cache, const char* fileName)
-{
-	size_t cacheDataSize;
-
-	// Determine the size of the cache data.
-	VulkanHelper::VkCheck(
-		vkGetPipelineCacheData(device, cache, &cacheDataSize, nullptr),
-		"first call to vkGetPipelineCacheData failed!"
-	);
-
-	if (cacheDataSize == 0)
-	{
-		// failed!
-		// Handle to fail needed
-		return;
-	}
-
-	FILE* pOutputFile;
-	void* pData;
-
-	// Allocate a temporary store for the cache data.
-	pData = malloc(cacheDataSize);
-
-	if (pData == nullptr)
-	{
-		return;
-	}
-
-	// Retrieve the actual data from the cache.
-	VulkanHelper::VkCheck(
-		vkGetPipelineCacheData(device, cache, &cacheDataSize, pData),
-		"Second call to vkGetPipelineCacheData is failed!"
-	);
-
-	// Open the file as a binary file and write the data to it.
-	pOutputFile = fopen(fileName, "wb");
-
-	if (pOutputFile == nullptr)
-	{
-		free(pData);
-		return;
-	}
-
-	fwrite(pData, 1, cacheDataSize, pOutputFile);
-
-	fclose(pOutputFile);
-
-	free(pData);
-}
-
-void MyVulkan::CreateDescriptorSetLayout()
-{
-	VkDescriptorSetLayoutCreateInfo createInfo;
-	VkDescriptorSetLayout layout;
-	vkCreateDescriptorSetLayout(logicalDevices.front(),
-		&createInfo,
-		&myAllocator,
-		&layout);
-}
-
-void MyVulkan::CreatePipelineLayout()
-{
-	// This describes our combined image-samplers.
-	// One set, two disjoint binding
-
-	static const VkDescriptorSetLayoutBinding samplers[] =
-	{
-		{
-			0,																										// Start from binding 0
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		// Combined image-sampler
-			1, 																									// Create One binding
-			VK_SHADER_STAGE_ALL,															// Usable in all stages
-			nullptr																								// No static samplers
-		},
-
-		{
-			2,																										// Start from binding 2
-			VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,		// Combined image-sampler
-			1,																										// Create one binding
-			VK_SHADER_STAGE_ALL,															// Usable in all stages
-			nullptr																								// No static samplers
-		}
-	};
-
-	static const VkDescriptorSetLayoutBinding uniformBlock =
-	{
-		0, 																										// Start from binding 0
-		VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,								// Uniform block
-		1,																											// One binding
-		VK_SHADER_STAGE_ALL,																// All stages
-		nullptr																									// No static samplers
-	};
-
-	// Now create the two descriptor set layouts
-	static const VkDescriptorSetLayoutCreateInfo createInfoSamplers =
-	{
-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		nullptr,
-		0,
-		2,
-		&samplers[0]
-	};
-
-	static const VkDescriptorSetLayoutCreateInfo createInfoUniforms =
-	{
-		VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-		nullptr,
-		0,
-		1,
-		&uniformBlock
-	};
-
-	// This array holds the two set layouts
-	VkDescriptorSetLayout setLayouts[2];
-	vkCreateDescriptorSetLayout(
-		device,
-		&createInfoSamplers,
-		nullptr,
-		&setLayouts[0]
-	);
-	vkCreateDescriptorSetLayout(
-		device,
-		&createInfoUniforms,
-		nullptr,
-		&setLayouts[1]
-	);
-
-	// Now create the pipeline layout.
-	const VkPipelineLayoutCreateInfo pipelineLayoutCreateInfo =
-	{
-		VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO,		// sType
-		nullptr,																									// pNext
-		0, 																										// flags
-		2,																											// setLayoutCount
-		setLayouts,																							// pSetLayouts
-		0,																											// pushConstantRangeCount
-		nullptr																									// pPushConstantRanges
-	};
-
-	VkPipelineLayout pipelineLayout;
-
-	vkCreatePipelineLayout(
-		device,
-		&pipelineLayoutCreateInfo,
-		nullptr,
-		pipelineLayout
-		)
-}
-*/
-/*
-void MyVulkan::CreateSimpleRenderpass()
-{
-	// This is our color attachment. It's an R8G8B8A8_UNORM single sample image.
-	// We want to clear it at the start of the renderpass and save the contents when we are done.
-	// It starts in UNDEFINED layout, which is a key to Vulkan that it is allowed to throw the old content away,
-	// and we want to leave it in COLOR_ATTACHMENT_OPTIMAL state when we are done.
-
-	static const VkAttachmentDescription attachments[] =
-	{
-		{
-			0,																										// flags
-			VK_FORMAT_R8G8B8A8_UNORM,												// format
-			VK_SAMPLE_COUNT_1_BIT,														// samples
-			VK_ATTACHMENT_LOAD_OP_CLEAR,										// loadOp
-			VK_ATTACHMENT_STORE_OP_STORE,										// storeOp
-			VK_ATTACHMENT_LOAD_OP_DONT_CARE,								// stencilLoadOp
-			VK_ATTACHMENT_STORE_OP_DONT_CARE,							// stencilStoreOp
-			VK_IMAGE_LAYOUT_UNDEFINED,												// initialLayout
-			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL			// finalLayout
-		}
-	};
-
-	// This is the single reference to our single attachment.
-	static const VkAttachmentReference attachmentReferences[] =
-	{
-		{
-			0,																									// attachment
-			VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL		// layout
-		}
-	};
-
-	// There is one subpass in this renderpass, with only a reference to the single output attachment.
-	static const VkSubpassDescription subpasses[] =
-	{
-		{
-			0,																		// flags
-			VK_PIPELINE_BIND_POINT_GRAPHICS,	// pipelineBindPoint
-			0,																		// inputAttachmentCount
-			nullptr,																// pInputAttachments
-			1,																		// colorAttachmentCount
-			&attachmentReferences[0],								// pColorAttachments
-			nullptr,																// pResolveAttachments
-			nullptr,																// pDepthStencilAttachment
-			0,																		// preserveAttachmentCount
-			nullptr																// pPreserveAttachments
-		}
-	};
-
-	// Finally, this is the information that Vulkan needs to create the render pass object.
-	static VkRenderPassCreateInfo renderpassCreateInfo =
-	{
-		VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO,			// sType
-		nullptr,																									// pNext
-		0,																											// flags
-		1,																											// attachmentCount
-		&attachments[0],																					// pAttachments
-		1,																											// subpassCount
-		&subpasses[0],																					// pSubpasses
-		0,																											// dependencyCount
-		nullptr																									// pDependencies
-	};
-
-	VkRenderPass renderPass = VK_NULL_HANDLE;
-
-	// The only code that actually executes is this single call, which creates the renderpass object.
-	vkCreateRenderPass(
-		device,
-		&renderpassCreateInfo,
-		nullptr,
-		&renderPass);
-}*/
 
 void MyVulkan::InitGUI()
 {
@@ -1182,7 +862,7 @@ void MyVulkan::CreateRenderPass()
 
 }
 
-void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout)
+void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout)
 {
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1297,7 +977,7 @@ void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+	pipelineLayoutInfo.pSetLayouts = descriptorSetLayoutPtr;
 	pipelineLayoutInfo.pushConstantRangeCount = 0;
 	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
@@ -1501,22 +1181,13 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	scissor.extent = swapchainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	// VUID-VkGraphicsPipelineCreateInfo-layout-00756(ERROR / SPEC): msgNum: 1165064310 - Validation Error: [ VUID-VkGraphicsPipelineCreateInfo-layout-00756 ] Object 0: handle = 0x1d201ae3c70, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0x45717876 | Shader uses descriptor slot 0.2 (expected `VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK`) but not declared in pipeline layout The Vulkan spec states: layout must be consistent with all shaders specified in pStages (https://vulkan.lunarg.com/doc/view/1.3.204.1/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-00756)
-	// Objects: 1
-	// [0]  0x1d201ae3c70, type : 3, name : NULL
-	// VUID - VkGraphicsPipelineCreateInfo - layout - 00756(ERROR / SPEC) : msgNum : 1165064310 - Validation Error : [VUID - VkGraphicsPipelineCreateInfo - layout - 00756] Object 0 : handle = 0x1d201ae3c70, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0x45717876 | Shader uses descriptor slot 0.1 but descriptor not accessible from stage VK_SHADER_STAGE_FRAGMENT_BIT The Vulkan spec states : layout must be consistent with all shaders specified in pStages(https ://vulkan.lunarg.com/doc/view/1.3.204.1/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-00756)
-	// 	Objects : 1
-	// 	[0]  0x1d201ae3c70, type : 3, name : NULL
-	// 	VUID - VkGraphicsPipelineCreateInfo - layout - 00756(ERROR / SPEC) : msgNum : 1165064310 - Validation Error : [VUID - VkGraphicsPipelineCreateInfo - layout - 00756] Object 0 : handle = 0x1d201ae3c70, type = VK_OBJECT_TYPE_DEVICE; | MessageID = 0x45717876 | Shader uses descriptor slot 0.2 (expected `VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER_DYNAMIC, VK_DESCRIPTOR_TYPE_INLINE_UNIFORM_BLOCK`) but not declared in pipeline layout The Vulkan spec states : layout must be consistent with all shaders specified in pStages(https ://vulkan.lunarg.com/doc/view/1.3.204.1/windows/1.3-extensions/vkspec.html#VUID-VkGraphicsPipelineCreateInfo-layout-00756)
-	// 		Objects : 1
-	// @@ TODO: Happened. Solve it!
 	if (textureImageViews.size() <= 0)
 	{
-		RecordDrawMeshCall(commandBuffer, waxPipeline, waxPipelineLayout);
+		RecordDrawMeshCall(commandBuffer, waxPipeline, waxPipelineLayout, waxDescriptorSet);
 	}
 	else
 	{
-		RecordDrawMeshCall(commandBuffer, pipeline, pipelineLayout);
+		RecordDrawMeshCall(commandBuffer, pipeline, pipelineLayout, descriptorSet);
 	}
 
 	if (boneSize > 0 && showSkeletonFlag)
@@ -1888,44 +1559,6 @@ void MyVulkan::CreateIndexBuffer(int indexCount, void* indexData, int i)
 	vkFreeMemory(device, stagingBufferMemory, nullptr);
 }
 
-void MyVulkan::CreateDescriptorSetLayout()
-{
-	VkDescriptorSetLayoutBinding uboLayoutBinding{};
-	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	uboLayoutBinding.pImmutableSamplers = nullptr;		// Optional
-
-	VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-	samplerLayoutBinding.binding = 1;
-	samplerLayoutBinding.descriptorCount = 1;
-	samplerLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	samplerLayoutBinding.pImmutableSamplers = nullptr;
-	samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-	VkDescriptorSetLayoutBinding animationLayoutBinding{};
-	animationLayoutBinding.binding = 2;
-	animationLayoutBinding.descriptorCount = 1;
-	animationLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	animationLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	animationLayoutBinding.pImmutableSamplers = nullptr;
-
-	std::array<VkDescriptorSetLayoutBinding, 3> bindings = { uboLayoutBinding, samplerLayoutBinding, animationLayoutBinding };
-
-	VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
-	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutCreateInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-	layoutCreateInfo.pBindings = bindings.data();
-
-	VulkanHelper::VkCheck(vkCreateDescriptorSetLayout(device, &layoutCreateInfo, nullptr, &descriptorSetLayout), "Creating descriptor set layout has failed!");
-}
-
-void MyVulkan::DestroyDescriptorSetLayout()
-{
-	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
-}
-
 void MyVulkan::CreateUniformBuffers()
 {
 	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
@@ -2015,107 +1648,67 @@ void MyVulkan::UpdateUniformBuffer(uint32_t currentImage)
 	vkUnmapMemory(device, uniformBuffersMemory[currentFrameID]);
 }
 
-void MyVulkan::CreateDescriptorPool()
+void MyVulkan::CreateDescriptorSet()
 {
-	std::array<VkDescriptorPoolSize, 3> poolSizes{};
-	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
+	descriptorSet = new DescriptorSet(device, MAX_FRAMES_IN_FLIGHT * meshSize, {
+		{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+		{1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr} ,
+		{2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
+		});
 
-	poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
-
-	poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[2].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
-
-	VkDescriptorPoolCreateInfo poolInfo{};
-	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-	poolInfo.pPoolSizes = poolSizes.data();
-	// maxSets is the maximum number of descriptor sets that can be allocated from the pool
-	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
-
-	VulkanHelper::VkCheck(vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool), "Creating descriptor pool has failed!");
+	WriteDescriptorSet();
 }
 
-void MyVulkan::DestroyDescriptorPool()
-{
-	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
-}
-
-void MyVulkan::CreateDescriptorSets()
-{
-	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * meshSize, descriptorSetLayout);
-	VkDescriptorSetAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.pNext = nullptr;
-	allocInfo.descriptorPool = descriptorPool;
-	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
-	allocInfo.pSetLayouts = layouts.data();
-
-	descriptorSets.resize(MAX_FRAMES_IN_FLIGHT * meshSize);
-	// vkAllocateDescriptorSets may fail with the error code VK_ERROR_POOL_OUT_OF_MEMORY 
-		// if the pool is not sufficiently large, 
-		// but the driver may also try to solve the problem internally.
-
-	VulkanHelper::VkCheck(vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()), "Allocating descriptor sets has failed!");
-
-	UpdateDescriptorSets();
-}
-
-void MyVulkan::UpdateDescriptorSets()
+void MyVulkan::WriteDescriptorSet()
 {
 	for (int i = 0; i < meshSize; i++)
 	{
 		for (int j = 0; j < MAX_FRAMES_IN_FLIGHT; j++)
 		{
-			VkDescriptorBufferInfo bufferInfo{};
-			bufferInfo.buffer = uniformBuffers[j];
-			bufferInfo.offset = 0;
-			bufferInfo.range = sizeof(UniformBufferObject);
-
-			VkDescriptorImageInfo imageInfo{};
-			imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-			imageInfo.imageView = textureImageViews[i];
-			imageInfo.sampler = textureSampler;
-
-			VkDescriptorBufferInfo animationBufferInfo{};
-			if (boneSize > 0)
+			descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 0, uniformBuffers[j], sizeof(UniformBufferObject));
+			if (i < textureImageViews.size())
 			{
-				animationBufferInfo.buffer = animationUniformBuffers[j];
+				descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 1, textureImageViews[i], textureSampler);
 			}
-			animationBufferInfo.offset = 0;
-			animationBufferInfo.range = animationUniformBufferSize;
-
-			std::vector<VkWriteDescriptorSet> descriptorWrites(3);
-
-			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[0].dstSet = descriptorSets[i * MAX_FRAMES_IN_FLIGHT + j];
-			descriptorWrites[0].dstBinding = 0;
-			// The starting element in that array
-			descriptorWrites[0].dstArrayElement = 0;
-			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			descriptorWrites[0].descriptorCount = 1;
-			descriptorWrites[0].pBufferInfo = &bufferInfo;
-
-			descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[1].dstSet = descriptorSets[i * MAX_FRAMES_IN_FLIGHT + j];
-			descriptorWrites[1].dstBinding = 1;
-			descriptorWrites[1].dstArrayElement = 0;
-			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-			descriptorWrites[1].descriptorCount = 1;
-			descriptorWrites[1].pImageInfo = &imageInfo;
-
-			descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[2].dstSet = descriptorSets[i * MAX_FRAMES_IN_FLIGHT + j];
-			descriptorWrites[2].dstBinding = 2;
-			descriptorWrites[2].dstArrayElement = 0;
-			descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			descriptorWrites[2].descriptorCount = 1;
-			descriptorWrites[2].pBufferInfo = &animationBufferInfo;
-
-			vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+			else
+			{
+				descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 1, 0, textureSampler);
+			}
+			descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 2, animationUniformBuffers[j], animationUniformBufferSize);
 		}
 	}
+}
+
+void MyVulkan::DestroyDescriptorSet()
+{
+	delete descriptorSet;
+}
+
+void MyVulkan::CreateWaxDescriptorSet()
+{
+	waxDescriptorSet = new DescriptorSet(device, MAX_FRAMES_IN_FLIGHT * meshSize, {
+		{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+		{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
+		});
+
+	WriteWaxDescriptorSet();
+}
+
+void MyVulkan::WriteWaxDescriptorSet()
+{
+	for (int i = 0; i < meshSize; i++)
+	{
+		for (int j = 0; j < MAX_FRAMES_IN_FLIGHT; j++)
+		{
+			waxDescriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 0, uniformBuffers[j], sizeof(UniformBufferObject));
+			waxDescriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 1, animationUniformBuffers[j], animationUniformBufferSize);
+		}
+	}
+}
+
+void MyVulkan::DestroyWaxDescriptorSet()
+{
+	delete waxDescriptorSet;
 }
 
 void MyVulkan::TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout)
@@ -2397,7 +1990,7 @@ void MyVulkan::CreateLinePipeline()
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = &descriptorSetLayout;
+	pipelineLayoutInfo.pSetLayouts = descriptorSet->GetDescriptorSetLayoutPtr();
 	pipelineLayoutInfo.pushConstantRangeCount = 0;
 	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
@@ -2603,12 +2196,12 @@ void MyVulkan::RecordDrawSkeletonCall(VkCommandBuffer commandBuffer)
 	VkBuffer VB[] = { skeletonLineBuffer };
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipelineLayout, 0, 1, &descriptorSets[currentFrameID], 0, nullptr);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipelineLayout, 0, 1, descriptorSet->GetDescriptorSetPtr(currentFrameID), 0, nullptr);
 
 	vkCmdDraw(commandBuffer, boneSize * 2, 1, 0, 0);
 }
 
-void MyVulkan::RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipeline, VkPipelineLayout pipelineLayout)
+void MyVulkan::RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipeline, VkPipelineLayout pipelineLayout, DescriptorSet* descriptorSet)
 {
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
@@ -2618,7 +2211,7 @@ void MyVulkan::RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipe
 		VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffers[i], 0, VK_INDEX_TYPE_UINT32);
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[i * MAX_FRAMES_IN_FLIGHT + currentFrameID], 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, descriptorSet->GetDescriptorSetPtr(i * MAX_FRAMES_IN_FLIGHT + currentFrameID), 0, nullptr);
 
 		vkCmdDrawIndexed(commandBuffer, indexCounts[i], 1, 0, 0, 0);
 	}
@@ -2645,7 +2238,11 @@ void MyVulkan::CreateTextureImageAndImageView(const std::string& path)
 
 	if (!pixels)
 	{
-		windowHolder->DisplayMessage("Texture Error", "Loading texture image has Failed!");
+		windowHolder->DisplayMessage("Texture Error", std::string("Loading texture image has Failed!") + std::string("\n") + path);
+
+		// The path is for when the given path is not valid, display default image.
+		pixels = stbi_load("../Vulkan/Graphics/Model/EssentialImages/transparent.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+		imageSize = texWidth * texHeight * RGBA;
 	}
 
 	VkBuffer stagingBuffer;
@@ -2713,109 +2310,4 @@ void MyVulkan::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkI
 
 	// Note that using vkBindImageMemoryinstead of vkBindBufferMemory
 	vkBindImageMemory(device, image, imageMemory, 0);
-}
-
-void MyVulkan::CreateWaxDescriptorPool()
-{
-	std::array<VkDescriptorPoolSize, 2> poolSizes{};
-	poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
-
-	poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
-
-	VkDescriptorPoolCreateInfo poolInfo{};
-	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-	poolInfo.pPoolSizes = poolSizes.data();
-	// maxSets is the maximum number of descriptor sets that can be allocated from the pool
-	poolInfo.maxSets = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
-
-	VulkanHelper::VkCheck(vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool), "Creating descriptor pool has failed!");
-}
-
-void MyVulkan::CreateWaxDescriptorSetLayout()
-{
-	VkDescriptorSetLayoutBinding uboLayoutBinding{};
-	uboLayoutBinding.binding = 0;
-	uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	uboLayoutBinding.descriptorCount = 1;
-	uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	uboLayoutBinding.pImmutableSamplers = nullptr;		// Optional
-
-	VkDescriptorSetLayoutBinding animationLayoutBinding{};
-	animationLayoutBinding.binding = 1;
-	animationLayoutBinding.descriptorCount = 1;
-	animationLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-	animationLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-	animationLayoutBinding.pImmutableSamplers = nullptr;
-
-	std::array<VkDescriptorSetLayoutBinding, 2> bindings = { uboLayoutBinding, animationLayoutBinding };
-
-	VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
-	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-	layoutCreateInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-	layoutCreateInfo.pBindings = bindings.data();
-
-	VulkanHelper::VkCheck(vkCreateDescriptorSetLayout(device, &layoutCreateInfo, nullptr, &descriptorSetLayout), "Creating descriptor set layout has failed!");
-}
-
-void MyVulkan::CreateWaxDescriptorSets()
-{
-	std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT * meshSize, descriptorSetLayout);
-	VkDescriptorSetAllocateInfo allocInfo{};
-	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-	allocInfo.pNext = nullptr;
-	allocInfo.descriptorPool = descriptorPool;
-	allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * meshSize);
-	allocInfo.pSetLayouts = layouts.data();
-
-	descriptorSets.resize(MAX_FRAMES_IN_FLIGHT * meshSize);
-	// vkAllocateDescriptorSets may fail with the error code VK_ERROR_POOL_OUT_OF_MEMORY 
-		// if the pool is not sufficiently large, 
-		// but the driver may also try to solve the problem internally.
-
-	VulkanHelper::VkCheck(vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()), "Allocating descriptor sets has failed!");
-
-	UpdateWaxDescriptorSets();
-}
-
-void MyVulkan::UpdateWaxDescriptorSets()
-{
-	for (int i = 0; i < meshSize; i++)
-	{
-		for (int j = 0; j < MAX_FRAMES_IN_FLIGHT; j++)
-		{
-			VkDescriptorBufferInfo bufferInfo{};
-			bufferInfo.buffer = uniformBuffers[j];
-			bufferInfo.offset = 0;
-			bufferInfo.range = sizeof(UniformBufferObject);
-
-			VkDescriptorBufferInfo animationBufferInfo{};
-			animationBufferInfo.buffer = animationUniformBuffers[j];
-			animationBufferInfo.offset = 0;
-			animationBufferInfo.range = animationUniformBufferSize;
-
-			std::vector<VkWriteDescriptorSet> descriptorWrites(2);
-
-			descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[0].dstSet = descriptorSets[i * MAX_FRAMES_IN_FLIGHT + j];
-			descriptorWrites[0].dstBinding = 0;
-			// The starting element in that array
-			descriptorWrites[0].dstArrayElement = 0;
-			descriptorWrites[0].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			descriptorWrites[0].descriptorCount = 1;
-			descriptorWrites[0].pBufferInfo = &bufferInfo;
-
-			descriptorWrites[1].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-			descriptorWrites[1].dstSet = descriptorSets[i * MAX_FRAMES_IN_FLIGHT + j];
-			descriptorWrites[1].dstBinding = 1;
-			descriptorWrites[1].dstArrayElement = 0;
-			descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-			descriptorWrites[1].descriptorCount = 1;
-			descriptorWrites[1].pBufferInfo = &animationBufferInfo;
-
-			vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
-		}
-	}
 }

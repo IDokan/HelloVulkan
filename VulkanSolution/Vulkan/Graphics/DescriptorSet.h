@@ -16,17 +16,21 @@ Creation Date 11.05.2022
 class DescriptorSet
 {
 public:
-	DescriptorSet(unsigned int descriptorSetSize, VkDevice device, std::vector<VkDescriptorSetLayoutBinding> layoutBindings);
+	DescriptorSet(VkDevice device, unsigned int descriptorSetSize, std::vector<VkDescriptorSetLayoutBinding> layoutBindings);
 	~DescriptorSet();
+
+	VkDescriptorSetLayout* GetDescriptorSetLayoutPtr();
+	VkDescriptorSet* GetDescriptorSetPtr(size_t index);
 
 	void Write(size_t descriptorIndex, uint32_t dstBinding, const VkBuffer& buffer, VkDeviceSize range);
 	void Write(size_t descriptorIndex, uint32_t dstBinding, const VkImageView& imageView, const VkSampler& sampler);
 private:
 	void CreateDescriptorPoolSize(std::vector<VkDescriptorPoolSize>& poolSizes);
 
+	VkDevice device;
+
 	unsigned int descriptorSetSize;
 
-	VkDevice device;
 	VkDescriptorPool descriptorPool;
 	VkDescriptorSetLayout descriptorSetLayout;
 	std::vector<VkDescriptorSet> descriptorSets;

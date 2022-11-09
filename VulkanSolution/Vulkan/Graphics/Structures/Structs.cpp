@@ -69,14 +69,12 @@ const Bone& Skeleton::GetBoneByBoneID(int boneID)
 
 const Bone& Skeleton::GetBoneByName(const std::string& name)
 {
-	int id = 0;
 	for (const Bone& bone : bones)
 	{
 		if (bone.name.compare(name) == 0)
 		{
 			return bone;
 		}
-		id++;
 	}
 
 	return bones.front();
@@ -85,6 +83,11 @@ const Bone& Skeleton::GetBoneByName(const std::string& name)
 Bone& Skeleton::GetBoneReferenceByName(const std::string& name)
 {
 	return const_cast<Bone&>(GetBoneByName(name));
+}
+
+std::string Skeleton::GetBoneNameByID(unsigned int boneID)
+{
+	return bones[boneID].name;
 }
 
 size_t Skeleton::GetSkeletonSize()

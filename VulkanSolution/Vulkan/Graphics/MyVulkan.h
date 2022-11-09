@@ -68,6 +68,7 @@ private:
 	void CreateRenderPass();
 
 	void CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
+	void CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, uint32_t pushConstantSize, VkShaderStageFlags pushConstantTargetStage, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
 	static std::vector<char> readFile(const std::string& filename);
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 	void DestroyPipeline();
@@ -81,6 +82,7 @@ private:
 	// It has drawing triangle part, which does not make sense.
 	// I'm gonna change it.
 	void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+	void RecordDrawModelCalls(VkCommandBuffer commandBuffer);
 
 	void RecordClientData();
 	void UpdateCurrentFrameID();
@@ -90,7 +92,7 @@ private:
 
 	void CreateBuffers();
 	void ResizeModelBuffers(int size);
-	void CreateVertexBuffer(int vertexCount, void* vertexData, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	void CreateVertexBuffer(VkDeviceSize bufferSize, void* vertexData, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 	void DestroyBuffersAndFreeMemories();
 	void CreateModelBuffers();
 	void DestroyModelBuffers();
@@ -139,6 +141,8 @@ private:
 	// @@@@@ Texture functions & resources
 	void CreateTextures(const std::vector<std::string>& imagePaths);
 	void CreateTextureImageAndImageView(const std::string& path);
+	void CreateEmergencyTexture();
+	void DestroyEmergencyTexture();
 	void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 	void TransitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
 	void CopyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
@@ -151,6 +155,10 @@ private:
 	std::vector<VkImage> textureImages;
 	std::vector<VkDeviceMemory> textureImageMemories;
 	std::vector<VkImageView> textureImageViews;
+
+	VkImage emergencyTextureImage;
+	VkDeviceMemory emergencyTextureImageMemory;
+	VkImageView emergencyTextureImageView;
 
 	VkSampler textureSampler;
 	// @@ End of Texture functions
@@ -246,10 +254,25 @@ private:
 
 	bool bindPoseFlag;
 	bool showSkeletonFlag;
+	
 
 	// @@ No texture pipeline (WaxPipeline).
-
 	VkPipeline waxPipeline;
 	VkPipelineLayout waxPipelineLayout;
 	// @@ End of no texture pipeline
+
+	// @@ Blending Weights
+	void CreateBlendingWeightDescriptorSet();
+	void WriteBlendingWeightDescriptorSet();
+	void DestroyBlendingWeightDescriptorSet();
+	bool blendingWeightMode;
+	DescriptorSet* blendingWeightDescriptorSet;
+	VkPipeline blendingWeightPipeline;
+	VkPipelineLayout blendingWeightPipelineLayout;
+
+
+	PushConstants selectedBone;
+	// @@ End of blending
+
+	void RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayout layout, VkShaderStageFlagBits targetStage, PushConstants* data);
 };

@@ -35,10 +35,13 @@ namespace
     Model* model;
     float* worldTimer;
     std::vector<std::string> animationNameList;
+    std::vector<std::string> boneNameList;
     bool* bindPoseFlag;
 
     bool* showSkeletonFlag;
-    int selected = 0;
+    unsigned int selected = 0;
+    bool* blendingWeightMode;
+    int* selectedBone;
 }
 
 namespace MyImGUI
@@ -202,6 +205,24 @@ void MyImGUI::Helper::Skeleton()
     if (ImGui::CollapsingHeader("Skeleton"))
     {
         ImGui::Checkbox("Show skeleton", showSkeletonFlag);
+
+        ImGui::Separator();
+
+        ImGui::Checkbox("Blending Weight Mode", blendingWeightMode);
+        if (*blendingWeightMode)
+        {
+
+            ImGui::Indent();
+            const unsigned int boneCount = static_cast<unsigned int>(model->GetBoneCount());
+            for (unsigned int n = 0; n < boneCount; n++)
+            {
+                if (ImGui::Selectable(boneNameList[n].c_str(), *selectedBone == n))
+                {
+                    *selectedBone = n;
+                }
+            }
+            ImGui::Unindent();
+        }
     }
 }
 
@@ -210,9 +231,11 @@ void MyImGUI::SendModelInfo(Model* _model)
     model = _model;
 }
 
-void MyImGUI::SendSkeletonInfo(bool* _showSkeletonFlag)
+void MyImGUI::SendSkeletonInfo(bool* _showSkeletonFlag, bool* _blendingWeightMode, int* _selectedBone)
 {
     showSkeletonFlag = _showSkeletonFlag;
+    blendingWeightMode = _blendingWeightMode;
+    selectedBone = _selectedBone;
 }
 
 void MyImGUI::SendAnimationInfo(float* _worldTimer, bool* _bindPoseFlag)
@@ -223,7 +246,7 @@ void MyImGUI::SendAnimationInfo(float* _worldTimer, bool* _bindPoseFlag)
 
 void MyImGUI::UpdateAnimationNameList()
 {
-    int previousSelected = model->GetSelectedAnimationIndex();
+    unsigned int previousSelected = model->GetSelectedAnimationIndex();
 
     const unsigned int animationCount = model->GetAnimationCount();
 
@@ -245,6 +268,22 @@ void MyImGUI::UpdateAnimationNameList()
     // Default selection is always bind pose
     selected = animationCount;
     *bindPoseFlag = true;
+}
+
+void MyImGUI::UpdateBoneNameList()
+{
+    const unsigned int boneCount = static_cast<unsigned int>(model->GetBoneCount());
+    boneNameList.resize(boneCount);
+
+    for (unsigned int i = 0; i < boneCount; i++)
+    {
+        boneNameList[i] = model->GetBoneName(i);
+    }
+}
+
+bool MyImGUI::IsMouseOnImGUIWindow()
+{
+    return ImGui::GetIO().WantCaptureMouse;
 }
 
 

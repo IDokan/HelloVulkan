@@ -15,7 +15,7 @@ struct AnimationData
 	mat4 model;
 };
 
-layout(binding = 2) uniform AnimationBufferObject
+layout(binding = 1) uniform AnimationBufferObject
 {
 	AnimationData item[99];
 } data;

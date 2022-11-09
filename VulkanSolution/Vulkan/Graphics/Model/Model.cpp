@@ -388,6 +388,12 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 			glm::vec2 uv = glm::vec2(uvs[iInt][0], uvs[iInt][1]);
 			glm::ivec4 boneID = animationSystem->GetBoneIndex(indices[i]);
 			glm::vec4 boneWeights = animationSystem->GetBoneWeight(indices[i]);
+			float sum = 0.f;
+			for (int x = 0; x < 4; x++)
+			{
+				sum += boneWeights[x];
+			}
+			boneWeights /= sum;
 			Vertex& vertex = m.vertices.back();
 			vertex.position = position;
 			vertex.normal = normal;
@@ -663,6 +669,11 @@ void Model::UpdateBoundingBox(glm::vec3 vertex)
 	boundingBox[1].z = std::max(boundingBox[1].z, vertex.z);
 }
 
+std::string Model::GetBoneName(unsigned int boneID)
+{
+	return animationSystem->GetBoneName(boneID);
+}
+
 glm::vec3 Model::GetModelScale()
 {
 	return boundingBox[1] - boundingBox[0];
@@ -683,7 +694,7 @@ unsigned int Model::GetSelectedAnimationIndex()
 	return animationSystem->GetSelectedAnimationIndex();
 }
 
-void Model::SetAnimationIndex(int i)
+void Model::SetAnimationIndex(unsigned int i)
 {
 	if (const unsigned int animationCount = animationSystem->GetAnimationCount();
 		i >= animationCount)

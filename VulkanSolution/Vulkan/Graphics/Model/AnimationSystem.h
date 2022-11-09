@@ -39,6 +39,7 @@ public:
 	void GetToModelFromBone(std::vector<glm::mat4>& data);
 	size_t GetBoneCount();
 	int GetBoneIDByName(const std::string& name);
+	std::string GetBoneName(unsigned int boneID);
 
 	// Gate function for cluster data (Gate function indicates precede function to get another data)
 	void GetDeformerData(FbxMesh* mesh);

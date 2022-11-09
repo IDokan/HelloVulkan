@@ -205,6 +205,12 @@
     <CustomBuild Include="Graphics\Shaders\waxShader.vert">
       <Filter>Graphics\Shaders</Filter>
     </CustomBuild>
+    <CustomBuild Include="Graphics\Shaders\blendingWeight.frag">
+      <Filter>Graphics\Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Graphics\Shaders\blendingWeight.vert">
+      <Filter>Graphics\Shaders</Filter>
+    </CustomBuild>
   </ItemGroup>
   <ItemGroup>
     <None Include="ImGUI\.editorconfig">

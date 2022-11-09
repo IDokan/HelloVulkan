@@ -22,10 +22,13 @@ namespace MyImGUI
 		VkCommandBuffer commandBuffer);
 
     void SendModelInfo(Model* model);
-    void SendSkeletonInfo(bool* showSkeletonFlag);
+    void SendSkeletonInfo(bool* showSkeletonFlag, bool* blendingWeightMode, int* selectedBone);
     void SendAnimationInfo(float* worldTimer, bool* bindPoseFlag);
 
     void UpdateAnimationNameList();
+    void UpdateBoneNameList();
+
+    bool IsMouseOnImGUIWindow();
 
     // Should be called before destruction of Vulkan
     void DestroyGUIResources();

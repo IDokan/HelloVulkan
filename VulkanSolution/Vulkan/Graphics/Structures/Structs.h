@@ -144,6 +144,11 @@ struct UniformBufferObject {
 	glm::mat4 proj;
 };
 
+struct PushConstants
+{
+	int selectedBone = 0;
+};
+
 struct Mesh
 {
 	Mesh();
@@ -184,6 +189,7 @@ public:
 	const Bone& GetBoneByBoneID(int boneID);
 	const Bone& GetBoneByName(const std::string& name);
 	Bone& GetBoneReferenceByName(const std::string& name);
+	std::string GetBoneNameByID(unsigned int boneID);
 	size_t GetSkeletonSize();
 	void Clear();
 

@@ -30,13 +30,15 @@ Creation Date: 06.12.2021
 #include "Engines/Input/Input.h"
 
 MyVulkan::MyVulkan(Window* window)
-	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), animationUniformBufferSize(0), bindPoseFlag(false), showSkeletonFlag(true)
+	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), animationUniformBufferSize(0), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false)
 {
 }
 
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
-	model = new Model("../Vulkan/Graphics/Model/models/stanford-bunny.fbx");
+	// @@TODO: for multiple mesh data, animation messed up. Normalize the bone weights is not the solution.
+	// Animation has a strange bug. Fix it!! TODODOTODOTOSDTOTOOTDOTODOTODTODODTOTODODOs
+	model = new Model("../Vulkan/Graphics/Model/models/Sitting Laughing.fbx");
 	model->SetAnimationIndex(0);
 
 	if (CreateInstance(appName, appVersion) == false)
@@ -61,6 +63,7 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	{
 		return false;
 	}
+	CreateEmergencyTexture();
 	CreateTextures(model->GetDiffuseImagePaths());
 	CreateTextureSampler();
 	CreateImageViews();
@@ -68,6 +71,7 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	CreateBuffers();
 	CreateDescriptorSet();
 	CreateWaxDescriptorSet();
+	CreateBlendingWeightDescriptorSet();
 	CreateDepthResources();
 
 
@@ -79,6 +83,11 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 	VkShaderModule waxFragModule = CreateShaderModule(readFile("spv/waxShader.frag.spv"));
 	CreateGraphicsPipeline(waxVertModule, waxFragModule, waxDescriptorSet->GetDescriptorSetLayoutPtr(), waxPipeline, waxPipelineLayout);
 
+	VkShaderModule blendingWeightVertModule = CreateShaderModule(readFile("spv/blendingWeight.vert.spv"));
+	VkShaderModule blendingWeightFragModule = CreateShaderModule(readFile("spv/blendingWeight.frag.spv"));
+	CreateGraphicsPipeline(blendingWeightVertModule, blendingWeightFragModule, sizeof(struct PushConstants), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptorSet->GetDescriptorSetLayoutPtr(), blendingWeightPipeline, blendingWeightPipelineLayout);
+
+	// it is using blendingWeightDescriptorSet
 	CreateLinePipeline();
 
 	CreateFramebuffers();
@@ -111,9 +120,11 @@ void MyVulkan::CleanVulkan()
 
 	DestroyTextureSampler();
 	DestroyTextureImage();
+	DestroyEmergencyTexture();
 
 	DestroyDescriptorSet();
 	DestroyWaxDescriptorSet();
+	DestroyBlendingWeightDescriptorSet();
 
 	DestroyBuffersAndFreeMemories();
 
@@ -361,6 +372,7 @@ void MyVulkan::LoadNewModel()
 	const int oldMeshSize = meshSize;
 
 	MyImGUI::UpdateAnimationNameList();
+	MyImGUI::UpdateBoneNameList();
 
 	CreateSkeletonBuffer();
 	CreateAnimationUniformBuffers();
@@ -374,11 +386,14 @@ void MyVulkan::LoadNewModel()
 		if (meshSize > oldMeshSize)
 		{
 			DestroyWaxDescriptorSet();
+			DestroyBlendingWeightDescriptorSet();
 			CreateWaxDescriptorSet();
+			CreateBlendingWeightDescriptorSet();
 		}
 		else
 		{
 			WriteWaxDescriptorSet();
+			WriteBlendingWeightDescriptorSet();
 		}
 
 		return;
@@ -390,11 +405,14 @@ void MyVulkan::LoadNewModel()
 	if (meshSize > oldMeshSize || textureImageViews.size() > oldTextureViewSize)
 	{
 		DestroyDescriptorSet();
+		DestroyBlendingWeightDescriptorSet();
 		CreateDescriptorSet();
+		CreateBlendingWeightDescriptorSet();
 	}
 	else
 	{
 		WriteDescriptorSet();
+		WriteBlendingWeightDescriptorSet();
 	}
 
 }
@@ -404,9 +422,10 @@ void MyVulkan::InitGUI()
 	MyImGUI::InitImGUI(windowHolder->glfwWindow, device, instance, physicalDevice, queue, renderPass, commandBuffers.front());
 
 	MyImGUI::SendModelInfo(model);
-	MyImGUI::SendSkeletonInfo(&showSkeletonFlag);
+	MyImGUI::SendSkeletonInfo(&showSkeletonFlag, &blendingWeightMode, &selectedBone.selectedBone);
 	MyImGUI::SendAnimationInfo(&timer, &bindPoseFlag);
 	MyImGUI::UpdateAnimationNameList();
+	MyImGUI::UpdateBoneNameList();
 }
 
 void MyVulkan::UpdateTimer(float dt)
@@ -1014,6 +1033,143 @@ void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule 
 	vkDestroyShaderModule(device, fragModule, nullptr);
 }
 
+void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, uint32_t pushConstantSize, VkShaderStageFlags pushConstantTargetStage, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout)
+{
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+	vertShaderStageInfo.module = vertModule;
+	vertShaderStageInfo.pName = "main";
+
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
+	fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	fragShaderStageInfo.module = fragModule;
+	fragShaderStageInfo.pName = "main";
+
+	VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+
+	std::vector<VkDynamicState> dynamicStates = {
+		VK_DYNAMIC_STATE_VIEWPORT,
+		VK_DYNAMIC_STATE_SCISSOR,
+	};
+	VkPipelineDynamicStateCreateInfo dynamicStateCreateInfo{};
+	dynamicStateCreateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicStateCreateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+	dynamicStateCreateInfo.pDynamicStates = dynamicStates.data();
+
+	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
+	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+	const VkVertexInputBindingDescription& bindingDescription = Vertex::GetBindingDescription();
+	const std::vector<VkVertexInputAttributeDescription>& attributeDescription = Vertex::GetAttributeDescriptions();
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescription.size());
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescription.data();
+
+	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
+	inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+	inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
+
+	VkPipelineViewportStateCreateInfo viewportState{};
+	viewportState.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportState.viewportCount = 1;
+	viewportState.scissorCount = 1;
+
+	VkPipelineRasterizationStateCreateInfo rasterizer{};
+	rasterizer.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+	rasterizer.depthClampEnable = VK_FALSE;
+	rasterizer.rasterizerDiscardEnable = VK_FALSE;
+	rasterizer.polygonMode = VK_POLYGON_MODE_FILL;
+	rasterizer.lineWidth = 1.f;
+	rasterizer.cullMode = VK_CULL_MODE_BACK_BIT;
+	rasterizer.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+	rasterizer.depthBiasEnable = VK_FALSE;
+	rasterizer.depthBiasConstantFactor = 0.0f;
+	rasterizer.depthBiasClamp = 0.0f;
+	rasterizer.depthBiasSlopeFactor = 0.0f;
+
+	VkPipelineMultisampleStateCreateInfo multisampling{};
+	multisampling.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+	multisampling.sampleShadingEnable = VK_FALSE;
+	multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisampling.minSampleShading = 1.f;
+	multisampling.pSampleMask = nullptr;
+	multisampling.alphaToCoverageEnable = VK_FALSE;
+	multisampling.alphaToOneEnable = VK_FALSE;
+
+	VkPipelineDepthStencilStateCreateInfo depthStencil{};
+	depthStencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+	depthStencil.depthTestEnable = VK_TRUE;
+	depthStencil.depthWriteEnable = VK_TRUE;
+	depthStencil.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+	depthStencil.depthBoundsTestEnable = VK_FALSE;
+	depthStencil.minDepthBounds = 0.f;
+	depthStencil.maxDepthBounds = 1.f;
+	depthStencil.stencilTestEnable = VK_FALSE;
+
+	VkPipelineColorBlendAttachmentState colorBlendAttachment{};
+	colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+	colorBlendAttachment.blendEnable = VK_TRUE;
+	colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+	colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+	colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+	colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+	colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+	colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+	VkPipelineColorBlendStateCreateInfo colorBlending{};
+	colorBlending.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+	colorBlending.logicOpEnable = VK_FALSE;
+	colorBlending.logicOp = VK_LOGIC_OP_COPY;
+	colorBlending.attachmentCount = 1;
+	colorBlending.pAttachments = &colorBlendAttachment;
+	colorBlending.blendConstants[0] = 0.0f;
+	colorBlending.blendConstants[1] = 0.0f;
+	colorBlending.blendConstants[2] = 0.0f;
+	colorBlending.blendConstants[3] = 0.0f;
+
+	VkPushConstantRange pushConstantRange{};
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = pushConstantSize;
+	pushConstantRange.stageFlags = pushConstantTargetStage;
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 1;
+	pipelineLayoutInfo.pSetLayouts = descriptorSetLayoutPtr;
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
+
+	VulkanHelper::VkCheck(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &pipelineLayout), "Creating pipelineLayout has failed!");
+
+	VkGraphicsPipelineCreateInfo pipelineInfo{};
+	pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+	pipelineInfo.stageCount = 2;
+	pipelineInfo.pStages = shaderStages;
+	pipelineInfo.pVertexInputState = &vertexInputInfo;
+	pipelineInfo.pInputAssemblyState = &inputAssemblyInfo;
+	pipelineInfo.pViewportState = &viewportState;
+	pipelineInfo.pRasterizationState = &rasterizer;
+	pipelineInfo.pMultisampleState = &multisampling;
+	pipelineInfo.pDepthStencilState = &depthStencil;
+	pipelineInfo.pColorBlendState = &colorBlending;
+	pipelineInfo.pDynamicState = &dynamicStateCreateInfo;
+	pipelineInfo.layout = pipelineLayout;
+	pipelineInfo.renderPass = renderPass;
+	pipelineInfo.subpass = 0;
+	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+	pipelineInfo.basePipelineIndex = -1;
+
+	VulkanHelper::VkCheck(vkCreateGraphicsPipelines(device, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &pipeline), "Creating graphics pipeline has failed!");
+
+
+
+	vkDestroyShaderModule(device, vertModule, nullptr);
+	vkDestroyShaderModule(device, fragModule, nullptr);
+}
+
 std::vector<char> MyVulkan::readFile(const std::string& filename)
 {
 	// ate -> read from at the end.
@@ -1056,6 +1212,9 @@ void MyVulkan::DestroyPipeline()
 
 	vkDestroyPipeline(device, waxPipeline, nullptr);
 	vkDestroyPipelineLayout(device, waxPipelineLayout, nullptr);
+
+	vkDestroyPipeline(device, blendingWeightPipeline, nullptr);
+	vkDestroyPipelineLayout(device, blendingWeightPipelineLayout, nullptr);
 
 	vkDestroyPipeline(device, linePipeline, nullptr);
 	vkDestroyPipelineLayout(device, linePipelineLayout, nullptr);
@@ -1181,25 +1340,36 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 	scissor.extent = swapchainExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
-	if (textureImageViews.size() <= 0)
-	{
-		RecordDrawMeshCall(commandBuffer, waxPipeline, waxPipelineLayout, waxDescriptorSet);
-	}
-	else
-	{
-		RecordDrawMeshCall(commandBuffer, pipeline, pipelineLayout, descriptorSet);
-	}
 
-	if (boneSize > 0 && showSkeletonFlag)
-	{
-		RecordDrawSkeletonCall(commandBuffer);
-	}
+	RecordDrawModelCalls(commandBuffer);
+
+	RecordDrawSkeletonCall(commandBuffer);
 
 	MyImGUI::GUIRender(commandBuffer);
 
 	vkCmdEndRenderPass(commandBuffer);
 
 	VulkanHelper::VkCheck(vkEndCommandBuffer(commandBuffer), "Ending command buffer has failed!");
+}
+
+void MyVulkan::RecordDrawModelCalls(VkCommandBuffer commandBuffer)
+{
+	if (blendingWeightMode == true)
+	{
+		RecordPushConstants(commandBuffer, blendingWeightPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &selectedBone);
+		RecordDrawMeshCall(commandBuffer, blendingWeightPipeline, blendingWeightPipelineLayout, blendingWeightDescriptorSet);
+	}
+	else
+	{
+		if (textureImageViews.size() <= 0)
+		{
+			RecordDrawMeshCall(commandBuffer, waxPipeline, waxPipelineLayout, waxDescriptorSet);
+		}
+		else
+		{
+			RecordDrawMeshCall(commandBuffer, pipeline, pipelineLayout, descriptorSet);
+		}
+	}
 }
 
 void MyVulkan::RecordClientData()
@@ -1387,12 +1557,11 @@ void MyVulkan::CleanupSwapchainResourcesForRecreation()
 	DestroySwapchain();
 }
 
-void MyVulkan::CreateVertexBuffer(int vertexCount, void* vertexData, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
+void MyVulkan::CreateVertexBuffer(VkDeviceSize bufferSize, void* vertexData, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
 {
 	// Use two buffers.
 	// One for writing vertex data, the other is actual vertex buffer which we cannot see and use(map) at CPU.
 	// The reason why use two buffers is the buffer we can see at CPU is not a good buffer from the GPU side.
-	VkDeviceSize bufferSize = sizeof(Vertex) * vertexCount;
 
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
@@ -1433,7 +1602,7 @@ void MyVulkan::CreateModelBuffers()
 
 	for (int i = 0; i < meshSize; i++)
 	{
-		CreateVertexBuffer(model->GetVertexCount(i), model->GetVertexData(i), vertexBuffers[i], vertexBufferMemories[i]);
+		CreateVertexBuffer(sizeof(Vertex) * model->GetVertexCount(i), model->GetVertexData(i), vertexBuffers[i], vertexBufferMemories[i]);
 		CreateIndexBuffer(model->GetIndexCount(i), model->GetIndexData(i), i);
 	}
 }
@@ -1584,63 +1753,68 @@ void MyVulkan::InitUniformBufferData()
 
 void MyVulkan::UpdateUniformBuffer(uint32_t currentImage)
 {
-	const bool isMousePressed = input.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_1);
-	const bool isLeftAltPressed = input.IsKeyPressed(GLFW_KEY_LEFT_ALT);
-	glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
-	glm::vec2 mouseDelta = input.GetMousePosition() - input.GetPresentMousePosition();
-
-	if (isMousePressed && isLeftAltPressed)
+	// Update camera if and only if the user does not control ImGui window.
+	if (MyImGUI::IsMouseOnImGUIWindow() == false)
 	{
-		static constexpr glm::vec3 globalUp = glm::vec3(0.f, 0.f, 1.f);
 
-
-		glm::vec3 newX = glm::normalize(glm::cross(globalUp, view));
-		glm::vec3 newY = glm::cross(newX, view);
-
-		const glm::vec3 delta = (newX * mouseDelta.x + newY * mouseDelta.y) * 0.01f;
-		targetPoint += delta;
-		cameraPoint += delta;
-
+		const bool isMousePressed = input.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_1);
+		const bool isLeftAltPressed = input.IsKeyPressed(GLFW_KEY_LEFT_ALT);
 		glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
-	}
-	else if (input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_MIDDLE))
-	{
-		targetPoint = glm::vec3(0.f, 0.f, 0.f);
-		cameraPoint = glm::vec3(0.f, 2.f, 2.f);
-	}
+		glm::vec2 mouseDelta = input.GetMousePosition() - input.GetPresentMousePosition();
 
-
-	if (isMousePressed && !isLeftAltPressed)
-	{
-
-		uniformData.model = glm::rotate(glm::mat4(1.f), mouseDelta.x * glm::radians(1.f), glm::vec3(0.0f, view.z, -view.y)) *
-			glm::rotate(glm::mat4(1.f), mouseDelta.y * glm::radians(1.f), glm::vec3(-view.y, view.x, 0.0f)) *
-			uniformData.model;
-	}
-
-	if (input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_2))
-	{
-		rightMouseCenter = glm::vec3(input.GetMousePosition(), 0);
-	}
-	else if (input.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_2))
-	{
-		glm::vec3 mousePosition = glm::vec3(input.GetMousePosition(), 0) - rightMouseCenter;
-		glm::vec3 previousPosition = glm::vec3(input.GetPresentMousePosition(), 0) - rightMouseCenter;
-
-		glm::vec3 cross = glm::cross(mousePosition, previousPosition);
-		float result = 0;
-		if (abs(cross.z) >= std::numeric_limits<float>().epsilon())
+		if (isMousePressed && isLeftAltPressed)
 		{
-			result = (cross.z / abs(cross.z)) * glm::length(mouseDelta) * 0.45f;
+			static constexpr glm::vec3 globalUp = glm::vec3(0.f, 0.f, 1.f);
+
+
+			glm::vec3 newX = glm::normalize(glm::cross(globalUp, view));
+			glm::vec3 newY = glm::cross(newX, view);
+
+			const glm::vec3 delta = (newX * mouseDelta.x + newY * mouseDelta.y) * 0.01f;
+			targetPoint += delta;
+			cameraPoint += delta;
+
+			glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
+		}
+		else if (input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_MIDDLE))
+		{
+			targetPoint = glm::vec3(0.f, 0.f, 0.f);
+			cameraPoint = glm::vec3(0.f, 2.f, 2.f);
 		}
 
-		uniformData.model = glm::rotate(glm::mat4(1.f), result * glm::radians(1.f), view) *
-			uniformData.model;
+
+		if (isMousePressed && !isLeftAltPressed)
+		{
+
+			uniformData.model = glm::rotate(glm::mat4(1.f), mouseDelta.x * glm::radians(1.f), glm::vec3(0.0f, view.z, -view.y)) *
+				glm::rotate(glm::mat4(1.f), mouseDelta.y * glm::radians(1.f), glm::vec3(-view.y, view.x, 0.0f)) *
+				uniformData.model;
+		}
+
+		if (input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_2))
+		{
+			rightMouseCenter = glm::vec3(input.GetMousePosition(), 0);
+		}
+		else if (input.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_2))
+		{
+			glm::vec3 mousePosition = glm::vec3(input.GetMousePosition(), 0) - rightMouseCenter;
+			glm::vec3 previousPosition = glm::vec3(input.GetPresentMousePosition(), 0) - rightMouseCenter;
+
+			glm::vec3 cross = glm::cross(mousePosition, previousPosition);
+			float result = 0;
+			if (abs(cross.z) >= std::numeric_limits<float>().epsilon())
+			{
+				result = (cross.z / abs(cross.z)) * glm::length(mouseDelta) * 0.45f;
+			}
+
+			uniformData.model = glm::rotate(glm::mat4(1.f), result * glm::radians(1.f), view) *
+				uniformData.model;
+		}
+
+
+		cameraPoint = cameraPoint + (static_cast<float>(input.MouseWheelScroll()) * (targetPoint - cameraPoint) * 0.1f);
+		uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 0.f, 1.f));
 	}
-
-
-	cameraPoint = cameraPoint + (static_cast<float>(input.MouseWheelScroll()) * (targetPoint - cameraPoint) * 0.1f);
-	uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 0.f, 1.f));
 
 	void* data;
 	vkMapMemory(device, uniformBuffersMemory[currentFrameID], 0, sizeof(UniformBufferObject), 0, &data);
@@ -1652,8 +1826,8 @@ void MyVulkan::CreateDescriptorSet()
 {
 	descriptorSet = new DescriptorSet(device, MAX_FRAMES_IN_FLIGHT * meshSize, {
 		{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-		{1, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr} ,
-		{2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
+		{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+		{2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
 		});
 
 	WriteDescriptorSet();
@@ -1666,15 +1840,15 @@ void MyVulkan::WriteDescriptorSet()
 		for (int j = 0; j < MAX_FRAMES_IN_FLIGHT; j++)
 		{
 			descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 0, uniformBuffers[j], sizeof(UniformBufferObject));
+			descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 1, animationUniformBuffers[j], animationUniformBufferSize);
 			if (i < textureImageViews.size())
 			{
-				descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 1, textureImageViews[i], textureSampler);
+				descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 2, textureImageViews[i], textureSampler);
 			}
 			else
 			{
-				descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 1, 0, textureSampler);
+				descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 2, emergencyTextureImageView, textureSampler);
 			}
-			descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 2, animationUniformBuffers[j], animationUniformBufferSize);
 		}
 	}
 }
@@ -1990,7 +2164,7 @@ void MyVulkan::CreateLinePipeline()
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
-	pipelineLayoutInfo.pSetLayouts = descriptorSet->GetDescriptorSetLayoutPtr();
+	pipelineLayoutInfo.pSetLayouts = blendingWeightDescriptorSet->GetDescriptorSetLayoutPtr();
 	pipelineLayoutInfo.pushConstantRangeCount = 0;
 	pipelineLayoutInfo.pPushConstantRanges = nullptr;
 
@@ -2036,13 +2210,23 @@ void MyVulkan::CreateSkeletonBuffer()
 		return;
 	}
 
-	CreateVertexBuffer(2 * boneSize, model->GetBoneDataForDrawing(), skeletonLineBuffer, skeletonLineBufferMemory);
+	CreateVertexBuffer(sizeof(LineVertex) * (2 * boneSize), model->GetBoneDataForDrawing(), skeletonLineBuffer, skeletonLineBufferMemory);
 }
 
 void MyVulkan::DestroySkeletonBuffer()
 {
 	DestroyBuffer(skeletonLineBuffer);
 	FreeMemory(skeletonLineBufferMemory);
+}
+
+void MyVulkan::CreateBlendingWeightDescriptorSet()
+{
+	blendingWeightDescriptorSet = new DescriptorSet(device, MAX_FRAMES_IN_FLIGHT * meshSize, {
+		{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+		{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
+		});
+
+	WriteBlendingWeightDescriptorSet();
 }
 
 void MyVulkan::UpdateAnimationUniformBuffer()
@@ -2062,6 +2246,23 @@ void MyVulkan::UpdateAnimationUniformBuffer()
 	vkMapMemory(device, animationUniformBufferMemories[currentFrameID], 0, animationUniformBufferSize, 0, &data);
 	memcpy(data, animationBufferData.data(), animationUniformBufferSize);
 	vkUnmapMemory(device, animationUniformBufferMemories[currentFrameID]);
+}
+
+void MyVulkan::WriteBlendingWeightDescriptorSet()
+{
+	for (int i = 0; i < meshSize; i++)
+	{
+		for (int j = 0; j < MAX_FRAMES_IN_FLIGHT; j++)
+		{
+			blendingWeightDescriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 0, uniformBuffers[j], sizeof(UniformBufferObject));
+			blendingWeightDescriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 1, animationUniformBuffers[j], animationUniformBufferSize);
+		}
+	}
+}
+
+void MyVulkan::DestroyBlendingWeightDescriptorSet()
+{
+	delete blendingWeightDescriptorSet;
 }
 
 void MyVulkan::CreateAnimationUniformBuffers()
@@ -2089,6 +2290,16 @@ void MyVulkan::DestroyAnimationUniformBuffers()
 		DestroyBuffer(animationUniformBuffers[i]);
 		FreeMemory(animationUniformBufferMemories[i]);
 	}
+}
+
+void MyVulkan::RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayout layout, VkShaderStageFlagBits targetStage, PushConstants* data)
+{
+	// Push constants at only blending weight mode is enabled.
+	if (blendingWeightMode == false)
+	{
+		return;
+	}
+	vkCmdPushConstants(commandBuffer, layout, targetStage, 0, sizeof(PushConstants), data);
 }
 
 VkValidationFeaturesEXT MyVulkan::EnableBestPracticesValidation()
@@ -2190,13 +2401,17 @@ void MyVulkan::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
 
 void MyVulkan::RecordDrawSkeletonCall(VkCommandBuffer commandBuffer)
 {
+	if (boneSize <= 0 || showSkeletonFlag == false)
+	{
+		return;
+	}
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipeline);
 
 	VkBuffer VB[] = { skeletonLineBuffer };
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipelineLayout, 0, 1, descriptorSet->GetDescriptorSetPtr(currentFrameID), 0, nullptr);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipelineLayout, 0, 1, blendingWeightDescriptorSet->GetDescriptorSetPtr(currentFrameID), 0, nullptr);
 
 	vkCmdDraw(commandBuffer, boneSize * 2, 1, 0, 0);
 }
@@ -2276,6 +2491,47 @@ void MyVulkan::CreateTextureImageAndImageView(const std::string& path)
 	textureImages.push_back(textureImage);
 	textureImageMemories.push_back(textureImageMemory);
 	textureImageViews.push_back(textureImageView);
+}
+void MyVulkan::CreateEmergencyTexture()
+{
+
+	int texWidth, texHeight, texChannels;
+
+	stbi_set_flip_vertically_on_load(true);
+	stbi_uc* pixels = stbi_load("../Vulkan/Graphics/Model/EssentialImages/transparent.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+	constexpr int RGBA = 4;
+	VkDeviceSize imageSize = texWidth * texHeight * RGBA;
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+
+	CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+	void* data;
+	vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+	memcpy(data, pixels, static_cast<size_t>(imageSize));
+	vkUnmapMemory(device, stagingBufferMemory);
+
+	stbi_image_free(pixels);
+
+	CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, emergencyTextureImage, emergencyTextureImageMemory);
+
+	TransitionImageLayout(emergencyTextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+	CopyBufferToImage(stagingBuffer, emergencyTextureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
+
+	TransitionImageLayout(emergencyTextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+	vkDestroyBuffer(device, stagingBuffer, nullptr);
+	vkFreeMemory(device, stagingBufferMemory, nullptr);
+	// Finished creating texture image (create staging buffer, copy image data, copy buffer data to image buffer, clean staging buffer)
+
+	// Create Image View
+	emergencyTextureImageView = CreateImageView(emergencyTextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
+}
+void MyVulkan::DestroyEmergencyTexture()
+{
+	vkDestroyImageView(device, emergencyTextureImageView, nullptr);
+	vkDestroyImage(device, emergencyTextureImage, nullptr);
+	vkFreeMemory(device, emergencyTextureImageMemory, nullptr);
 }
 void MyVulkan::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)
 {

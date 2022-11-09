@@ -36,6 +36,7 @@ public:
 	
 	bool IsModelValid();
 
+	std::string GetBoneName(unsigned int boneID);
 	size_t GetBoneCount();
 	void* GetBoneDataForDrawing();
 	void GetToBoneFromUnit(std::vector<glm::mat4>& data);
@@ -44,7 +45,7 @@ public:
 	// @@ Getter&Setter of animation system
 	unsigned int GetAnimationCount();
 	unsigned int GetSelectedAnimationIndex();
-	void SetAnimationIndex(int i);
+	void SetAnimationIndex(unsigned int i);
 	void GetAnimationData(float t, std::vector<glm::mat4>& data, bool bindPoseFlag = false);
 	std::string GetAnimationName();
 	float GetAnimationDuration();
@@ -108,6 +109,8 @@ private:
 	int numTabs = 0;
 
 	std::vector<Mesh> meshes;
+
+	// it would be std::vector<LineVertex> bones;
 	std::vector<glm::vec3> bones;
 	AnimationSystem* animationSystem;
 	

@@ -146,7 +146,7 @@ void AnimationSystem::GetAnimationData(float t, std::vector<glm::mat4>& data)
 	// Multiply toModelFromBone matrix at here.
 	for (size_t i = 0; i < trackSize; i++)
 	{
-		data[i] = data[i] * skeleton.GetBoneByBoneID(static_cast<size_t>(i)).toModelFromBone;
+		data[i] = data[i] * skeleton.GetBoneByBoneID(static_cast<int>(i)).toModelFromBone;
 	}
 }
 
@@ -168,6 +168,11 @@ size_t AnimationSystem::GetBoneCount()
 int AnimationSystem::GetBoneIDByName(const std::string& name)
 {
 	return skeleton.GetBoneIDByName(name);
+}
+
+std::string AnimationSystem::GetBoneName(unsigned int boneID)
+{
+	return skeleton.GetBoneNameByID(boneID);
 }
 
 void AnimationSystem::GetDeformerData(FbxMesh* mesh)

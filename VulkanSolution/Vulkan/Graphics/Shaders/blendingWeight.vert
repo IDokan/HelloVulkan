@@ -25,9 +25,26 @@ layout(binding = 1) uniform AnimationBufferObject
 	AnimationData item[99];
 } data;
 
-layout(location = 0) out vec3 normal;
-layout(location = 1) out vec3 viewVector;
-layout(location = 2) out vec2 fragTexCoord;
+layout(push_constant) uniform constants
+{
+	int selectedBone;
+} PushConstants;
+
+layout(location = 0) out vec3 blendingColor;
+
+vec3 GetBlendingColor(float weight)
+{
+	if(weight <= 0.5f)
+	{
+		weight *= 2.f;
+		return (1.0f - weight) * vec3(0.f, 0.f, 1.f) + (weight)*vec3(0.f, 1.f, 0.f);
+	}
+	else
+	{
+		weight = (weight - 0.5f) * 2.f;
+		return (1.0f - weight) * vec3(0.f, 1.f, 0.f) + (weight)*vec3(1.f, 0.f, 0.f);
+	}
+}
 
 void main()
 {
@@ -36,11 +53,16 @@ void main()
 	animationTransform += data.item[boneIDs[2]].model * boneWeights[2];
 	animationTransform += data.item[boneIDs[3]].model * boneWeights[3];
 
+	float weight = 0.f;
+	for(int i = 0; i < 4; i++)
+	{
+		if(boneIDs[i] == PushConstants.selectedBone)
+		{
+			weight += boneWeights[i];
+		}
+	}
+	blendingColor = GetBlendingColor(weight);
+	
+
 	gl_Position = ubo.proj * ubo.view * ubo.model * animationTransform * vec4(inPosition, 1.0);
-	normal = normalize(vec3(transpose(inverse(ubo.model)) * animationTransform * vec4(inNormal, 0.f)));
-	fragTexCoord = inTexCoord;
-
-	vec3 fragPos = vec3(ubo.model * animationTransform * vec4(inPosition, 1.f));
-
-	viewVector = normalize(vec3(2, 2, 2) - fragPos);
 }

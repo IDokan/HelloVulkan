@@ -2,7 +2,9 @@
 
 layout(location = 0) out vec4 outColor;
 
+layout(location = 0) in vec4 color;
+
 void main()
 {
-	outColor = vec4(1.f, 1.f, 1.f, 1.f);
+	outColor = color;
 }

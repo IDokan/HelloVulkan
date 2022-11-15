@@ -2161,12 +2161,17 @@ void MyVulkan::CreateLinePipeline()
 	colorBlending.blendConstants[2] = 0.0f;
 	colorBlending.blendConstants[3] = 0.0f;
 
+	VkPushConstantRange pushConstantRange{};
+	pushConstantRange.offset = 0;
+	pushConstantRange.size = sizeof(struct PushConstants);
+	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
+
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
 	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
 	pipelineLayoutInfo.setLayoutCount = 1;
 	pipelineLayoutInfo.pSetLayouts = blendingWeightDescriptorSet->GetDescriptorSetLayoutPtr();
-	pipelineLayoutInfo.pushConstantRangeCount = 0;
-	pipelineLayoutInfo.pPushConstantRanges = nullptr;
+	pipelineLayoutInfo.pushConstantRangeCount = 1;
+	pipelineLayoutInfo.pPushConstantRanges = &pushConstantRange;
 
 	VulkanHelper::VkCheck(vkCreatePipelineLayout(device, &pipelineLayoutInfo, nullptr, &linePipelineLayout), "Creating pipelineLayout has failed!");
 
@@ -2294,11 +2299,6 @@ void MyVulkan::DestroyAnimationUniformBuffers()
 
 void MyVulkan::RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayout layout, VkShaderStageFlagBits targetStage, PushConstants* data)
 {
-	// Push constants at only blending weight mode is enabled.
-	if (blendingWeightMode == false)
-	{
-		return;
-	}
 	vkCmdPushConstants(commandBuffer, layout, targetStage, 0, sizeof(PushConstants), data);
 }
 
@@ -2404,6 +2404,16 @@ void MyVulkan::RecordDrawSkeletonCall(VkCommandBuffer commandBuffer)
 	if (boneSize <= 0 || showSkeletonFlag == false)
 	{
 		return;
+	}
+
+	if (blendingWeightMode == true)
+	{
+		RecordPushConstants(commandBuffer, linePipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &selectedBone);
+	}
+	else
+	{
+		PushConstants noData{ -1 };
+		RecordPushConstants(commandBuffer, linePipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &noData);
 	}
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipeline);

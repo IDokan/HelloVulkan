@@ -188,7 +188,9 @@ void AnimationSystem::GetDeformerData(FbxMesh* mesh)
 		// Set default data to -1 to this temporary container and pass only appropriate data to the real vertex data.
 			// Why we should use temporary, set -1 to vertex data and pass them GPU might cause out of bound error.
 	const uint32_t verticesCount = mesh->GetControlPointsCount();
+	boneVertexID.clear();
 	boneVertexID.resize(verticesCount, glm::ivec4(-1));
+	boneVertexWeights.clear();
 	boneVertexWeights.resize(verticesCount, glm::vec4(0.f));
 
 	for (int i = 0; i < deformerCount; i++)

@@ -32,7 +32,7 @@ void main()
 	int id = (gl_VertexIndex + gl_InstanceIndex) / 2;
 	if(PushConstants.selectedBone == id)
 	{
-		color = vec4(1.f, 0.f, 1.f, 1.f);
+		color = vec4(0.f, 1.f, 0.f, 1.f);
 	}
 	else
 	{

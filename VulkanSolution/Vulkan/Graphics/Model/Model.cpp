@@ -674,6 +674,11 @@ std::string Model::GetBoneName(unsigned int boneID)
 	return animationSystem->GetBoneName(boneID);
 }
 
+const Bone& Model::GetBone(unsigned int boneID)
+{
+	return animationSystem->GetBone(boneID);
+}
+
 glm::vec3 Model::GetModelScale()
 {
 	return boundingBox[1] - boundingBox[0];

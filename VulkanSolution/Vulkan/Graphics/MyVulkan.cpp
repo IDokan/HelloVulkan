@@ -36,8 +36,6 @@ MyVulkan::MyVulkan(Window* window)
 
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
-	// @@TODO: for multiple mesh data, animation messed up. Normalize the bone weights is not the solution.
-	// Animation has a strange bug. Fix it!! TODODOTODOTOSDTOTOOTDOTODOTODTODODTOTODODOs
 	model = new Model("../Vulkan/Graphics/Model/models/Sitting Laughing.fbx");
 	model->SetAnimationIndex(0);
 

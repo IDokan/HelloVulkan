@@ -38,6 +38,7 @@ public:
 	void GetToBoneFromUnit(std::vector<glm::mat4>& data);
 	void GetToModelFromBone(std::vector<glm::mat4>& data);
 	size_t GetBoneCount();
+	const Bone& GetBone(int boneID);
 	int GetBoneIDByName(const std::string& name);
 	std::string GetBoneName(unsigned int boneID);
 

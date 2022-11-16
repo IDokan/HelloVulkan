@@ -25,6 +25,7 @@ namespace MyImGUI
     namespace Helper
     {
         void ModelStats();
+        void BlendingWeightsSkeletonSelectionRecursively(int currentBoneIndex, int boneSize, ImGuiTreeNodeFlags baseFlags, bool nodeOpened = false);
         void Skeleton();
         void Animation();
     }
@@ -35,7 +36,10 @@ namespace
     Model* model;
     float* worldTimer;
     std::vector<std::string> animationNameList;
+    
     std::vector<std::string> boneNameList;
+    // pair<bone ID, parent ID>
+    std::vector<std::pair<int, int>> boneIdPid;
     bool* bindPoseFlag;
 
     bool* showSkeletonFlag;
@@ -163,7 +167,7 @@ void MyImGUI::DrawGUI()
 {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
-    //ImGui::ShowDemoWindow();
+    ImGui::ShowDemoWindow();
     
 
     ImGui::Begin("Controller");
@@ -200,6 +204,62 @@ void MyImGUI::Helper::ModelStats()
     }
 }
 
+void MyImGUI::Helper::BlendingWeightsSkeletonSelectionRecursively(int currentBoneIndex, int boneSize, ImGuiTreeNodeFlags baseFlags, bool nodeOpened)
+{
+    // Safe check
+    if (currentBoneIndex < 0 || currentBoneIndex >= boneSize)
+    {
+        return;
+    }
+
+    // Flag controls
+    ImGuiTreeNodeFlags nodeFlags = baseFlags;
+    if (*selectedBone == currentBoneIndex)
+    {
+        nodeFlags |= ImGuiTreeNodeFlags_Selected;
+    }
+    if (nodeOpened)
+    {
+        nodeFlags |= ImGuiTreeNodeFlags_DefaultOpen;
+    }
+
+    bool nodeOpen = ImGui::TreeNodeEx((void*)(intptr_t)currentBoneIndex, nodeFlags, boneNameList[currentBoneIndex].c_str());
+    if (ImGui::IsItemClicked())
+    {
+        *selectedBone = currentBoneIndex;
+    }
+
+    // Call children bones recursively if node selected
+    if (nodeOpen)
+    {
+        // Use temporary vector to automatically open a single child node.
+        std::vector<int> childBoneIndices;
+        for (int i = 0; i < boneSize; i++)
+        {
+            if (boneIdPid[i].second == currentBoneIndex)
+            {
+                childBoneIndices.push_back(boneIdPid[i].first);
+            }
+        }
+
+        size_t childCount = childBoneIndices.size();
+        // Automatically open when it has only one child.
+        if (childCount == 1)
+        {
+            BlendingWeightsSkeletonSelectionRecursively(childBoneIndices[0], boneSize, baseFlags, true);
+        }
+        // Call default recursive calls when it has children.
+        else
+        {
+            for (size_t i = 0; i < childBoneIndices.size(); i++)
+            {
+                BlendingWeightsSkeletonSelectionRecursively(childBoneIndices[i], boneSize, baseFlags);
+            }
+        }
+        ImGui::TreePop();
+    }
+}
+
 void MyImGUI::Helper::Skeleton()
 {
     if (ImGui::CollapsingHeader("Skeleton"))
@@ -207,20 +267,14 @@ void MyImGUI::Helper::Skeleton()
         ImGui::Checkbox("Show skeleton", showSkeletonFlag);
 
         ImGui::Separator();
-
         ImGui::Checkbox("Blending Weight Mode", blendingWeightMode);
         if (*blendingWeightMode)
         {
 
             ImGui::Indent();
             const unsigned int boneCount = static_cast<unsigned int>(model->GetBoneCount());
-            for (unsigned int n = 0; n < boneCount; n++)
-            {
-                if (ImGui::Selectable(boneNameList[n].c_str(), *selectedBone == n))
-                {
-                    *selectedBone = n;
-                }
-            }
+            static ImGuiTreeNodeFlags baseFlags = ImGuiTreeNodeFlags_None | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
+            BlendingWeightsSkeletonSelectionRecursively(0, boneCount, baseFlags);
             ImGui::Unindent();
         }
     }
@@ -273,11 +327,17 @@ void MyImGUI::UpdateAnimationNameList()
 void MyImGUI::UpdateBoneNameList()
 {
     const unsigned int boneCount = static_cast<unsigned int>(model->GetBoneCount());
+    boneNameList.clear();
     boneNameList.resize(boneCount);
+    boneIdPid.clear();
+    boneIdPid.resize(boneCount);
 
     for (unsigned int i = 0; i < boneCount; i++)
     {
-        boneNameList[i] = model->GetBoneName(i);
+        const Bone& bone = model->GetBone(i);
+        boneNameList[i] = bone.name;
+        boneIdPid[i].first = bone.id;
+        boneIdPid[i].second = bone.parentID;
     }
 }
 

@@ -36,6 +36,7 @@ public:
 	
 	bool IsModelValid();
 
+	const Bone& GetBone(unsigned int boneID);
 	std::string GetBoneName(unsigned int boneID);
 	size_t GetBoneCount();
 	void* GetBoneDataForDrawing();

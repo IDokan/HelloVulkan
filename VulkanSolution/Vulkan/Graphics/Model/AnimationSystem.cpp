@@ -165,6 +165,11 @@ size_t AnimationSystem::GetBoneCount()
 	return skeleton.GetSkeletonSize();
 }
 
+const Bone& AnimationSystem::GetBone(int boneID)
+{
+	return skeleton.GetBoneByBoneID(boneID);
+}
+
 int AnimationSystem::GetBoneIDByName(const std::string& name)
 {
 	return skeleton.GetBoneIDByName(name);

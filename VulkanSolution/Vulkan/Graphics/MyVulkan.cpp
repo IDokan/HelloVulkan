@@ -37,30 +37,37 @@ MyVulkan::MyVulkan(Window* window)
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
 	model = new Model("../Vulkan/Graphics/Model/models/Sitting Laughing.fbx");
+	std::cout << "model = new Model(.. / Vulkan / Graphics / Model / models / Sitting Laughing.fbx);" << std::endl;
 	model->SetAnimationIndex(0);
+	std::cout << "model->SetAnimationIndex(0); " << std::endl;
 
 	if (CreateInstance(appName, appVersion) == false)
 	{
 		return false;
 	}
+	std::cout << "CreateInstance(appName, appVersion); " << std::endl;
 	CreatePhysicalDevice();
 	ChooseQueueFamily();
 	if (CreateDevice() == false)
 	{
 		return false;
 	}
+	std::cout << "CreateDevice; " << std::endl;
 	if (CreateSurfaceByGLFW() == false)
 	{
 		return false;
 	}
+	std::cout << "CreateSurfaceByGLFW; " << std::endl;
 	if (CreateCommandPoolAndAllocateCommandBuffers() == false)
 	{
 		return false;
 	}
+	std::cout << "CreateCommandPoolAndAllocateCommandBuffers; " << std::endl;
 	if (CreateSwapchain() == false)
 	{
 		return false;
 	}
+	std::cout << "CreateSwapchain; " << std::endl;
 	CreateEmergencyTexture();
 	CreateTextures(model->GetDiffuseImagePaths());
 	CreateTextureSampler();

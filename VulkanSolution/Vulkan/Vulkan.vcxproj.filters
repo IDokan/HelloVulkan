@@ -88,6 +88,9 @@
     <ClCompile Include="Graphics\DescriptorSet.cpp">
       <Filter>Graphics</Filter>
     </ClCompile>
+    <ClCompile Include="ImGUI\imgui_tables.cpp">
+      <Filter>ImGUI</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GLMath.h">

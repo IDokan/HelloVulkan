@@ -9,6 +9,7 @@ Creation Date: 10.06.2022
     header file for dear ImGUI customization.
 ******************************************************************************/
 #include "ImGUI/myGUI.h"
+#include "ImGUI/imgui_internal.h"
 #include "Helper/VulkanHelper.h"
 #include "ImGUI/backends/imgui_impl_glfw.h"
 #include "ImGUI/imgui.h"
@@ -36,7 +37,7 @@ namespace
     Model* model;
     float* worldTimer;
     std::vector<std::string> animationNameList;
-    
+
     std::vector<std::string> boneNameList;
     // pair<bone ID, parent ID>
     std::vector<std::pair<int, int>> boneIdPid;
@@ -88,6 +89,10 @@ void MyImGUI::InitImGUI(GLFWwindow* window, VkDevice device, VkInstance instance
 
     // it initializes the core structures of imgui
     ImGui::CreateContext();
+
+    ImGuiIO& io = ImGui::GetIO();
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
+
     // it initializes imgui for GLFW
     ImGui_ImplGlfw_InitForVulkan(window, true);
 
@@ -167,8 +172,48 @@ void MyImGUI::DrawGUI()
 {
     ImGui_ImplGlfw_NewFrame();
     ImGui::NewFrame();
+
+
+
+    ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking;
+    ImGuiViewport* viewport = ImGui::GetMainViewport();
+    ImGui::SetNextWindowPos(viewport->Pos);
+    ImGui::SetNextWindowSize(viewport->Size);
+    ImGui::SetNextWindowViewport(viewport->ID);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+    windowFlags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
+    windowFlags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus | ImGuiWindowFlags_NoBackground;
+
+    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.f, 0.f));
+    ImGui::Begin("DockSpace", nullptr, windowFlags);
+    ImGui::PopStyleVar();
+    ImGui::PopStyleVar(2);
+
+    ImGuiIO& io = ImGui::GetIO();
+    if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
+    {
+        ImGuiID dockspaceID = ImGui::GetID("MyDockSpace");
+        ImGui::DockSpace(dockspaceID, ImVec2(0.f, 0.f), ImGuiDockNodeFlags_PassthruCentralNode);
+
+        static auto firstTime = true;
+        if (firstTime)
+        {
+            firstTime = false;
+
+            ImGui::DockBuilderRemoveNode(dockspaceID);
+            ImGui::DockBuilderAddNode(dockspaceID, ImGuiDockNodeFlags_PassthruCentralNode | ImGuiDockNodeFlags_DockSpace);
+            ImGui::DockBuilderSetNodeSize(dockspaceID, viewport->Size);
+
+            auto dockIDLeft = ImGui::DockBuilderSplitNode(dockspaceID, ImGuiDir_Left, 0.32f, nullptr, &dockspaceID);
+            ImGui::DockBuilderDockWindow("Controller", dockIDLeft);
+            ImGui::DockBuilderFinish(dockspaceID);
+        }
+    }
+    ImGui::End();
+
     // ImGui::ShowDemoWindow();
-    
+
 
     ImGui::Begin("Controller");
 
@@ -270,7 +315,8 @@ void MyImGUI::Helper::Skeleton()
         ImGui::Checkbox("Blending Weight Mode", blendingWeightMode);
         if (*blendingWeightMode)
         {
-
+            ImGui::Separator();
+            ImGui::Text("Select a bone to visualize weights");
             ImGui::Indent();
             const unsigned int boneCount = static_cast<unsigned int>(model->GetBoneCount());
             static ImGuiTreeNodeFlags baseFlags = ImGuiTreeNodeFlags_None | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;

@@ -46,6 +46,7 @@ public:
 
 private:
 	bool CreateInstance(const char* appName, uint32_t appVersion);
+	std::vector<const char*> LoadCompatibleLayers(std::vector<const char*> layers);
 	void DestroyInstance();
 	void CreatePhysicalDevice();
 	void ChooseQueueFamily();
@@ -198,9 +199,6 @@ private:
 
 	// GLFW provides required instance extensions.
 	VkValidationFeaturesEXT EnableBestPracticesValidation();
-	std::vector<const char*> instanceLayers = {
-		"VK_LAYER_KHRONOS_validation"		// it assists developers in isolating incorrect usage, and in verifying that applications correctly use the API.
-	};
 
 	std::vector<const char*> reqDeviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,

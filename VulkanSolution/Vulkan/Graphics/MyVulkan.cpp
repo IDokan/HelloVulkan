@@ -460,6 +460,12 @@ bool MyVulkan::CreateInstance(const char* appName, uint32_t appVersion)
 
 	VkValidationFeaturesEXT bestPracticesEnabled = EnableBestPracticesValidation();
 
+
+	std::vector<const char*> instanceLayers = {
+		"VK_LAYER_KHRONOS_validation"		// it assists developers in isolating incorrect usage, and in verifying that applications correctly use the API.
+	};
+	instanceLayers = LoadCompatibleLayers(instanceLayers);
+
 	// Create an instance
 	VkInstanceCreateInfo instanceCreateInfo{};
 	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
@@ -477,6 +483,29 @@ bool MyVulkan::CreateInstance(const char* appName, uint32_t appVersion)
 	}
 
 	return true;
+}
+
+std::vector<const char*> MyVulkan::LoadCompatibleLayers(std::vector<const char*> layers)
+{
+	std::vector<const char*> compatibleLayers;
+	
+	uint32_t availableLayerCount;
+	vkEnumerateInstanceLayerProperties(&availableLayerCount, nullptr);
+	std::vector<VkLayerProperties> availableLayers(availableLayerCount);
+	vkEnumerateInstanceLayerProperties(&availableLayerCount, availableLayers.data());
+	
+	for (const char* layerName : layers)
+	{
+		for (const VkLayerProperties& layerProperty : availableLayers)
+		{
+			if (strcmp(layerName, layerProperty.layerName) == 0)
+			{
+				compatibleLayers.push_back(layerName);
+			}
+		}
+	}
+
+	return compatibleLayers;
 }
 
 void MyVulkan::DestroyInstance()

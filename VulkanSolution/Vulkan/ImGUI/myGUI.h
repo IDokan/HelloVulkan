@@ -21,7 +21,7 @@ namespace MyImGUI
 		VkPhysicalDevice physicalDevice, VkQueue queue, VkRenderPass renderPass, 
 		VkCommandBuffer commandBuffer);
 
-    void SendModelInfo(Model* model);
+    void SendModelInfo(Model* model, bool* showModel, bool* vertexPointsMode, float* pointSize);
     void SendSkeletonInfo(bool* showSkeletonFlag, bool* blendingWeightMode, int* selectedBone);
     void SendAnimationInfo(float* worldTimer, bool* bindPoseFlag);
 

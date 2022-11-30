@@ -35,6 +35,9 @@ namespace MyImGUI
 namespace
 {
     Model* model;
+    bool* showModel;
+    bool* vertexPointsMode;
+    float* pointSize;
     float* worldTimer;
     std::vector<std::string> animationNameList;
 
@@ -235,6 +238,7 @@ void MyImGUI::Helper::ModelStats()
 {
     if (ImGui::CollapsingHeader("Basic Information"))
     {
+        ImGui::Checkbox("Display model", showModel);
         const int meshSize = model->GetMeshSize();
         for (int i = 0; i < meshSize; i++)
         {
@@ -245,6 +249,13 @@ void MyImGUI::Helper::ModelStats()
 
                 ImGui::TreePop();
             }
+        }
+
+        ImGui::Separator();
+        ImGui::Checkbox("Display Vertices", vertexPointsMode);
+        if (*vertexPointsMode)
+        {
+            ImGui::SliderFloat("Vertex Size", pointSize, 1.f, 10.f);
         }
     }
 }
@@ -326,9 +337,12 @@ void MyImGUI::Helper::Skeleton()
     }
 }
 
-void MyImGUI::SendModelInfo(Model* _model)
+void MyImGUI::SendModelInfo(Model* _model, bool* _showModel, bool* _vertexPointsMode, float* _pointSize)
 {
     model = _model;
+    showModel = _showModel;
+    vertexPointsMode = _vertexPointsMode;
+    pointSize = _pointSize;
 }
 
 void MyImGUI::SendSkeletonInfo(bool* _showSkeletonFlag, bool* _blendingWeightMode, int* _selectedBone)

@@ -144,11 +144,6 @@ struct UniformBufferObject {
 	glm::mat4 proj;
 };
 
-struct PushConstants
-{
-	int selectedBone = 0;
-};
-
 struct Mesh
 {
 	Mesh();

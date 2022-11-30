@@ -68,8 +68,8 @@ private:
 
 	void CreateRenderPass();
 
-	void CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
-	void CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, uint32_t pushConstantSize, VkShaderStageFlags pushConstantTargetStage, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout);
+	void CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	void CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, uint32_t pushConstantSize, VkShaderStageFlags pushConstantTargetStage, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	static std::vector<char> readFile(const std::string& filename);
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);
 	void DestroyPipeline();
@@ -197,9 +197,6 @@ private:
 	
 	uint32_t currentFrameID;
 
-	// GLFW provides required instance extensions.
-	VkValidationFeaturesEXT EnableBestPracticesValidation();
-
 	std::vector<const char*> reqDeviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	};
@@ -269,8 +266,16 @@ private:
 	VkPipelineLayout blendingWeightPipelineLayout;
 
 
-	PushConstants selectedBone;
+	int selectedBone;
 	// @@ End of blending
 
-	void RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayout layout, VkShaderStageFlagBits targetStage, PushConstants* data);
+	void RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayout layout, VkShaderStageFlagBits targetStage, void* data, uint32_t dataSize);
+	void RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayout layout, VkShaderStageFlagBits targetStage, void const* data, uint32_t dataSize);
+
+
+	bool showModel;
+	bool vertexPointsMode;
+	float pointSize;
+	VkPipeline vertexPointsPipeline;
+	VkPipelineLayout vertexPointsPipelineLayout;
 };

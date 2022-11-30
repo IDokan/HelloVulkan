@@ -30,44 +30,37 @@ Creation Date: 06.12.2021
 #include "Engines/Input/Input.h"
 
 MyVulkan::MyVulkan(Window* window)
-	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), animationUniformBufferSize(0), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false)
+	: windowHolder(window), currentFrameID(0), meshSize(-1), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), animationUniformBufferSize(0), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f)
 {
 }
 
 bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 {
 	model = new Model("../Vulkan/Graphics/Model/models/Sitting Laughing.fbx");
-	std::cout << "model = new Model(.. / Vulkan / Graphics / Model / models / Sitting Laughing.fbx);" << std::endl;
 	model->SetAnimationIndex(0);
-	std::cout << "model->SetAnimationIndex(0); " << std::endl;
 
 	if (CreateInstance(appName, appVersion) == false)
 	{
 		return false;
 	}
-	std::cout << "CreateInstance(appName, appVersion); " << std::endl;
 	CreatePhysicalDevice();
 	ChooseQueueFamily();
 	if (CreateDevice() == false)
 	{
 		return false;
 	}
-	std::cout << "CreateDevice; " << std::endl;
 	if (CreateSurfaceByGLFW() == false)
 	{
 		return false;
 	}
-	std::cout << "CreateSurfaceByGLFW; " << std::endl;
 	if (CreateCommandPoolAndAllocateCommandBuffers() == false)
 	{
 		return false;
 	}
-	std::cout << "CreateCommandPoolAndAllocateCommandBuffers; " << std::endl;
 	if (CreateSwapchain() == false)
 	{
 		return false;
 	}
-	std::cout << "CreateSwapchain; " << std::endl;
 	CreateEmergencyTexture();
 	CreateTextures(model->GetDiffuseImagePaths());
 	CreateTextureSampler();
@@ -90,7 +83,12 @@ bool MyVulkan::InitVulkan(const char* appName, uint32_t appVersion)
 
 	VkShaderModule blendingWeightVertModule = CreateShaderModule(readFile("spv/blendingWeight.vert.spv"));
 	VkShaderModule blendingWeightFragModule = CreateShaderModule(readFile("spv/blendingWeight.frag.spv"));
-	CreateGraphicsPipeline(blendingWeightVertModule, blendingWeightFragModule, sizeof(struct PushConstants), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptorSet->GetDescriptorSetLayoutPtr(), blendingWeightPipeline, blendingWeightPipelineLayout);
+	CreateGraphicsPipeline(blendingWeightVertModule, blendingWeightFragModule, sizeof(int), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptorSet->GetDescriptorSetLayoutPtr(), blendingWeightPipeline, blendingWeightPipelineLayout);
+
+	VkShaderModule vertexPointsVertModule = CreateShaderModule(readFile("spv/vertexPoints.vert.spv"));
+	VkShaderModule vertexPointsFragModule = CreateShaderModule(readFile("spv/vertexPoints.frag.spv"));
+																														 // Let's use waxDescriptor set because it can be used so far and to reduce memory allocations
+	CreateGraphicsPipeline(vertexPointsVertModule, vertexPointsFragModule, sizeof(float), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptorSet->GetDescriptorSetLayoutPtr(), vertexPointsPipeline, vertexPointsPipelineLayout, VK_PRIMITIVE_TOPOLOGY_POINT_LIST);
 
 	// it is using blendingWeightDescriptorSet
 	CreateLinePipeline();
@@ -426,8 +424,8 @@ void MyVulkan::InitGUI()
 {
 	MyImGUI::InitImGUI(windowHolder->glfwWindow, device, instance, physicalDevice, queue, renderPass, commandBuffers.front());
 
-	MyImGUI::SendModelInfo(model);
-	MyImGUI::SendSkeletonInfo(&showSkeletonFlag, &blendingWeightMode, &selectedBone.selectedBone);
+	MyImGUI::SendModelInfo(model, &showModel, &vertexPointsMode, &pointSize);
+	MyImGUI::SendSkeletonInfo(&showSkeletonFlag, &blendingWeightMode, &selectedBone);
 	MyImGUI::SendAnimationInfo(&timer, &bindPoseFlag);
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
@@ -458,7 +456,12 @@ bool MyVulkan::CreateInstance(const char* appName, uint32_t appVersion)
 	uint32_t glfwExtensionCount;
 	const char** extensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
 
-	VkValidationFeaturesEXT bestPracticesEnabled = EnableBestPracticesValidation();
+
+	VkValidationFeatureEnableEXT enables[] = { VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT };
+	VkValidationFeaturesEXT features{};
+	features.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
+	features.enabledValidationFeatureCount = 1;
+	features.pEnabledValidationFeatures = enables;
 
 
 	std::vector<const char*> instanceLayers = {
@@ -469,7 +472,7 @@ bool MyVulkan::CreateInstance(const char* appName, uint32_t appVersion)
 	// Create an instance
 	VkInstanceCreateInfo instanceCreateInfo{};
 	instanceCreateInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-	instanceCreateInfo.pNext = &bestPracticesEnabled;
+	instanceCreateInfo.pNext = &features;
 	instanceCreateInfo.flags = 0;
 	instanceCreateInfo.pApplicationInfo = &applicationInfo;
 	instanceCreateInfo.enabledExtensionCount = glfwExtensionCount;
@@ -915,7 +918,7 @@ void MyVulkan::CreateRenderPass()
 
 }
 
-void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout)
+void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, VkPrimitiveTopology primitiveTopology)
 {
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -952,7 +955,7 @@ void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule 
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
 	inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssemblyInfo.topology = primitiveTopology;
 	inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
 
 	VkPipelineViewportStateCreateInfo viewportState{};
@@ -1067,7 +1070,7 @@ void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule 
 	vkDestroyShaderModule(device, fragModule, nullptr);
 }
 
-void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, uint32_t pushConstantSize, VkShaderStageFlags pushConstantTargetStage, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout)
+void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule fragModule, uint32_t pushConstantSize, VkShaderStageFlags pushConstantTargetStage, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPipeline& pipeline, VkPipelineLayout& pipelineLayout, VkPrimitiveTopology primitiveTopology)
 {
 	VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
 	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -1103,7 +1106,7 @@ void MyVulkan::CreateGraphicsPipeline(VkShaderModule vertModule, VkShaderModule 
 
 	VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo{};
 	inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-	inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+	inputAssemblyInfo.topology = primitiveTopology;
 	inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
 
 	VkPipelineViewportStateCreateInfo viewportState{};
@@ -1247,6 +1250,9 @@ void MyVulkan::DestroyPipeline()
 	vkDestroyPipeline(device, waxPipeline, nullptr);
 	vkDestroyPipelineLayout(device, waxPipelineLayout, nullptr);
 
+	vkDestroyPipeline(device, vertexPointsPipeline, nullptr);
+	vkDestroyPipelineLayout(device, vertexPointsPipelineLayout, nullptr);
+
 	vkDestroyPipeline(device, blendingWeightPipeline, nullptr);
 	vkDestroyPipelineLayout(device, blendingWeightPipelineLayout, nullptr);
 
@@ -1388,21 +1394,32 @@ void MyVulkan::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t image
 
 void MyVulkan::RecordDrawModelCalls(VkCommandBuffer commandBuffer)
 {
-	if (blendingWeightMode == true)
+	// If show model flag is on, display model and blending weight model
+	if (showModel == true)
 	{
-		RecordPushConstants(commandBuffer, blendingWeightPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &selectedBone);
-		RecordDrawMeshCall(commandBuffer, blendingWeightPipeline, blendingWeightPipelineLayout, blendingWeightDescriptorSet);
-	}
-	else
-	{
-		if (textureImageViews.size() <= 0)
+		if (blendingWeightMode == true)
 		{
-			RecordDrawMeshCall(commandBuffer, waxPipeline, waxPipelineLayout, waxDescriptorSet);
+			RecordPushConstants(commandBuffer, blendingWeightPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &selectedBone, sizeof(int));
+			RecordDrawMeshCall(commandBuffer, blendingWeightPipeline, blendingWeightPipelineLayout, blendingWeightDescriptorSet);
 		}
 		else
 		{
-			RecordDrawMeshCall(commandBuffer, pipeline, pipelineLayout, descriptorSet);
+			if (textureImageViews.size() <= 0)
+			{
+				RecordDrawMeshCall(commandBuffer, waxPipeline, waxPipelineLayout, waxDescriptorSet);
+			}
+			else
+			{
+				RecordDrawMeshCall(commandBuffer, pipeline, pipelineLayout, descriptorSet);
+			}
 		}
+	}
+
+	// No matter showing model or not, display vertex points if and only if vertex points mode is on.
+	if (vertexPointsMode == true)
+	{
+		RecordPushConstants(commandBuffer, vertexPointsPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &pointSize, sizeof(float));
+		RecordDrawMeshCall(commandBuffer, vertexPointsPipeline, vertexPointsPipelineLayout, blendingWeightDescriptorSet);
 	}
 }
 
@@ -2197,7 +2214,7 @@ void MyVulkan::CreateLinePipeline()
 
 	VkPushConstantRange pushConstantRange{};
 	pushConstantRange.offset = 0;
-	pushConstantRange.size = sizeof(struct PushConstants);
+	pushConstantRange.size = sizeof(int);
 	pushConstantRange.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
 
 	VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
@@ -2331,20 +2348,14 @@ void MyVulkan::DestroyAnimationUniformBuffers()
 	}
 }
 
-void MyVulkan::RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayout layout, VkShaderStageFlagBits targetStage, PushConstants* data)
+void MyVulkan::RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayout layout, VkShaderStageFlagBits targetStage, void* data, uint32_t dataSize)
 {
-	vkCmdPushConstants(commandBuffer, layout, targetStage, 0, sizeof(PushConstants), data);
+	vkCmdPushConstants(commandBuffer, layout, targetStage, 0, dataSize, data);
 }
 
-VkValidationFeaturesEXT MyVulkan::EnableBestPracticesValidation()
+void MyVulkan::RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayout layout, VkShaderStageFlagBits targetStage, void const* data, uint32_t dataSize)
 {
-	VkValidationFeatureEnableEXT enables[] = { VK_VALIDATION_FEATURE_ENABLE_BEST_PRACTICES_EXT };
-	VkValidationFeaturesEXT features{};
-	features.sType = VK_STRUCTURE_TYPE_VALIDATION_FEATURES_EXT;
-	features.enabledValidationFeatureCount = 1;
-	features.pEnabledValidationFeatures = enables;
-
-	return features;
+	vkCmdPushConstants(commandBuffer, layout, targetStage, 0, dataSize, data);
 }
 
 void MyVulkan::CreateDepthResources()
@@ -2442,12 +2453,12 @@ void MyVulkan::RecordDrawSkeletonCall(VkCommandBuffer commandBuffer)
 
 	if (blendingWeightMode == true)
 	{
-		RecordPushConstants(commandBuffer, linePipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &selectedBone);
+		RecordPushConstants(commandBuffer, linePipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &selectedBone, sizeof(int));
 	}
 	else
 	{
-		PushConstants noData{ -1 };
-		RecordPushConstants(commandBuffer, linePipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &noData);
+		const int noData{ -1 };
+		RecordPushConstants(commandBuffer, linePipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &noData, sizeof(int));
 	}
 
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipeline);

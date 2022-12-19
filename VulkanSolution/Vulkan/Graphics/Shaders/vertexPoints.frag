@@ -10,6 +10,6 @@ layout(location = 2) in vec2 fragTexCoord;
 
 void main()
 {
-	vec3 color = vec3(1.f, 1.f, 1.f) * dot(normal, viewVector);
+	vec3 color = vec3(0.f, 1.f, 0.f) * dot(normal, viewVector);
 	outColor = vec4(color, 1.f);
 }

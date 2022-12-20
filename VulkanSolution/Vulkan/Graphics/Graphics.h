@@ -13,9 +13,15 @@ Creation Date: 12.19.2022
 #include <vector>
 
 class Window;
+class Buffer;
+class UniformBuffer;
+
 
 class Graphics
 {
+public:
+	friend Buffer;
+	friend UniformBuffer;
 public:
 	Graphics();
 	~Graphics();
@@ -62,6 +68,8 @@ private:
 
 	VkCommandBuffer BeginSingleTimeCommands();
 	void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
+
+	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
 	// Texture related functions
 	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);

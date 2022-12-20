@@ -46,6 +46,9 @@
     <Filter Include="Graphics\Pipelines">
       <UniqueIdentifier>{bdd4cbc9-28a0-4caa-b894-63cd7f423f23}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Graphics\Buffer">
+      <UniqueIdentifier>{6ca5ef34-e33e-41a8-a197-81041217427e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
@@ -111,6 +114,12 @@
     </ClCompile>
     <ClCompile Include="Graphics\Pipelines\Pipeline.cpp">
       <Filter>Graphics\Pipelines</Filter>
+    </ClCompile>
+    <ClCompile Include="Graphics\Buffer\Buffer.cpp">
+      <Filter>Graphics\Buffer</Filter>
+    </ClCompile>
+    <ClCompile Include="Graphics\Buffer\UniformBuffer.cpp">
+      <Filter>Graphics\Buffer</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -188,6 +197,12 @@
     </ClInclude>
     <ClInclude Include="Graphics\Pipelines\Pipeline.h">
       <Filter>Graphics\Pipelines</Filter>
+    </ClInclude>
+    <ClInclude Include="Graphics\Buffer\Buffer.h">
+      <Filter>Graphics\Buffer</Filter>
+    </ClInclude>
+    <ClInclude Include="Graphics\Buffer\UniformBuffer.h">
+      <Filter>Graphics\Buffer</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

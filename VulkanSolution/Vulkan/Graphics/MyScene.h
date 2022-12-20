@@ -60,7 +60,6 @@ private:
 	void FreeMemory(VkDeviceMemory memory);
 
 	
-	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 	
 	void CreateIndexBuffer(int indexCount, void* indexData, int i);
 

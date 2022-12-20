@@ -488,19 +488,6 @@ void MyScene::FreeMemory(VkDeviceMemory memory)
 	vkFreeMemory(device, memory, nullptr);
 }
 
-void MyScene::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
-{
-	VkCommandBuffer copyCommandBuffer = BeginSingleTimeCommands();
-
-	VkBufferCopy copyRegion{};
-	copyRegion.srcOffset = 0;
-	copyRegion.dstOffset = 0;
-	copyRegion.size = size;
-	vkCmdCopyBuffer(copyCommandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
-
-	EndSingleTimeCommands(copyCommandBuffer);
-}
-
 void MyScene::CreateIndexBuffer(int indexCount, void* indexData, int i)
 {
 	indexCounts[i] = indexCount;

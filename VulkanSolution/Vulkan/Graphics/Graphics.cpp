@@ -640,6 +640,19 @@ void Graphics::EndSingleTimeCommands(VkCommandBuffer commandBuffer)
 	vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
 
+void Graphics::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+{
+	VkCommandBuffer copyCommandBuffer = BeginSingleTimeCommands();
+
+	VkBufferCopy copyRegion{};
+	copyRegion.srcOffset = 0;
+	copyRegion.dstOffset = 0;
+	copyRegion.size = size;
+	vkCmdCopyBuffer(copyCommandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+	EndSingleTimeCommands(copyCommandBuffer);
+}
+
 void Graphics::CreateTextureImageAndImageView(const std::string& path, VkImage& textureImage, VkDeviceMemory& textureImageMemory, VkImageView& textureImageView)
 {
 	int texWidth, texHeight, texChannels;

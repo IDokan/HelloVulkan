@@ -2,34 +2,21 @@
 Copyright (C) 2021 DigiPen Institute of Technology.
 Reproduction or disclosure of this file or its contents without the prior
 written consent of DigiPen Institute of Technology is prohibited.
-File Name:   Engine.h
+File Name:   Object.cpp
 Author
 	- sinil.kang	rtd99062@gmail.com
-Creation Date: 06.08.2021
-	header file for engine.
+Creation Date: 12.19.2022
+	Source file for object.
 ******************************************************************************/
-#pragma once
+#include <../Engines/Objects/Object.h>
 
-class Window;
-class MyScene;
-class Graphics;
+static int globalID = 0;
 
-class Engine
+Object::Object(std::string name)
+	:name(name), id(globalID++)
 {
-public:
-	Engine();
-	~Engine();
+}
 
-	// return whether initialization is succeed or not.
-	bool Init();
-	void Update();
-	void Clean();
-
-	bool IsUpdate();
-
-private:
-	bool isUpdate;
-	Window* window;
-	MyScene* scene;
-	Graphics* graphics;
-};
+Object::~Object()
+{
+}

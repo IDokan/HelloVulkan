@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8"?>
+﻿<?xml version="1.0" encoding="utf-8"?>
 <Project DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <ItemGroup Label="ProjectConfigurations">
     <ProjectConfiguration Include="Debug|Win32">
@@ -177,6 +177,7 @@ xcopy /y /d "$(FBX_SDK)\lib\vs2019\$(PlatformTarget)\$(Configuration)\*.dll" "$(
   <ItemGroup>
     <ClCompile Include="Engines\Engine.cpp" />
     <ClCompile Include="Engines\Input\Input.cpp" />
+    <ClCompile Include="Engines\Objects\Object.cpp" />
     <ClCompile Include="Engines\Window.cpp" />
     <ClCompile Include="Graphics\Allocator\Allocator.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">true</ExcludedFromBuild>
@@ -185,13 +186,13 @@ xcopy /y /d "$(FBX_SDK)\lib\vs2019\$(PlatformTarget)\$(Configuration)\*.dll" "$(
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClCompile>
     <ClCompile Include="Graphics\DescriptorSet.cpp" />
+    <ClCompile Include="Graphics\Graphics.cpp" />
     <ClCompile Include="Graphics\Model\AnimationSystem.cpp" />
     <ClCompile Include="Graphics\Model\Model.cpp" />
-    <ClCompile Include="Graphics\MyVulkan.cpp">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
-    </ClCompile>
+    <ClCompile Include="Graphics\MyScene.cpp" />
+    <ClCompile Include="Graphics\Pipelines\Pipeline.cpp" />
     <ClCompile Include="Graphics\Structures\Structs.cpp" />
+    <ClCompile Include="Graphics\Textures\Texture.cpp" />
     <ClCompile Include="ImGUI\backends\imgui_impl_glfw.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
@@ -240,6 +241,7 @@ xcopy /y /d "$(FBX_SDK)\lib\vs2019\$(PlatformTarget)\$(Configuration)\*.dll" "$(
   <ItemGroup>
     <ClInclude Include="Engines\Engine.h" />
     <ClInclude Include="Engines\Input\Input.h" />
+    <ClInclude Include="Engines\Objects\Object.h" />
     <ClInclude Include="Engines\Timer.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>
@@ -255,13 +257,13 @@ xcopy /y /d "$(FBX_SDK)\lib\vs2019\$(PlatformTarget)\$(Configuration)\*.dll" "$(
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">true</ExcludedFromBuild>
     </ClInclude>
     <ClInclude Include="Graphics\DescriptorSet.h" />
+    <ClInclude Include="Graphics\Graphics.h" />
     <ClInclude Include="Graphics\Model\AnimationSystem.h" />
     <ClInclude Include="Graphics\Model\Model.h" />
-    <ClInclude Include="Graphics\MyVulkan.h">
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">false</ExcludedFromBuild>
-      <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|x64'">false</ExcludedFromBuild>
-    </ClInclude>
+    <ClInclude Include="Graphics\MyScene.h" />
+    <ClInclude Include="Graphics\Pipelines\Pipeline.h" />
     <ClInclude Include="Graphics\Structures\Structs.h" />
+    <ClInclude Include="Graphics\Textures\Texture.h" />
     <ClInclude Include="Helper\VulkanHelper.h" />
     <ClInclude Include="ImGUI\backends\imgui_impl_glfw.h">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>

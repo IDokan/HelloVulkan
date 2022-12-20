@@ -14,12 +14,14 @@ Creation Date: 06.08.2021
 
 struct GLFWwindow;
 struct GLFWmonitor;
-class MyVulkan;
+class MyScene;
+class Graphics;
 
 class Window
 {
 public:
-	friend MyVulkan;
+	friend MyScene;
+	friend Graphics;
 public:
 	Window()
 		: glfwWindow(nullptr), windowFramebufferResized(false), isPathDropped(false), path(nullptr)

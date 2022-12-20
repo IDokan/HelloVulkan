@@ -16,13 +16,14 @@ Creation Date: 06.08.2021
 #include "Engine.h"
 #include "Engines/Window.h"
 #include "Timer.h"
-#include "Graphics/MyVulkan.h"
+#include "Graphics/MyScene.h"
+#include "Graphics/Graphics.h"
 #include "vulkan/vulkan_core.h"
 #include "ImGUI/myGUI.h"
 #include "Input/Input.h"
 
 Engine::Engine()
-	: isUpdate(true), window(new Window()), VK(new MyVulkan(window))
+	: isUpdate(true), window(new Window()), scene(new MyScene(window)), graphics(new Graphics())
 {
 }
 
@@ -41,13 +42,19 @@ bool Engine::Init()
 		return false;
 	}
 
-	if (VK->InitVulkan("Sinil's Hello Vulkan", VK_MAKE_VERSION(1, 0, 0)) == false)
+	if (graphics->InitVulkan("Sinil's Hello Vulkan", VK_MAKE_VERSION(1, 0, 0), window) == false)
 	{
-		window->DisplayMessage("Init Failed!", "Init Vulkan has Failed!");
+		window->DisplayMessage("Init Failed!", "Init Graphics resources(Vulkan) has Failed!");
 		return false;
 	}
 
-	VK->InitGUI();
+	if (scene->InitScene() == false)
+	{
+		window->DisplayMessage("Init Failed!", "Init Scene information has Failed!");
+		return false;
+	}
+
+	scene->InitGUI();
 
 	return true;
 }
@@ -73,12 +80,12 @@ void Engine::Update()
 
 	if (window->IsPathDropped())
 	{
-		VK->LoadNewModel();
+		scene->LoadNewModel();
 	}
 
 	MyImGUI::DrawGUI();
 	
-	VK->DrawFrame(dt);
+	scene->DrawFrame(dt);
 }
 
 void Engine::Clean()
@@ -87,7 +94,9 @@ void Engine::Clean()
 
 	MyImGUI::DestroyGUIResources();
 
-	VK->CleanVulkan();
+	graphics->CleanVulkan();
+
+	scene->CleanScene();
 }
 
 bool Engine::IsUpdate()

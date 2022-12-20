@@ -37,6 +37,15 @@
     <Filter Include="Engines\Input">
       <UniqueIdentifier>{1b90f54e-0ec4-4cf5-9283-da3069ce3429}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Engines\Objects">
+      <UniqueIdentifier>{a7a5e535-a4c3-4f8a-97f9-5ec2790ba171}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Graphics\Textures">
+      <UniqueIdentifier>{86a96456-b78d-4ca2-afa8-f4e237ad0017}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Graphics\Pipelines">
+      <UniqueIdentifier>{bdd4cbc9-28a0-4caa-b894-63cd7f423f23}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="main.cpp" />
@@ -45,9 +54,6 @@
     </ClCompile>
     <ClCompile Include="Engines\Window.cpp">
       <Filter>Engines</Filter>
-    </ClCompile>
-    <ClCompile Include="Graphics\MyVulkan.cpp">
-      <Filter>Graphics</Filter>
     </ClCompile>
     <ClCompile Include="Graphics\Allocator\Allocator.cpp">
       <Filter>Graphics\Allocator</Filter>
@@ -91,6 +97,21 @@
     <ClCompile Include="ImGUI\imgui_tables.cpp">
       <Filter>ImGUI</Filter>
     </ClCompile>
+    <ClCompile Include="Engines\Objects\Object.cpp">
+      <Filter>Engines\Objects</Filter>
+    </ClCompile>
+    <ClCompile Include="Graphics\MyScene.cpp">
+      <Filter>Graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="Graphics\Graphics.cpp">
+      <Filter>Graphics</Filter>
+    </ClCompile>
+    <ClCompile Include="Graphics\Textures\Texture.cpp">
+      <Filter>Graphics\Textures</Filter>
+    </ClCompile>
+    <ClCompile Include="Graphics\Pipelines\Pipeline.cpp">
+      <Filter>Graphics\Pipelines</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GLMath.h">
@@ -107,9 +128,6 @@
     </ClInclude>
     <ClInclude Include="Helper\VulkanHelper.h">
       <Filter>Helper</Filter>
-    </ClInclude>
-    <ClInclude Include="Graphics\MyVulkan.h">
-      <Filter>Graphics</Filter>
     </ClInclude>
     <ClInclude Include="Graphics\Allocator\Allocator.h">
       <Filter>Graphics\Allocator</Filter>
@@ -155,6 +173,21 @@
     </ClInclude>
     <ClInclude Include="Graphics\DescriptorSet.h">
       <Filter>Graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="Engines\Objects\Object.h">
+      <Filter>Engines\Objects</Filter>
+    </ClInclude>
+    <ClInclude Include="Graphics\MyScene.h">
+      <Filter>Graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="Graphics\Graphics.h">
+      <Filter>Graphics</Filter>
+    </ClInclude>
+    <ClInclude Include="Graphics\Textures\Texture.h">
+      <Filter>Graphics\Textures</Filter>
+    </ClInclude>
+    <ClInclude Include="Graphics\Pipelines\Pipeline.h">
+      <Filter>Graphics\Pipelines</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

@@ -171,7 +171,7 @@ Pipeline::Pipeline(VkDevice device, VkRenderPass renderPass, std::string pipelin
 
 
 
-Pipeline::Pipeline(VkDevice device, VkRenderPass renderPass, std::string pipelineName, const std::string& vertShader, const std::string& fragShader, uint32_t pushConstantSize, VkShaderStageFlags pushConstantTargetStage, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPrimitiveTopology primitiveTopology, bool depthTestWrite)
+Pipeline::Pipeline(VkDevice device, VkRenderPass renderPass, std::string pipelineName, const std::string& vertShader, const std::string& fragShader, const VkVertexInputBindingDescription& bindingDescription, const std::vector<VkVertexInputAttributeDescription>& attributeDescription, uint32_t pushConstantSize, VkShaderStageFlags pushConstantTargetStage, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPrimitiveTopology primitiveTopology, bool depthTestWrite)
 	:Object(pipelineName), device(device)
 {
 
@@ -204,8 +204,6 @@ Pipeline::Pipeline(VkDevice device, VkRenderPass renderPass, std::string pipelin
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
 	// @@ TODO @@ : Binding Description is fixed to Vertex: Make it flexible.
-	const VkVertexInputBindingDescription& bindingDescription = Vertex::GetBindingDescription();
-	const std::vector<VkVertexInputAttributeDescription>& attributeDescription = Vertex::GetAttributeDescriptions();
 	vertexInputInfo.vertexBindingDescriptionCount = 1;
 	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
 	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescription.size());

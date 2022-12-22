@@ -11,6 +11,7 @@ Creation Date: 12.19.2022
 
 #include "Vulkan/vulkan.h"
 #include <vector>
+#include <string>
 
 class Window;
 class Buffer;
@@ -61,6 +62,9 @@ private:
 
 	void CreateImageViews();
 	void DestroyImageViews();
+
+	void CreateTextureSampler();
+	void DestroyTextureSampler();
 
 	void CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory);
 	VkImageView CreateImageView(VkImage image, VkFormat format, VkImageAspectFlags aspectFlags);
@@ -129,6 +133,8 @@ private:
 	std::vector<const char*> reqDeviceExtensions = {
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	};
+
+	 VkSampler textureSampler;
 
 	Window* windowHolder;
 };

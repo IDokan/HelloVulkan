@@ -15,7 +15,6 @@ Creation Date: 12.19.2022
 #include <algorithm>
 #include <array>
 
-
 #include <Helper/VulkanHelper.h>
 #include <Engines/Window.h>
 
@@ -66,6 +65,8 @@ bool Graphics::InitVulkan(const char* appName, uint32_t appVersion, Window* _win
 
 	CreateFramebuffers();
 
+	CreateTextureSampler();
+
 	return true;
 }
 
@@ -73,6 +74,7 @@ void Graphics::CleanVulkan()
 {
 	VulkanHelper::VkCheck(vkDeviceWaitIdle(device), "failed to make logical device idle");
 
+	DestroyTextureSampler();
 
 	DestroyFramebuffers();
 
@@ -548,6 +550,48 @@ void Graphics::DestroyImageViews()
 	{
 		vkDestroyImageView(device, imageView, nullptr);
 	}
+}
+
+void Graphics::CreateTextureSampler()
+{
+	VkSamplerCreateInfo samplerInfo{};
+	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+	samplerInfo.magFilter = VK_FILTER_LINEAR;
+	samplerInfo.minFilter = VK_FILTER_LINEAR;
+	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
+
+	// Anisotropy filter info
+	if (physicalDeviceFeatures.features.samplerAnisotropy == VK_TRUE)
+	{
+		samplerInfo.anisotropyEnable = VK_TRUE;
+		samplerInfo.maxAnisotropy = physicalDeviceProperties.limits.maxSamplerAnisotropy;
+	}
+	else
+	{
+		samplerInfo.anisotropyEnable = VK_FALSE;
+		samplerInfo.maxAnisotropy = 1.f;
+	}
+
+	// [0, texWidth) vs [0, 1)
+	samplerInfo.unnormalizedCoordinates = VK_FALSE;
+
+	// below info is mainly used for percentage-closer filtering on shadow maps.
+	samplerInfo.compareEnable = VK_FALSE;
+	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
+
+	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
+	samplerInfo.mipLodBias = 0.f;
+	samplerInfo.minLod = 0.f;
+	samplerInfo.maxLod = 0.f;
+
+	VulkanHelper::VkCheck(vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler), "Creating sampler has failed!");
+}
+
+void Graphics::DestroyTextureSampler()
+{
+	vkDestroySampler(device, textureSampler, nullptr);
 }
 
 void Graphics::CreateImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling, VkImageUsageFlags usage, VkMemoryPropertyFlags properties, VkImage& image, VkDeviceMemory& imageMemory)

@@ -84,15 +84,11 @@ private:
 	// @@@@@ Texture functions & resources
 	void CreateEmergencyTexture();
 	void DestroyEmergencyTexture();
-	void CreateTextureSampler();
-
-	void DestroyTextureSampler();
 
 	VkImage emergencyTextureImage;
 	VkDeviceMemory emergencyTextureImageMemory;
 	VkImageView emergencyTextureImageView;
 
-	VkSampler textureSampler;
 	// @@ End of Texture functions
 private:
 	Window* windowHolder;

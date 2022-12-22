@@ -41,7 +41,6 @@ bool MyScene::InitScene()
 
 	CreateEmergencyTexture();
 	CreateTextures(model->GetDiffuseImagePaths());
-	CreateTextureSampler();
 	CreateBuffers();
 	CreateDescriptorSet();
 	CreateWaxDescriptorSet();
@@ -78,7 +77,6 @@ void MyScene::CleanScene()
 
 	DestroyPipeline();
 
-	DestroyTextureSampler();
 	DestroyEmergencyTexture();
 
 	DestroyDescriptorSet();
@@ -667,48 +665,6 @@ void MyScene::WriteWaxDescriptorSet()
 void MyScene::DestroyWaxDescriptorSet()
 {
 	delete waxDescriptorSet;
-}
-
-void MyScene::CreateTextureSampler()
-{
-	VkSamplerCreateInfo samplerInfo{};
-	samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-	samplerInfo.magFilter = VK_FILTER_LINEAR;
-	samplerInfo.minFilter = VK_FILTER_LINEAR;
-	samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-	samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-
-	// Anisotropy filter info
-	if (physicalDeviceFeatures.features.samplerAnisotropy == VK_TRUE)
-	{
-		samplerInfo.anisotropyEnable = VK_TRUE;
-		samplerInfo.maxAnisotropy = physicalDeviceProperties.limits.maxSamplerAnisotropy;
-	}
-	else
-	{
-		samplerInfo.anisotropyEnable = VK_FALSE;
-		samplerInfo.maxAnisotropy = 1.f;
-	}
-
-	// [0, texWidth) vs [0, 1)
-	samplerInfo.unnormalizedCoordinates = VK_FALSE;
-
-	// below info is mainly used for percentage-closer filtering on shadow maps.
-	samplerInfo.compareEnable = VK_FALSE;
-	samplerInfo.compareOp = VK_COMPARE_OP_ALWAYS;
-
-	samplerInfo.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-	samplerInfo.mipLodBias = 0.f;
-	samplerInfo.minLod = 0.f;
-	samplerInfo.maxLod = 0.f;
-
-	VulkanHelper::VkCheck(vkCreateSampler(device, &samplerInfo, nullptr, &textureSampler), "Creating sampler has failed!");
-}
-
-void MyScene::DestroyTextureSampler()
-{
-	vkDestroySampler(device, textureSampler, nullptr);
 }
 
 void MyScene::CreateLinePipeline()

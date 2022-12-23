@@ -102,6 +102,21 @@ VkDevice Graphics::GetDevice()
 	return device;
 }
 
+VkSampler Graphics::GetTextureSampler()
+{
+	return textureSampler;
+}
+
+VkRenderPass Graphics::GetRenderPass()
+{
+	return renderPass;
+}
+
+VkExtent2D Graphics::GetSwapchainExtent()
+{
+	return swapchainExtent;
+}
+
 bool Graphics::CreateInstance(const char* appName, uint32_t appVersion)
 {
 	//A generic application info structure

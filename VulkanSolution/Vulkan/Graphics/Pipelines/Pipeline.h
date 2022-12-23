@@ -18,9 +18,9 @@ class Graphics;
 class Pipeline : public Object
 {
 public:
-	Pipeline(VkDevice device, VkRenderPass renderPass, std::string pipelineName, const std::string& vertShader, const std::string& fragShader, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
+	Pipeline(Graphics* graphics, std::string pipelineName, const std::string& vertShader, const std::string& fragShader, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST);
 	// Push Constant compatible pipeline
-	Pipeline(VkDevice device, VkRenderPass renderPass, std::string pipelineName, const std::string& vertShader, const std::string& fragShader, const VkVertexInputBindingDescription& bindingDescription, const std::vector<VkVertexInputAttributeDescription>& attributeDescription, uint32_t pushConstantSize, VkShaderStageFlags pushConstantTargetStage, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, bool depthTestWrite = VK_TRUE);
+	Pipeline(Graphics* graphics, std::string pipelineName, const std::string& vertShader, const std::string& fragShader, const VkVertexInputBindingDescription& bindingDescription, const std::vector<VkVertexInputAttributeDescription>& attributeDescription, uint32_t pushConstantSize, VkShaderStageFlags pushConstantTargetStage, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPrimitiveTopology primitiveTopology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST, bool depthTestWrite = VK_TRUE);
 	~Pipeline();
 
 	bool Init();

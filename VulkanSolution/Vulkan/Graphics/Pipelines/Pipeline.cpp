@@ -12,10 +12,13 @@ Creation Date: 12.19.2022
 #include "Pipeline.h"
 #include <Helper/VulkanHelper.h>
 #include <Graphics/Structures/Structs.h>
+#include <Graphics/Graphics.h>
 
-Pipeline::Pipeline(VkDevice device, VkRenderPass renderPass, std::string pipelineName, const std::string& vertShader, const std::string& fragShader, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPrimitiveTopology primitiveTopology)
-	:Object(pipelineName), device(device)
+Pipeline::Pipeline(Graphics* graphics, std::string pipelineName, const std::string& vertShader, const std::string& fragShader, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPrimitiveTopology primitiveTopology)
+	:Object(pipelineName), device(graphics->GetDevice())
 {
+
+
 	VkShaderModule vertModule = CreateShaderModule(readFile(vertShader));
 	VkShaderModule fragModule = CreateShaderModule(readFile(fragShader));
 
@@ -155,7 +158,7 @@ Pipeline::Pipeline(VkDevice device, VkRenderPass renderPass, std::string pipelin
 	// Pipeline layout
 	pipelineInfo.layout = pipelineLayout;
 	// Render pass
-	pipelineInfo.renderPass = renderPass;
+	pipelineInfo.renderPass = graphics->GetRenderPass();
 	pipelineInfo.subpass = 0;
 	// Below parameters are used for specify parent pipeline to handle derived multiple pipelines, which we don't use it here.
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
@@ -171,8 +174,8 @@ Pipeline::Pipeline(VkDevice device, VkRenderPass renderPass, std::string pipelin
 
 
 
-Pipeline::Pipeline(VkDevice device, VkRenderPass renderPass, std::string pipelineName, const std::string& vertShader, const std::string& fragShader, const VkVertexInputBindingDescription& bindingDescription, const std::vector<VkVertexInputAttributeDescription>& attributeDescription, uint32_t pushConstantSize, VkShaderStageFlags pushConstantTargetStage, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPrimitiveTopology primitiveTopology, bool depthTestWrite)
-	:Object(pipelineName), device(device)
+Pipeline::Pipeline(Graphics* graphics, std::string pipelineName, const std::string& vertShader, const std::string& fragShader, const VkVertexInputBindingDescription& bindingDescription, const std::vector<VkVertexInputAttributeDescription>& attributeDescription, uint32_t pushConstantSize, VkShaderStageFlags pushConstantTargetStage, VkDescriptorSetLayout* descriptorSetLayoutPtr, VkPrimitiveTopology primitiveTopology, bool depthTestWrite)
+	:Object(pipelineName), device(graphics->GetDevice())
 {
 
 	VkShaderModule vertModule = CreateShaderModule(readFile(vertShader));
@@ -299,7 +302,7 @@ Pipeline::Pipeline(VkDevice device, VkRenderPass renderPass, std::string pipelin
 	pipelineInfo.pColorBlendState = &colorBlending;
 	pipelineInfo.pDynamicState = &dynamicStateCreateInfo;
 	pipelineInfo.layout = pipelineLayout;
-	pipelineInfo.renderPass = renderPass;
+	pipelineInfo.renderPass = graphics->GetRenderPass();
 	pipelineInfo.subpass = 0;
 	pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
 	pipelineInfo.basePipelineIndex = -1;

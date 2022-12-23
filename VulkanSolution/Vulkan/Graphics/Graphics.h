@@ -36,7 +36,9 @@ public:
 
 
 	VkDevice GetDevice();
-	
+	VkSampler GetTextureSampler();
+	VkRenderPass GetRenderPass();
+	VkExtent2D GetSwapchainExtent();
 
 	void CreateTextureImageAndImageView(const std::string& path, VkImage& textureImage, VkDeviceMemory& textureImageMemory, VkImageView& textureImageView);
 	void DestroyTextureImageAndImageView(VkImage& textureImage, VkDeviceMemory textureImageMemory, VkImageView& textureImageView);

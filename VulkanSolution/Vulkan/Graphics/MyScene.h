@@ -58,10 +58,8 @@ private:
 	void InitUniformBufferData();
 	void UpdateUniformBuffer(uint32_t currentImage);
 
-	void CreateDescriptorSet();
 	void WriteDescriptorSet();
 
-	void CreateWaxDescriptorSet();
 	void WriteWaxDescriptorSet();
 
 
@@ -80,7 +78,6 @@ private:
 	std::vector<VkBuffer> indexBuffers;
 	std::vector<VkDeviceMemory> indexBufferMemories;
 	
-	int meshSize;
 	Model* model;
 
 	float timer;
@@ -94,7 +91,6 @@ private:
 	// @@ Line drawing variables
 	int boneSize;
 
-	void CreateLinePipeline();
 	VkPipelineLayout linePipelineLayout;
 	VkPipeline linePipeline;
 
@@ -114,9 +110,7 @@ private:
 	// @@ End of no texture pipeline
 
 	// @@ Blending Weights
-	void CreateBlendingWeightDescriptorSet();
 	void WriteBlendingWeightDescriptorSet();
-	void DestroyBlendingWeightDescriptorSet();
 	bool blendingWeightMode;
 	VkPipeline blendingWeightPipeline;
 	VkPipelineLayout blendingWeightPipelineLayout;

@@ -11,10 +11,13 @@ Creation Date 11.05.2022
 ******************************************************************************/
 #include "Graphics/DescriptorSet.h"
 #include "Helper/VulkanHelper.h"
+#include <Graphics/Graphics.h>
 
-DescriptorSet::DescriptorSet(VkDevice device, unsigned int descriptorSetSize, std::vector<VkDescriptorSetLayoutBinding> layoutBindings)
-	:descriptorSetSize(descriptorSetSize), device(device), descriptorPool(0), descriptorSetLayout(0), descriptorSets(descriptorSetSize), bindingTable(layoutBindings)
+DescriptorSet::DescriptorSet(Graphics* graphics, std::string name, unsigned int descriptorSetSize, std::vector<VkDescriptorSetLayoutBinding> layoutBindings)
+	:Object(name), descriptorSetSize(descriptorSetSize), descriptorPool(0), descriptorSetLayout(0), descriptorSets(descriptorSetSize), bindingTable(layoutBindings)
 {
+	device = graphics->GetDevice();
+
 	/// @@ Create Descriptor Set Layout
 	VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
 	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
@@ -57,6 +60,19 @@ DescriptorSet::DescriptorSet(VkDevice device, unsigned int descriptorSetSize, st
 }
 
 DescriptorSet::~DescriptorSet()
+{
+}
+
+bool DescriptorSet::Init()
+{
+	return true;
+}
+
+void DescriptorSet::Update(float dt)
+{
+}
+
+void DescriptorSet::Clean()
 {
 	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);

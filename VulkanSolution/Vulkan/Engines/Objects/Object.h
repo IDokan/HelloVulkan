@@ -20,7 +20,8 @@ public:
 	virtual void Update(float dt) = 0;
 	virtual void Clean() = 0;
 
-	
+	std::string GetName();
+	unsigned int GetID();
 
 protected:
 	std::string name;

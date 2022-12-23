@@ -17,20 +17,22 @@ class Graphics;
 class UniformBuffer : public Object
 {
 public:
-	UniformBuffer(Graphics* graphics, std::string bufferName, VkDeviceSize bufferSize);
+	UniformBuffer(Graphics* graphics, std::string bufferName, VkDeviceSize bufferSize, int numOfBuffer = 1);
 	~UniformBuffer();
 
 	bool Init();
-	void Update();
+	void Update(float dt);
 	void Clean();
 
-	void UpdateUniformData(VkDeviceSize bufferSize, void* data);
+	void UpdateUniformData(VkDeviceSize bufferSize, void* data, int i = 0);
 
-	const VkBuffer GetBuffer();
-	const VkDeviceMemory GetBufferMemory();
+	const VkBuffer GetBuffer(int i = 0);
+	const VkDeviceMemory GetBufferMemory(int i = 0);
+	VkDeviceSize GetBufferSize();
 private:
 	Graphics* graphics;
 
-	VkBuffer buffer;
-	VkDeviceMemory bufferMemory;
+	std::vector<VkBuffer> buffers;
+	std::vector<VkDeviceMemory> bufferMemories;
+	VkDeviceSize bufferSize;
 };

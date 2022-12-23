@@ -20,3 +20,13 @@ Object::Object(std::string name)
 Object::~Object()
 {
 }
+
+std::string Object::GetName()
+{
+	return name;
+}
+
+unsigned int Object::GetID()
+{
+	return id;
+}

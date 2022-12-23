@@ -21,7 +21,7 @@ public:
 	~Buffer();
 
 	bool Init();
-	void Update();
+	void Update(float dt);
 	void Clean();
 
 	const VkBuffer GetBuffer();

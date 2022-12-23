@@ -23,7 +23,7 @@ class MyScene
 public:
 	MyScene(Window* window);
 	
-	bool InitScene();
+	bool InitScene(Graphics* graphics);
 	void CleanScene();
 
 	void DrawFrame(float dt);
@@ -50,30 +50,19 @@ private:
 
 	void UpdateCurrentFrameID();
 
-	void CreateBuffers();
 	void ResizeModelBuffers(int size);
-	void CreateVertexBuffer(VkDeviceSize bufferSize, void* vertexData, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-	void DestroyBuffersAndFreeMemories();
-	void CreateModelBuffers();
-	void DestroyModelBuffers();
-	void DestroyBuffer(VkBuffer& buffer);
-	void FreeMemory(VkDeviceMemory memory);
 
 	
 	
-	void CreateIndexBuffer(int indexCount, void* indexData, int i);
-
 	void CreateUniformBuffers();
 	void InitUniformBufferData();
 	void UpdateUniformBuffer(uint32_t currentImage);
 
 	void CreateDescriptorSet();
 	void WriteDescriptorSet();
-	void DestroyDescriptorSet();
 
 	void CreateWaxDescriptorSet();
 	void WriteWaxDescriptorSet();
-	void DestroyWaxDescriptorSet();
 
 
 	bool HasStencilComponent(VkFormat format);
@@ -81,22 +70,9 @@ private:
 	void RecordDrawSkeletonCall(VkCommandBuffer commandBuffer);
 	void RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipeline, VkPipelineLayout pipelineLayout, DescriptorSet* descriptorSet);
 
-	// @@@@@ Texture functions & resources
-	void CreateEmergencyTexture();
-	void DestroyEmergencyTexture();
-
-	VkImage emergencyTextureImage;
-	VkDeviceMemory emergencyTextureImageMemory;
-	VkImageView emergencyTextureImageView;
-
-	// @@ End of Texture functions
 private:
 	Window* windowHolder;
 	
-	DescriptorSet* descriptorSet;
-	DescriptorSet* waxDescriptorSet;
-
-
 	std::vector<uint32_t> indexCounts;
 
 	std::vector<VkBuffer> vertexBuffers;
@@ -104,10 +80,6 @@ private:
 	std::vector<VkBuffer> indexBuffers;
 	std::vector<VkDeviceMemory> indexBufferMemories;
 	
-	std::vector<VkBuffer> uniformBuffers;
-	std::vector<VkDeviceMemory> uniformBuffersMemory;
-	
-
 	int meshSize;
 	Model* model;
 
@@ -126,18 +98,11 @@ private:
 	VkPipelineLayout linePipelineLayout;
 	VkPipeline linePipeline;
 
-	void CreateSkeletonBuffer();
-	void DestroySkeletonBuffer();
 	VkBuffer skeletonLineBuffer;
 	VkDeviceMemory skeletonLineBufferMemory;
 
 	int animationCount;
 	void UpdateAnimationUniformBuffer();
-	VkDeviceSize animationUniformBufferSize;
-	void CreateAnimationUniformBuffers();
-	void DestroyAnimationUniformBuffers();
-	std::vector<VkBuffer> animationUniformBuffers;
-	std::vector<VkDeviceMemory> animationUniformBufferMemories;
 
 	bool bindPoseFlag;
 	bool showSkeletonFlag;
@@ -153,7 +118,6 @@ private:
 	void WriteBlendingWeightDescriptorSet();
 	void DestroyBlendingWeightDescriptorSet();
 	bool blendingWeightMode;
-	DescriptorSet* blendingWeightDescriptorSet;
 	VkPipeline blendingWeightPipeline;
 	VkPipelineLayout blendingWeightPipelineLayout;
 
@@ -170,4 +134,10 @@ private:
 	float pointSize;
 	VkPipeline vertexPointsPipeline;
 	VkPipelineLayout vertexPointsPipelineLayout;
+
+	Graphics* graphics;
+	std::vector<Object*> graphicResources;
+private:
+	Object* FindObjectByName(std::string name);
+
 };

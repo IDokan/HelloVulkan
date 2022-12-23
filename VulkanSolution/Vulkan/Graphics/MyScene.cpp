@@ -27,21 +27,46 @@ Creation Date: 06.12.2021
 #include "ImGUI/myGUI.h"
 #include "Engines/Input/Input.h"
 
+#include <Engines/Objects/Object.h>
+#include <Graphics/Textures/Texture.h>
+#include <Graphics/Buffer/Buffer.h>
+#include <Graphics/Buffer/UniformBuffer.h>
+
 MyScene::MyScene(Window* window)
 	: windowHolder(window), meshSize(-1), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), animationUniformBufferSize(0), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f)
 {
 }
 
-bool MyScene::InitScene()
+bool MyScene::InitScene(Graphics* _graphics)
 {
 	model = new Model("../Vulkan/Graphics/Model/models/Sitting Laughing.fbx");
 	model->SetAnimationIndex(0);
 
 
+	graphics = _graphics;
 
-	CreateEmergencyTexture();
-	CreateTextures(model->GetDiffuseImagePaths());
-	CreateBuffers();
+	graphicResources.push_back(new Texture(graphics, "EmergencyTexture", "../Vulkan/Graphics/Model/EssentialImages/transparent.png"));
+	const std::vector<std::string>& paths = model->GetDiffuseImagePaths();
+	for (int i = 0; i < paths.size(); i++)
+	{
+		graphicResources.push_back(new Texture(graphics, std::string("diffuseImage") + std::to_string(i), paths[i]));
+	}
+	graphicResources.push_back(new Buffer(graphics, "skeletonBuffer", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(LineVertex) * 2 * model->GetBoneCount(), model->GetBoneDataForDrawing()));
+	const int meshSize = model->GetMeshSize();
+	for (int i = 0; i < meshSize; i++)
+	{
+		graphicResources.push_back(new Buffer(graphics, model->GetMeshName(i) + std::string("vertex"), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex) * model->GetVertexCount(i), model->GetVertexData(i)));
+		graphicResources.push_back(new Buffer(graphics, model->GetMeshName(i) + std::string("index"), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, model->GetIndexCount(i), model->GetIndexData(i)));
+	}
+
+	graphicResources.push_back(new UniformBuffer(graphics, std::string("uniformBuffer"), sizeof(UniformBufferObject), Graphics::MAX_FRAMES_IN_FLIGHT));
+	graphicResources.push_back(new UniformBuffer(graphics, std::string("animationUniformBuffer"), sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT));
+
+	graphicResources.push_back(new DescriptorSet(graphics, "descriptor", Graphics::MAX_FRAMES_IN_FLIGHT * meshSize, {
+		{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+		{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+		{2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
+		}));
 	CreateDescriptorSet();
 	CreateWaxDescriptorSet();
 	CreateBlendingWeightDescriptorSet();
@@ -161,14 +186,6 @@ void MyScene::DrawFrame(float dt)
 	}
 
 	UpdateCurrentFrameID();
-}
-
-void MyScene::CreateBuffers()
-{
-	CreateSkeletonBuffer();
-	CreateModelBuffers();
-	CreateUniformBuffers();
-	CreateAnimationUniformBuffers();
 }
 
 void MyScene::ResizeModelBuffers(int size)
@@ -412,118 +429,6 @@ void MyScene::UpdateCurrentFrameID()
 	currentFrameID = (currentFrameID + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-void MyScene::CreateVertexBuffer(VkDeviceSize bufferSize, void* vertexData, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
-{
-	// Use two buffers.
-	// One for writing vertex data, the other is actual vertex buffer which we cannot see and use(map) at CPU.
-	// The reason why use two buffers is the buffer we can see at CPU is not a good buffer from the GPU side.
-
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-
-	void* data;
-	// Operate as glMapBuffer, glUnmapBuffer
-	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, vertexData, static_cast<size_t>(bufferSize));
-	vkUnmapMemory(device, stagingBufferMemory);
-
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, buffer, bufferMemory);
-
-	CopyBuffer(stagingBuffer, buffer, bufferSize);
-
-	DestroyBuffer(stagingBuffer);
-	FreeMemory(stagingBufferMemory);
-}
-
-void MyScene::DestroyBuffersAndFreeMemories()
-{
-	DestroySkeletonBuffer();
-	DestroyModelBuffers();
-
-	DestroyAnimationUniformBuffers();
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		DestroyBuffer(uniformBuffers[i]);
-		FreeMemory(uniformBuffersMemory[i]);
-	}
-}
-
-void MyScene::CreateModelBuffers()
-{
-	meshSize = model->GetMeshSize();
-
-	ResizeModelBuffers(meshSize);
-
-	for (int i = 0; i < meshSize; i++)
-	{
-		CreateVertexBuffer(sizeof(Vertex) * model->GetVertexCount(i), model->GetVertexData(i), vertexBuffers[i], vertexBufferMemories[i]);
-		CreateIndexBuffer(model->GetIndexCount(i), model->GetIndexData(i), i);
-	}
-}
-
-void MyScene::DestroyModelBuffers()
-{
-	int previousMeshSize = static_cast<int>(vertexBuffers.size());
-
-	for (int i = 0; i < previousMeshSize; i++)
-	{
-		DestroyBuffer(vertexBuffers[i]);
-		FreeMemory(vertexBufferMemories[i]);
-
-		DestroyBuffer(indexBuffers[i]);
-		FreeMemory(indexBufferMemories[i]);
-	}
-}
-
-void MyScene::DestroyBuffer(VkBuffer& buffer)
-{
-	vkDestroyBuffer(device, buffer, nullptr);
-}
-
-void MyScene::FreeMemory(VkDeviceMemory memory)
-{
-	vkFreeMemory(device, memory, nullptr);
-}
-
-void MyScene::CreateIndexBuffer(int indexCount, void* indexData, int i)
-{
-	indexCounts[i] = indexCount;
-	VkDeviceSize bufferSize = sizeof(int32_t) * indexCount;
-
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-		stagingBuffer, stagingBufferMemory);
-
-	void* data;
-	vkMapMemory(device, stagingBufferMemory, 0, bufferSize, 0, &data);
-	memcpy(data, indexData, bufferSize);
-	vkUnmapMemory(device, stagingBufferMemory);
-
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-		indexBuffers[i], indexBufferMemories[i]);
-
-	CopyBuffer(stagingBuffer, indexBuffers[i], bufferSize);
-
-	vkDestroyBuffer(device, stagingBuffer, nullptr);
-	vkFreeMemory(device, stagingBufferMemory, nullptr);
-}
-
-void MyScene::CreateUniformBuffers()
-{
-	VkDeviceSize bufferSize = sizeof(UniformBufferObject);
-	uniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-	uniformBuffersMemory.resize(MAX_FRAMES_IN_FLIGHT);
-
-
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			uniformBuffers[i], uniformBuffersMemory[i]);
-	}
-}
-
 void MyScene::InitUniformBufferData()
 {
 	uniformData.model = model->CalculateAdjustBoundingBoxMatrix();
@@ -606,38 +511,43 @@ void MyScene::UpdateUniformBuffer(uint32_t currentImage)
 
 void MyScene::CreateDescriptorSet()
 {
-	descriptorSet = new DescriptorSet(device, MAX_FRAMES_IN_FLIGHT * meshSize, {
-		{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-		{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-		{2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
-		});
-
 	WriteDescriptorSet();
 }
 
 void MyScene::WriteDescriptorSet()
 {
+	DescriptorSet* descriptorSet = dynamic_cast<DescriptorSet*>(FindObjectByName("descriptor"));
+	UniformBuffer* uniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("uniformBuffer"));
+	UniformBuffer* animationUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));
+	Texture* emergencyTexture = dynamic_cast<Texture*>(FindObjectByName("EmergencyTexture"));
+	
+	const std::vector<std::string>& paths = model->GetDiffuseImagePaths();
+	std::vector<Texture*> textures(paths.size(), nullptr);
+	for (int i = 0; i < paths.size(); i++)
+	{
+		if (Texture* image = dynamic_cast<Texture*>(FindObjectByName(std::string("diffuseImage") + std::to_string(i)));
+			image != nullptr)
+		{
+			textures[i] = image;
+		}
+	}
+
 	for (int i = 0; i < meshSize; i++)
 	{
-		for (int j = 0; j < MAX_FRAMES_IN_FLIGHT; j++)
+		for (int j = 0; j < Graphics::MAX_FRAMES_IN_FLIGHT; j++)
 		{
-			descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 0, uniformBuffers[j], sizeof(UniformBufferObject));
-			descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 1, animationUniformBuffers[j], animationUniformBufferSize);
-			if (i < textureImageViews.size())
+			descriptorSet->Write(i * Graphics::MAX_FRAMES_IN_FLIGHT + j, 0, uniformBuffer->GetBuffer(j), uniformBuffer->GetBufferSize());
+			descriptorSet->Write(i * Graphics::MAX_FRAMES_IN_FLIGHT + j, 1, animationUniformBuffer->GetBuffer(j), animationUniformBuffer->GetBufferSize());
+			if (i < paths.size())
 			{
-				descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 2, textureImageViews[i], textureSampler);
+				descriptorSet->Write(i * Graphics::MAX_FRAMES_IN_FLIGHT + j, 2, textureImageViews[i], textureSampler);
 			}
 			else
 			{
-				descriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 2, emergencyTextureImageView, textureSampler);
+				descriptorSet->Write(i * Graphics::MAX_FRAMES_IN_FLIGHT + j, 2, emergencyTextureImageView, textureSampler);
 			}
 		}
 	}
-}
-
-void MyScene::DestroyDescriptorSet()
-{
-	delete descriptorSet;
 }
 
 void MyScene::CreateWaxDescriptorSet()
@@ -660,11 +570,6 @@ void MyScene::WriteWaxDescriptorSet()
 			waxDescriptorSet->Write(i * MAX_FRAMES_IN_FLIGHT + j, 1, animationUniformBuffers[j], animationUniformBufferSize);
 		}
 	}
-}
-
-void MyScene::DestroyWaxDescriptorSet()
-{
-	delete waxDescriptorSet;
 }
 
 void MyScene::CreateLinePipeline()
@@ -821,24 +726,6 @@ void MyScene::CreateLinePipeline()
 	vkDestroyShaderModule(device, fragModule, nullptr);
 }
 
-void MyScene::CreateSkeletonBuffer()
-{
-	boneSize = static_cast<int>(model->GetBoneCount());
-
-	if (boneSize <= 0)
-	{
-		return;
-	}
-
-	CreateVertexBuffer(sizeof(LineVertex) * (2 * boneSize), model->GetBoneDataForDrawing(), skeletonLineBuffer, skeletonLineBufferMemory);
-}
-
-void MyScene::DestroySkeletonBuffer()
-{
-	DestroyBuffer(skeletonLineBuffer);
-	FreeMemory(skeletonLineBufferMemory);
-}
-
 void MyScene::CreateBlendingWeightDescriptorSet()
 {
 	blendingWeightDescriptorSet = new DescriptorSet(device, MAX_FRAMES_IN_FLIGHT * meshSize, {
@@ -885,33 +772,6 @@ void MyScene::DestroyBlendingWeightDescriptorSet()
 	delete blendingWeightDescriptorSet;
 }
 
-void MyScene::CreateAnimationUniformBuffers()
-{
-	if (boneSize <= 0)
-	{
-		return;
-	}
-
-	animationUniformBufferSize = sizeof(glm::mat4) * boneSize;
-	animationUniformBuffers.resize(MAX_FRAMES_IN_FLIGHT);
-	animationUniformBufferMemories.resize(MAX_FRAMES_IN_FLIGHT);
-
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		CreateBuffer(animationUniformBufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-			animationUniformBuffers[i], animationUniformBufferMemories[i]);
-	}
-}
-
-void MyScene::DestroyAnimationUniformBuffers()
-{
-	for (int i = 0; i < MAX_FRAMES_IN_FLIGHT; i++)
-	{
-		DestroyBuffer(animationUniformBuffers[i]);
-		FreeMemory(animationUniformBufferMemories[i]);
-	}
-}
-
 void MyScene::RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayout layout, VkShaderStageFlagBits targetStage, void* data, uint32_t dataSize)
 {
 	vkCmdPushConstants(commandBuffer, layout, targetStage, 0, dataSize, data);
@@ -920,6 +780,16 @@ void MyScene::RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayou
 void MyScene::RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayout layout, VkShaderStageFlagBits targetStage, void const* data, uint32_t dataSize)
 {
 	vkCmdPushConstants(commandBuffer, layout, targetStage, 0, dataSize, data);
+}
+
+Object* MyScene::FindObjectByName(std::string name)
+{
+	for (Object* obj : graphicResources)
+	{
+		if (obj->GetName().compare(name) == 0)
+			return obj;
+	}
+	return nullptr;
 }
 
 bool MyScene::HasStencilComponent(VkFormat format)
@@ -968,46 +838,4 @@ void MyScene::RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipel
 
 		vkCmdDrawIndexed(commandBuffer, indexCounts[i], 1, 0, 0, 0);
 	}
-}
-
-void MyScene::CreateEmergencyTexture()
-{
-
-	int texWidth, texHeight, texChannels;
-
-	stbi_set_flip_vertically_on_load(true);
-	stbi_uc* pixels = stbi_load("../Vulkan/Graphics/Model/EssentialImages/transparent.png", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
-	constexpr int RGBA = 4;
-	VkDeviceSize imageSize = texWidth * texHeight * RGBA;
-
-	VkBuffer stagingBuffer;
-	VkDeviceMemory stagingBufferMemory;
-
-	CreateBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
-	void* data;
-	vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
-	memcpy(data, pixels, static_cast<size_t>(imageSize));
-	vkUnmapMemory(device, stagingBufferMemory);
-
-	stbi_image_free(pixels);
-
-	CreateImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL, VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, emergencyTextureImage, emergencyTextureImageMemory);
-
-	TransitionImageLayout(emergencyTextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
-	CopyBufferToImage(stagingBuffer, emergencyTextureImage, static_cast<uint32_t>(texWidth), static_cast<uint32_t>(texHeight));
-
-	TransitionImageLayout(emergencyTextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
-
-	vkDestroyBuffer(device, stagingBuffer, nullptr);
-	vkFreeMemory(device, stagingBufferMemory, nullptr);
-	// Finished creating texture image (create staging buffer, copy image data, copy buffer data to image buffer, clean staging buffer)
-
-	// Create Image View
-	emergencyTextureImageView = CreateImageView(emergencyTextureImage, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_ASPECT_COLOR_BIT);
-}
-void MyScene::DestroyEmergencyTexture()
-{
-	vkDestroyImageView(device, emergencyTextureImageView, nullptr);
-	vkDestroyImage(device, emergencyTextureImage, nullptr);
-	vkFreeMemory(device, emergencyTextureImageMemory, nullptr);
 }

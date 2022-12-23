@@ -47,7 +47,7 @@ bool Buffer::Init()
 	return true;
 }
 
-void Buffer::Update()
+void Buffer::Update(float dt)
 {
 }
 

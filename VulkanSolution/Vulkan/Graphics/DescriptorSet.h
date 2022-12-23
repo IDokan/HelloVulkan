@@ -11,13 +11,20 @@ Creation Date 11.05.2022
 #pragma once
 
 #include <vector>
+#include <Engines/Objects/Object.h>
 #include <vulkan/vulkan.h>
 
-class DescriptorSet
+class Graphics;
+
+class DescriptorSet : public Object
 {
 public:
-	DescriptorSet(VkDevice device, unsigned int descriptorSetSize, std::vector<VkDescriptorSetLayoutBinding> layoutBindings);
+	DescriptorSet(Graphics* graphics, std::string name, unsigned int descriptorSetSize, std::vector<VkDescriptorSetLayoutBinding> layoutBindings);
 	~DescriptorSet();
+
+	bool Init();
+	void Update(float dt);
+	void Clean();
 
 	VkDescriptorSetLayout* GetDescriptorSetLayoutPtr();
 	VkDescriptorSet* GetDescriptorSetPtr(size_t index);

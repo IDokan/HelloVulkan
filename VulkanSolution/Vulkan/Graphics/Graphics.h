@@ -24,6 +24,8 @@ public:
 	friend Buffer;
 	friend UniformBuffer;
 public:
+	static constexpr unsigned int MAX_FRAMES_IN_FLIGHT = 2;
+public:
 	Graphics();
 	~Graphics();
 
@@ -97,8 +99,6 @@ private:
 	void GetSwapchainImages();
 
 
-private:
-	const unsigned int MAX_FRAMES_IN_FLIGHT = 2;
 private:
 	VkInstance instance{};
 	VkPhysicalDeviceProperties physicalDeviceProperties;

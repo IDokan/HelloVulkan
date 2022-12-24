@@ -56,8 +56,8 @@ bool MyScene::InitScene(Graphics* _graphics)
 	const int meshSize = model->GetMeshSize();
 	for (int i = 0; i < meshSize; i++)
 	{
-		graphicResources.push_back(new Buffer(graphics, model->GetMeshName(i) + std::string("vertex"), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex) * model->GetVertexCount(i), model->GetVertexData(i)));
-		graphicResources.push_back(new Buffer(graphics, model->GetMeshName(i) + std::string("index"), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, model->GetIndexCount(i), model->GetIndexData(i)));
+		graphicResources.push_back(new Buffer(graphics, std::string("vertex") + std::to_string(i), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex) * model->GetVertexCount(i), model->GetVertexData(i)));
+		graphicResources.push_back(new Buffer(graphics, std::string("index") + std::to_string(i), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, model->GetIndexCount(i), model->GetIndexData(i)));
 	}
 
 	graphicResources.push_back(new UniformBuffer(graphics, std::string("uniformBuffer"), sizeof(UniformBufferObject), Graphics::MAX_FRAMES_IN_FLIGHT));
@@ -138,10 +138,14 @@ void MyScene::FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer
 {
 	vkCmdFillBuffer(cmdBuffer, dstBuffer, offset, size, *(const uint32_t*)&value);
 }
+
 void MyScene::LoadNewModel()
 {
 	windowHolder->isPathDropped = false;
 	const char* newPath = windowHolder->path;
+
+	const int oldTextureSize = static_cast<const int>(model->GetDiffuseImagePaths().size());
+	const int oldMeshSize = model->GetMeshSize();
 
 	if (model->LoadModel(newPath) == false)
 	{
@@ -152,24 +156,69 @@ void MyScene::LoadNewModel()
 	// In order to clean previous model buffers successfully, 
 			// I should guarantee that deleted buffers are not in use by a command buffer.
 	// Thus, wait until the submitted command buffer completed execution.
-	VulkanHelper::VkCheck(vkDeviceWaitIdle(device), "failed to make logical device idle");
+	graphics->DeviceWaitIdle();
+	 
+	// Reload textures
+	const std::vector<std::string> texturePaths = model->GetDiffuseImagePaths();
+	const int textureSize = static_cast<const int>(texturePaths.size());
+	for (int i = 0; i < textureSize; i++)
+	{
+		if (i < oldTextureSize)
+		{
+			Texture* texture = dynamic_cast<Texture*>(FindObjectByName(std::string("diffuseImage") + std::to_string(i)));
+			texture->ChangeTexture(texturePaths[i]);
+		}
+		else
+		{
+			graphicResources.push_back(new Texture(graphics, std::string("diffuseImage") + std::to_string(i), texturePaths[i]));
+		}
+	}
+	for (int i = textureSize; i < oldTextureSize; i++)
+	{
+		Object* WillBeDeleted = FindObjectByName(std::string("diffuseImage") + std::to_string(i));
+		const auto& iter = std::find(graphicResources.begin(), graphicResources.end(), WillBeDeleted);
+		graphicResources.erase(iter);
+	}
 
-	const int oldTextureViewSize = static_cast<const int>(textureImageViews.size());
+	// Reload model buffers
+	const int meshSize = model->GetMeshSize();
+	for (int i = 0; i < meshSize; i++)
+	{
+		if (i < oldTextureSize)
+		{
+			Buffer* buffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("vertex") + std::to_string(i)));
+			buffer->ChangeBufferData(sizeof(Vertex) * model->GetVertexCount(i), model->GetVertexData(i));
+			Buffer* indexBuffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("index") + std::to_string(i)));
+			indexBuffer->ChangeBufferData(sizeof(Vertex) * model->GetIndexCount(i), model->GetIndexData(i));
+		}
+		else
+		{
+			graphicResources.push_back(new Buffer(graphics, std::string("vertex") + std::to_string(i), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex) * model->GetVertexCount(i), model->GetVertexData(i)));
+			graphicResources.push_back(new Buffer(graphics, std::string("index") + std::to_string(i), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, model->GetIndexCount(i), model->GetIndexData(i)));
+		}
+	}
+	for (int i = meshSize; i < oldMeshSize; i++)
+	{
+		Object* WillBeDeleted = FindObjectByName(std::string("vertex") + std::to_string(i));
+		const auto& iter = std::find(graphicResources.begin(), graphicResources.end(), WillBeDeleted);
+		graphicResources.erase(iter);
 
-	DestroyTextureImage();
-	DestroyModelBuffers();
-	DestroySkeletonBuffer();
-	DestroyAnimationUniformBuffers();
+		Object* WillBeDeleted2 = FindObjectByName(std::string("index") + std::to_string(i));
+		const auto& iter2 = std::find(graphicResources.begin(), graphicResources.end(), WillBeDeleted2);
+		graphicResources.erase(iter2);
+	}
 
-	const int oldMeshSize = meshSize;
+	Buffer* skeletonBuffer = dynamic_cast<Buffer*>(FindObjectByName("skeletonBuffer"));
+	skeletonBuffer->ChangeBufferData(sizeof(LineVertex) * 2 * model->GetBoneCount(), model->GetBoneDataForDrawing());
+
+
+	UniformBuffer* animationUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));
+	animationUniformBuffer->ChangeBufferData(sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT);
+
 
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
 
-	CreateSkeletonBuffer();
-	CreateAnimationUniformBuffers();
-	CreateModelBuffers();
-	CreateTextures(model->GetDiffuseImagePaths());
 	InitUniformBufferData();
 
 	// If loaded data is waxing model(do not have texture data),
@@ -194,7 +243,7 @@ void MyScene::LoadNewModel()
 	// It is an old code when there was no wax descriptor sets.
 	// Currently, Create descriptor sets at everytime, which might not be good.
 	// Solve two different functions, merge together and recover this functionality back.
-	if (meshSize > oldMeshSize || textureImageViews.size() > oldTextureViewSize)
+	if (meshSize > oldMeshSize || textureImageViews.size() > oldTextureSize)
 	{
 		DestroyDescriptorSet();
 		DestroyBlendingWeightDescriptorSet();

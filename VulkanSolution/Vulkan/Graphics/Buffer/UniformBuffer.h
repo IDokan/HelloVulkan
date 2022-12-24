@@ -29,6 +29,8 @@ public:
 	const VkBuffer GetBuffer(int i = 0);
 	const VkDeviceMemory GetBufferMemory(int i = 0);
 	VkDeviceSize GetBufferSize();
+
+	void ChangeBufferData(VkDeviceSize bufferSize, int numOfBuffer);
 private:
 	Graphics* graphics;
 

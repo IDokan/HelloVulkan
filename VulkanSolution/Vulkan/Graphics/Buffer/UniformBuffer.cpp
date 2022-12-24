@@ -80,3 +80,26 @@ VkDeviceSize UniformBuffer::GetBufferSize()
 {
 	return bufferSize;
 }
+
+void UniformBuffer::ChangeBufferData(VkDeviceSize bufferSize, int numOfBuffer)
+{
+	const VkDevice device = graphics->GetDevice();
+
+	for (VkBuffer& buffer : buffers)
+	{
+		vkDestroyBuffer(device, buffer, nullptr);
+	}
+	for (VkDeviceMemory& bufferMemory : bufferMemories)
+	{
+		vkFreeMemory(device, bufferMemory, nullptr);
+	}
+
+	buffers.resize(numOfBuffer);
+	bufferMemories.resize(numOfBuffer);
+
+	for (int i = 0; i < numOfBuffer; i++)
+	{
+		graphics->CreateBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+			buffers[i], bufferMemories[i]);
+	}
+}

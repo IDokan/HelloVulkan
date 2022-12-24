@@ -37,6 +37,8 @@ public:
 	void StartDrawing();
 	void EndDrawing();
 
+	void DeviceWaitIdle();
+
 	VkDevice GetDevice();
 	VkSampler GetTextureSampler();
 	VkRenderPass GetRenderPass();

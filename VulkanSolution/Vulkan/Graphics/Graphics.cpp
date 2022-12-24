@@ -75,7 +75,7 @@ bool Graphics::InitVulkan(const char* appName, uint32_t appVersion, Window* _win
 
 void Graphics::CleanVulkan()
 {
-	VulkanHelper::VkCheck(vkDeviceWaitIdle(device), "failed to make logical device idle");
+	DeviceWaitIdle();
 
 	DestroyTextureSampler();
 
@@ -179,6 +179,11 @@ void Graphics::EndDrawing()
 	}
 
 	UpdateCurrentFrameID();
+}
+
+void Graphics::DeviceWaitIdle()
+{
+	VulkanHelper::VkCheck(vkDeviceWaitIdle(device), "failed to make logical device idle");
 }
 
 VkDevice Graphics::GetDevice()
@@ -1077,7 +1082,7 @@ void Graphics::RecreateSwapchain()
 	DestroyDepthResources();
 	DestroySwapchain();
 
-	vkDeviceWaitIdle(device);
+	DeviceWaitIdle();
 
 	CreateSwapchain();
 	CreateImageViews();

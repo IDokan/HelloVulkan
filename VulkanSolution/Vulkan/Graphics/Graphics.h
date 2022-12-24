@@ -34,11 +34,16 @@ public:
 	bool InitVulkan(const char* appName, uint32_t appVersion, Window* windowHolder);
 	void CleanVulkan();
 
+	void StartDrawing();
+	void EndDrawing();
 
 	VkDevice GetDevice();
 	VkSampler GetTextureSampler();
 	VkRenderPass GetRenderPass();
 	VkExtent2D GetSwapchainExtent();
+
+	VkCommandBuffer GetCommandBuffer();
+	uint32_t GetCurrentFrameID();
 
 	void CreateTextureImageAndImageView(const std::string& path, VkImage& textureImage, VkDeviceMemory& textureImageMemory, VkImageView& textureImageView);
 	void DestroyTextureImageAndImageView(VkImage& textureImage, VkDeviceMemory textureImageMemory, VkImageView& textureImageView);
@@ -101,6 +106,9 @@ private:
 	void GetSwapchainImages();
 
 
+	void UpdateCurrentFrameID();
+	void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
+
 private:
 	VkInstance instance{};
 	VkPhysicalDeviceProperties physicalDeviceProperties;
@@ -136,7 +144,9 @@ private:
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
 	};
 
-	 VkSampler textureSampler;
+	VkSampler textureSampler;
 
 	Window* windowHolder;
+
+	uint32_t imageIndex;
 };

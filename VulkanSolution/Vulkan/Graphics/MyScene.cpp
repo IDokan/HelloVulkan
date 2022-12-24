@@ -34,7 +34,7 @@ Creation Date: 06.12.2021
 #include <Graphics/Pipelines/Pipeline.h>
 
 MyScene::MyScene(Window* window)
-	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), animationUniformBufferSize(0), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f)
+	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f)
 {
 }
 
@@ -112,79 +112,17 @@ void MyScene::CleanScene()
 	delete model;
 }
 
-void MyScene::DrawFrame(float dt)
+void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t currentFrameID)
 {
 	UpdateTimer(dt);
 
-	// Synchronize with GPU
-	vkWaitForFences(device, 1, &inFlightFences[currentFrameID], VK_TRUE, UINT64_MAX);
-
-	uint32_t imageIndex;
-	VkResult resultGetNextImage = vkAcquireNextImageKHR(device, swapchain, UINT64_MAX, imageAvailableSemaphores[currentFrameID], VK_NULL_HANDLE, &imageIndex);
-	if (windowHolder->windowFramebufferResized || resultGetNextImage == VK_ERROR_OUT_OF_DATE_KHR)
-	{
-		windowHolder->SetWindowFramebufferResized(false);
-		RecreateSwapchain();
-		return;
-	}
-	else if (resultGetNextImage != VK_SUCCESS && resultGetNextImage != VK_SUBOPTIMAL_KHR)
-	{
-		std::cout << "Acquiring next image has failed!" << std::endl;
-		abort();
-	}
 
 	UpdateUniformBuffer(currentFrameID);
-	UpdateAnimationUniformBuffer();
+	UpdateAnimationUniformBuffer(currentFrameID);
 
-	// Prevent deadlock, delay ResetFences
-	vkResetFences(device, 1, &inFlightFences[currentFrameID]);
+	RecordDrawModelCalls(commandBuffer);
 
-	vkResetCommandBuffer(commandBuffers[currentFrameID], 0);
-	RecordCommandBuffer(commandBuffers[currentFrameID], imageIndex);
-
-	VkSubmitInfo submitInfo{};
-	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-	VkSemaphore waitSemaphores[] = { imageAvailableSemaphores[currentFrameID] };
-	VkPipelineStageFlags waitStages[] = { VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT };
-	submitInfo.waitSemaphoreCount = 1;
-	submitInfo.pWaitSemaphores = waitSemaphores;
-	submitInfo.pWaitDstStageMask = waitStages;
-
-	submitInfo.commandBufferCount = 1;
-	submitInfo.pCommandBuffers = &commandBuffers[currentFrameID];
-
-	VkSemaphore signalSemaphores[] = { renderFinishedSemaphores[currentFrameID] };
-	submitInfo.signalSemaphoreCount = 1;
-	submitInfo.pSignalSemaphores = signalSemaphores;
-
-	VulkanHelper::VkCheck(vkQueueSubmit(queue, 1, &submitInfo, inFlightFences[currentFrameID]), "Submitting queue has failed!");
-
-	VkPresentInfoKHR presentInfo{};
-	presentInfo.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
-	presentInfo.waitSemaphoreCount = 1;
-	presentInfo.pWaitSemaphores = signalSemaphores;
-
-	VkSwapchainKHR swapchains[] = { swapchain };
-	presentInfo.swapchainCount = 1;
-	presentInfo.pSwapchains = swapchains;
-	presentInfo.pImageIndices = &imageIndex;
-	// It allows you to specify an array of VkResult values to check for every individual swap chain if presentation was successful.
-	// It's not necessary if you're only using a single swap chain, because you can simply use the return value of the present function.
-	presentInfo.pResults = nullptr;
-
-	VkResult resultQueuePresent = vkQueuePresentKHR(queue, &presentInfo);
-	if (windowHolder->windowFramebufferResized || resultQueuePresent == VK_ERROR_OUT_OF_DATE_KHR || resultQueuePresent == VK_SUBOPTIMAL_KHR)
-	{
-		windowHolder->SetWindowFramebufferResized(false);
-		RecreateSwapchain();
-	}
-	else if (resultQueuePresent != VK_SUCCESS)
-	{
-		std::cout << "Acquiring next image has failed!" << std::endl;
-		abort();
-	}
-
-	UpdateCurrentFrameID();
+	RecordDrawSkeletonCall(commandBuffer);
 }
 
 void MyScene::ResizeModelBuffers(int size)
@@ -292,60 +230,6 @@ void MyScene::UpdateTimer(float dt)
 	}
 }
 
-void MyScene::RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex)
-{
-	VkCommandBufferBeginInfo beginInfo{};
-	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-	beginInfo.flags = 0;
-	beginInfo.pInheritanceInfo = nullptr;
-
-	VulkanHelper::VkCheck(vkBeginCommandBuffer(commandBuffer, &beginInfo), "Begining command buffer has failed!");
-
-
-	// Starting a render pass??????
-	VkRenderPassBeginInfo renderPassInfo{};
-	renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-	renderPassInfo.renderPass = renderPass;
-	renderPassInfo.framebuffer = swapchainFramebuffers[imageIndex];
-	renderPassInfo.renderArea.offset = { 0, 0 };
-	renderPassInfo.renderArea.extent = swapchainExtent;
-
-	// Since VkClearValue is union, use appropriate member variable name for usage.
-	std::array<VkClearValue, 2> clearValues{};
-	clearValues[0].color = { { 0.4f, 0.f, 0.f, 1.f} };
-	clearValues[1].depthStencil = { 1.f, 0 };
-
-	renderPassInfo.clearValueCount = static_cast<uint32_t>(clearValues.size());
-	renderPassInfo.pClearValues = clearValues.data();
-
-	vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
-
-	VkViewport viewport{};
-	viewport.x = 0.f;
-	viewport.y = 0.f;
-	viewport.width = static_cast<float>(swapchainExtent.width);
-	viewport.height = static_cast<float>(swapchainExtent.height);
-	viewport.minDepth = 0.f;
-	viewport.maxDepth = 1.f;
-	vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
-
-	VkRect2D scissor{};
-	scissor.offset = { 0, 0 };
-	scissor.extent = swapchainExtent;
-	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
-
-
-	RecordDrawModelCalls(commandBuffer);
-
-	RecordDrawSkeletonCall(commandBuffer);
-
-	MyImGUI::GUIRender(commandBuffer);
-
-	vkCmdEndRenderPass(commandBuffer);
-
-	VulkanHelper::VkCheck(vkEndCommandBuffer(commandBuffer), "Ending command buffer has failed!");
-}
-
 void MyScene::RecordDrawModelCalls(VkCommandBuffer commandBuffer)
 {
 	// If show model flag is on, display model and blending weight model
@@ -377,22 +261,17 @@ void MyScene::RecordDrawModelCalls(VkCommandBuffer commandBuffer)
 	}
 }
 
-void MyScene::UpdateCurrentFrameID()
-{
-	currentFrameID = (currentFrameID + 1) % MAX_FRAMES_IN_FLIGHT;
-}
-
 void MyScene::InitUniformBufferData()
 {
-	VkExtent2D swapchainExtent = graphics->GetSwapchainExtent();
 	uniformData.model = model->CalculateAdjustBoundingBoxMatrix();
 	uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 0.f, 1.f));
+	VkExtent2D swapchainExtent = graphics->GetSwapchainExtent();
 	uniformData.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 10.f);
 	// flip the sign of the element because GLM originally designed for OpenGL, where Y coordinate of the clip coorinates is inverted.
 	uniformData.proj[1][1] *= -1;
 }
 
-void MyScene::UpdateUniformBuffer(uint32_t currentImage)
+void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 {
 	// Update camera if and only if the user does not control ImGui window.
 	if (MyImGUI::IsMouseOnImGUIWindow() == false)
@@ -455,12 +334,19 @@ void MyScene::UpdateUniformBuffer(uint32_t currentImage)
 
 		cameraPoint = cameraPoint + (static_cast<float>(input.MouseWheelScroll()) * (targetPoint - cameraPoint) * 0.1f);
 		uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 0.f, 1.f));
+
+		VkExtent2D swapchainExtent = graphics->GetSwapchainExtent();
+		uniformData.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 10.f);
+		// flip the sign of the element because GLM originally designed for OpenGL, where Y coordinate of the clip coorinates is inverted.
+		uniformData.proj[1][1] *= -1;
 	}
 
+	UniformBuffer* uniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("uniformBuffer"));
+
 	void* data;
-	vkMapMemory(device, uniformBuffersMemory[currentFrameID], 0, sizeof(UniformBufferObject), 0, &data);
-	memcpy(data, &uniformData, sizeof(UniformBufferObject));
-	vkUnmapMemory(device, uniformBuffersMemory[currentFrameID]);
+	vkMapMemory(graphics->GetDevice(), uniformBuffer->GetBufferMemory(currentFrameID), 0, uniformBuffer->GetBufferSize(), 0, &data);
+	memcpy(data, &uniformData, uniformBuffer->GetBufferSize());
+	vkUnmapMemory(graphics->GetDevice(), uniformBuffer->GetBufferMemory(currentFrameID));
 }
 
 void MyScene::WriteDescriptorSet()
@@ -514,7 +400,7 @@ void MyScene::WriteWaxDescriptorSet()
 	}
 }
 
-void MyScene::UpdateAnimationUniformBuffer()
+void MyScene::UpdateAnimationUniformBuffer(uint32_t currentFrameID)
 {
 	if (boneSize <= 0)
 	{
@@ -527,10 +413,11 @@ void MyScene::UpdateAnimationUniformBuffer()
 	model->GetAnimationData(timer, animationBufferData, bindPoseFlag);
 
 
+	UniformBuffer* animationUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));
 	void* data;
-	vkMapMemory(device, animationUniformBufferMemories[currentFrameID], 0, animationUniformBufferSize, 0, &data);
-	memcpy(data, animationBufferData.data(), animationUniformBufferSize);
-	vkUnmapMemory(device, animationUniformBufferMemories[currentFrameID]);
+	vkMapMemory(graphics->GetDevice(), animationUniformBuffer->GetBufferMemory(currentFrameID), 0, animationUniformBuffer->GetBufferSize(), 0, &data);
+	memcpy(data, animationBufferData.data(), animationUniformBuffer->GetBufferSize());
+	vkUnmapMemory(graphics->GetDevice(), animationUniformBuffer->GetBufferMemory(currentFrameID));
 }
 
 void MyScene::WriteBlendingWeightDescriptorSet()

@@ -26,7 +26,7 @@ public:
 	bool InitScene(Graphics* graphics);
 	void CleanScene();
 
-	void DrawFrame(float dt);
+	void DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t currentFrameID);
 
 	void CreateCubeImages();
 
@@ -45,10 +45,7 @@ private:
 
 	// It has drawing triangle part, which does not make sense.
 	// I'm gonna change it.
-	void RecordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
 	void RecordDrawModelCalls(VkCommandBuffer commandBuffer);
-
-	void UpdateCurrentFrameID();
 
 	void ResizeModelBuffers(int size);
 
@@ -56,7 +53,7 @@ private:
 	
 	void CreateUniformBuffers();
 	void InitUniformBufferData();
-	void UpdateUniformBuffer(uint32_t currentImage);
+	void UpdateUniformBuffer(uint32_t currentFrameID);
 
 	void WriteDescriptorSet();
 
@@ -98,7 +95,7 @@ private:
 	VkDeviceMemory skeletonLineBufferMemory;
 
 	int animationCount;
-	void UpdateAnimationUniformBuffer();
+	void UpdateAnimationUniformBuffer(uint32_t currentFrameID);
 
 	bool bindPoseFlag;
 	bool showSkeletonFlag;

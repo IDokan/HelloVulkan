@@ -85,7 +85,9 @@ void Engine::Update()
 
 	MyImGUI::DrawGUI();
 	
-	scene->DrawFrame(dt);
+	graphics->StartDrawing();
+	scene->DrawFrame(dt, graphics->GetCommandBuffer(), graphics->GetCurrentFrameID());
+	graphics->EndDrawing();
 }
 
 void Engine::Clean()

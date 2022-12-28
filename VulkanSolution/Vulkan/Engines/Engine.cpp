@@ -48,7 +48,7 @@ bool Engine::Init()
 		return false;
 	}
 
-	if (scene->InitScene() == false)
+	if (scene->InitScene(graphics) == false)
 	{
 		window->DisplayMessage("Init Failed!", "Init Scene information has Failed!");
 		return false;

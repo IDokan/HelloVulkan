@@ -9,6 +9,7 @@ Creation Date: 12.19.2022
 	Header file for Texture.
 ******************************************************************************/
 
+#pragma once
 #include <Engines/Objects/Object.h>
 #include <vulkan/vulkan.h>
 #include <vector>
@@ -26,6 +27,10 @@ public:
 	bool Init();
 	void Update(float dt);
 	void Clean();
+
+	VkPipelineLayout GetPipelineLayout();
+	VkPipeline GetPipeline();
+
 private:
 	static std::vector<char> readFile(const std::string& filename);
 	VkShaderModule CreateShaderModule(const std::vector<char>& code);

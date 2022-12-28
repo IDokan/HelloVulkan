@@ -12,6 +12,7 @@ Creation Date: 06.12.2021
 
 #include <fstream> // for ifstream to read spv file
 #include "Graphics/Structures/Structs.h"
+#include <Engines/Objects/Object.h>
 
 class Model;
 class Window;
@@ -88,12 +89,6 @@ private:
 	// @@ Line drawing variables
 	int boneSize;
 
-	VkPipelineLayout linePipelineLayout;
-	VkPipeline linePipeline;
-
-	VkBuffer skeletonLineBuffer;
-	VkDeviceMemory skeletonLineBufferMemory;
-
 	int animationCount;
 	void UpdateAnimationUniformBuffer(uint32_t currentFrameID);
 
@@ -101,16 +96,9 @@ private:
 	bool showSkeletonFlag;
 	
 
-	// @@ No texture pipeline (WaxPipeline).
-	VkPipeline waxPipeline;
-	VkPipelineLayout waxPipelineLayout;
-	// @@ End of no texture pipeline
-
 	// @@ Blending Weights
 	void WriteBlendingWeightDescriptorSet();
 	bool blendingWeightMode;
-	VkPipeline blendingWeightPipeline;
-	VkPipelineLayout blendingWeightPipelineLayout;
 
 
 	int selectedBone;
@@ -123,8 +111,6 @@ private:
 	bool showModel;
 	bool vertexPointsMode;
 	float pointSize;
-	VkPipeline vertexPointsPipeline;
-	VkPipelineLayout vertexPointsPipelineLayout;
 
 	Graphics* graphics;
 	std::vector<Object*> graphicResources;

@@ -11,6 +11,7 @@ Creation Date: 06.12.2021
 ******************************************************************************/
 #pragma once
 #include <iostream>
+#include <vector>
 
 enum VkResult;
 
@@ -33,6 +34,7 @@ namespace VulkanHelper
 
 
 	VkFormat FindDepthFormat(VkPhysicalDevice physicalDevice);
+	VkFormat FindSupportedFormat(VkPhysicalDevice physicalDevice, const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 
 
 
@@ -44,7 +46,6 @@ namespace VulkanHelper
 		);
 	}
 
-	VkFormat FindSupportedFormat(VkPhysicalDevice physicalDevice, const std::vector<VkFormat>& candidates, VkImageTiling tiling, VkFormatFeatureFlags features);
 
 
 

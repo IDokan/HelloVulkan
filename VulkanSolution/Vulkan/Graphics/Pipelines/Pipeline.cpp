@@ -334,6 +334,16 @@ void Pipeline::Clean()
 	vkDestroyPipelineLayout(device, pipelineLayout, nullptr);
 }
 
+VkPipelineLayout Pipeline::GetPipelineLayout()
+{
+	return pipelineLayout;
+}
+
+VkPipeline Pipeline::GetPipeline()
+{
+	return pipeline;
+}
+
 std::vector<char> Pipeline::readFile(const std::string& filename)
 
 {

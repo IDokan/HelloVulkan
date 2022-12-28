@@ -8,7 +8,7 @@ Author
 Creation Date: 12.20.2022
 	Header file for Buffers.
 ******************************************************************************/
-
+#pragma once
 #include <Engines/Objects/Object.h>
 #include <vulkan/vulkan.h>
 

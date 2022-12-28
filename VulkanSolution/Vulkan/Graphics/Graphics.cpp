@@ -70,6 +70,8 @@ bool Graphics::InitVulkan(const char* appName, uint32_t appVersion, Window* _win
 
 	CreateTextureSampler();
 
+	MyImGUI::InitImGUI(windowHolder->glfwWindow, device, instance, physicalDevice, queue, renderPass, commandBuffers.front());
+
 	return true;
 }
 

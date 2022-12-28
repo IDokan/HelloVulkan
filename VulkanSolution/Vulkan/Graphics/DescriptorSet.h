@@ -26,6 +26,8 @@ public:
 	void Update(float dt);
 	void Clean();
 
+	void ChangeDescriptorSet(unsigned int descriptorSetSize, std::vector<VkDescriptorSetLayoutBinding> layoutBindings);
+
 	VkDescriptorSetLayout* GetDescriptorSetLayoutPtr();
 	VkDescriptorSet* GetDescriptorSetPtr(size_t index);
 

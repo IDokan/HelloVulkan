@@ -157,7 +157,7 @@ void MyScene::LoadNewModel()
 			// I should guarantee that deleted buffers are not in use by a command buffer.
 	// Thus, wait until the submitted command buffer completed execution.
 	graphics->DeviceWaitIdle();
-	 
+
 	// Reload textures
 	const std::vector<std::string> texturePaths = model->GetDiffuseImagePaths();
 	const int textureSize = static_cast<const int>(texturePaths.size());
@@ -222,14 +222,20 @@ void MyScene::LoadNewModel()
 	InitUniformBufferData();
 
 	// If loaded data is waxing model(do not have texture data),
-	if (textureImageViews.size() <= 0)
+	if (textureSize <= 0)
 	{
 		if (meshSize > oldMeshSize)
 		{
-			DestroyWaxDescriptorSet();
-			DestroyBlendingWeightDescriptorSet();
-			CreateWaxDescriptorSet();
-			CreateBlendingWeightDescriptorSet();
+			DescriptorSet* waxDes = dynamic_cast<DescriptorSet*>(FindObjectByName("waxDescriptor"));
+			waxDes->ChangeDescriptorSet(Graphics::MAX_FRAMES_IN_FLIGHT * meshSize, {
+					{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+					{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
+				});
+			DescriptorSet* blendingDes = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
+			blendingDes->ChangeDescriptorSet(Graphics::MAX_FRAMES_IN_FLIGHT * meshSize, {
+				{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+				{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
+			});
 		}
 		else
 		{
@@ -241,14 +247,21 @@ void MyScene::LoadNewModel()
 	}
 
 	// It is an old code when there was no wax descriptor sets.
-	// Currently, Create descriptor sets at everytime, which might not be good.
+	// Currently, Create descriptor sets at everytime reloads, which might not be good. (?)
 	// Solve two different functions, merge together and recover this functionality back.
-	if (meshSize > oldMeshSize || textureImageViews.size() > oldTextureSize)
+	if (meshSize > oldMeshSize || textureSize > oldTextureSize)
 	{
-		DestroyDescriptorSet();
-		DestroyBlendingWeightDescriptorSet();
-		CreateDescriptorSet();
-		CreateBlendingWeightDescriptorSet();
+		DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("descriptor"));
+		des->ChangeDescriptorSet(Graphics::MAX_FRAMES_IN_FLIGHT * meshSize, {
+		{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+		{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+		{2, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_FRAGMENT_BIT, nullptr}
+			});
+		DescriptorSet* blendingDes = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
+		blendingDes->ChangeDescriptorSet(Graphics::MAX_FRAMES_IN_FLIGHT * meshSize, {
+			{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+			{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
+			});
 	}
 	else
 	{
@@ -260,8 +273,6 @@ void MyScene::LoadNewModel()
 
 void MyScene::InitGUI()
 {
-	MyImGUI::InitImGUI(windowHolder->glfwWindow, device, instance, physicalDevice, queue, renderPass, commandBuffers.front());
-
 	MyImGUI::SendModelInfo(model, &showModel, &vertexPointsMode, &pointSize);
 	MyImGUI::SendSkeletonInfo(&showSkeletonFlag, &blendingWeightMode, &selectedBone);
 	MyImGUI::SendAnimationInfo(&timer, &bindPoseFlag);
@@ -286,18 +297,24 @@ void MyScene::RecordDrawModelCalls(VkCommandBuffer commandBuffer)
 	{
 		if (blendingWeightMode == true)
 		{
-			RecordPushConstants(commandBuffer, blendingWeightPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &selectedBone, sizeof(int));
-			RecordDrawMeshCall(commandBuffer, blendingWeightPipeline, blendingWeightPipelineLayout, blendingWeightDescriptorSet);
+			Pipeline* bwPipeline = dynamic_cast<Pipeline*>(FindObjectByName("blendingWeightPipeline"));
+			DescriptorSet* bwDes = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
+			RecordPushConstants(commandBuffer, bwPipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &selectedBone, sizeof(int));
+			RecordDrawMeshCall(commandBuffer, bwPipeline->GetPipeline(), bwPipeline->GetPipelineLayout(), bwDes);
 		}
 		else
 		{
-			if (textureImageViews.size() <= 0)
+			if (model->GetDiffuseImagePaths().size() <= 0)
 			{
-				RecordDrawMeshCall(commandBuffer, waxPipeline, waxPipelineLayout, waxDescriptorSet);
+				Pipeline* wPipeline = dynamic_cast<Pipeline*>(FindObjectByName("waxPipeline"));
+				DescriptorSet* wDes = dynamic_cast<DescriptorSet*>(FindObjectByName("waxDescriptor"));
+				RecordDrawMeshCall(commandBuffer, wPipeline->GetPipeline(), wPipeline->GetPipelineLayout(), wDes);
 			}
 			else
 			{
-				RecordDrawMeshCall(commandBuffer, pipeline, pipelineLayout, descriptorSet);
+				Pipeline* pipeline = dynamic_cast<Pipeline*>(FindObjectByName("pipeline"));
+				DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("descriptor"));
+				RecordDrawMeshCall(commandBuffer, pipeline->GetPipeline(), pipeline->GetPipelineLayout(), des);
 			}
 		}
 	}
@@ -305,8 +322,10 @@ void MyScene::RecordDrawModelCalls(VkCommandBuffer commandBuffer)
 	// No matter showing model or not, display vertex points if and only if vertex points mode is on.
 	if (vertexPointsMode == true)
 	{
-		RecordPushConstants(commandBuffer, vertexPointsPipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &pointSize, sizeof(float));
-		RecordDrawMeshCall(commandBuffer, vertexPointsPipeline, vertexPointsPipelineLayout, blendingWeightDescriptorSet);
+		Pipeline* vPipeline = dynamic_cast<Pipeline*>(FindObjectByName("vertexPipeline"));
+		DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
+		RecordPushConstants(commandBuffer, vPipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &pointSize, sizeof(float));
+		RecordDrawMeshCall(commandBuffer, vPipeline->GetPipeline(), vPipeline->GetPipelineLayout(), des);
 	}
 }
 
@@ -404,7 +423,7 @@ void MyScene::WriteDescriptorSet()
 	UniformBuffer* uniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("uniformBuffer"));
 	UniformBuffer* animationUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));
 	Texture* emergencyTexture = dynamic_cast<Texture*>(FindObjectByName("EmergencyTexture"));
-	
+
 	const std::vector<std::string>& paths = model->GetDiffuseImagePaths();
 	std::vector<Texture*> textures(paths.size(), nullptr);
 	for (int i = 0; i < paths.size(); i++)
@@ -516,22 +535,25 @@ void MyScene::RecordDrawSkeletonCall(VkCommandBuffer commandBuffer)
 		return;
 	}
 
+	Pipeline* linePipeline = dynamic_cast<Pipeline*>(FindObjectByName("linePipeline"));
 	if (blendingWeightMode == true)
 	{
-		RecordPushConstants(commandBuffer, linePipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &selectedBone, sizeof(int));
+		RecordPushConstants(commandBuffer, linePipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &selectedBone, sizeof(int));
 	}
 	else
 	{
 		const int noData{ -1 };
-		RecordPushConstants(commandBuffer, linePipelineLayout, VK_SHADER_STAGE_VERTEX_BIT, &noData, sizeof(int));
+		RecordPushConstants(commandBuffer, linePipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &noData, sizeof(int));
 	}
 
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipeline);
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipeline->GetPipeline());
 
-	VkBuffer VB[] = { skeletonLineBuffer };
+	Buffer* skeletonBuffer = dynamic_cast<Buffer*>(FindObjectByName("skeletonBuffer"));
+	DescriptorSet* bwDescriptor = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
+	VkBuffer VB[] = { skeletonBuffer->GetBuffer() };
 	VkDeviceSize offsets[] = { 0 };
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipelineLayout, 0, 1, blendingWeightDescriptorSet->GetDescriptorSetPtr(currentFrameID), 0, nullptr);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipeline->GetPipelineLayout(), 0, 1, bwDescriptor->GetDescriptorSetPtr(graphics->GetCurrentFrameID()), 0, nullptr);
 
 	vkCmdDraw(commandBuffer, boneSize * 2, 1, 0, 0);
 }
@@ -540,13 +562,14 @@ void MyScene::RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipel
 {
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
+	const int meshSize = model->GetMeshSize();
 	for (int i = 0; i < meshSize; i++)
 	{
 		VkBuffer VB[] = { vertexBuffers[i] };
 		VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
 		vkCmdBindIndexBuffer(commandBuffer, indexBuffers[i], 0, VK_INDEX_TYPE_UINT32);
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, descriptorSet->GetDescriptorSetPtr(i * MAX_FRAMES_IN_FLIGHT + currentFrameID), 0, nullptr);
+		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, descriptorSet->GetDescriptorSetPtr(i * Graphics::MAX_FRAMES_IN_FLIGHT + graphics->GetCurrentFrameID()), 0, nullptr);
 
 		vkCmdDrawIndexed(commandBuffer, indexCounts[i], 1, 0, 0, 0);
 	}

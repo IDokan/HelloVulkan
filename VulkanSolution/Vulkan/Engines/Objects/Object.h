@@ -8,7 +8,10 @@ Author
 Creation Date: 12.19.2022
 	header file for object.
 ******************************************************************************/
+#pragma once
 #include <string>
+
+class Object;
 
 class Object
 {

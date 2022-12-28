@@ -78,6 +78,55 @@ void DescriptorSet::Clean()
 	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
 }
 
+void DescriptorSet::ChangeDescriptorSet(unsigned int _descriptorSetSize, std::vector<VkDescriptorSetLayoutBinding> layoutBindings)
+{
+	vkDestroyDescriptorPool(device, descriptorPool, nullptr);
+	vkDestroyDescriptorSetLayout(device, descriptorSetLayout, nullptr);
+
+	descriptorSetSize = _descriptorSetSize;
+	bindingTable = layoutBindings;
+
+	/// @@ Create Descriptor Set Layout
+	VkDescriptorSetLayoutCreateInfo layoutCreateInfo{};
+	layoutCreateInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+	layoutCreateInfo.bindingCount = bindingTable.size();
+	layoutCreateInfo.pBindings = bindingTable.data();
+
+	VulkanHelper::VkCheck(vkCreateDescriptorSetLayout(device, &layoutCreateInfo, nullptr, &descriptorSetLayout), "Creating descriptor set layout has failed!");
+	/// @@ End of creating Descriptor Set Layout
+
+
+	/// @@ Create Descriptor Pool
+	// Assemble the same type descriptor set bindings to the sum of them in one descriptor type.
+	std::vector<VkDescriptorPoolSize> poolSizes;
+	CreateDescriptorPoolSize(poolSizes);
+
+	VkDescriptorPoolCreateInfo poolInfo{};
+	poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+	poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+	poolInfo.pPoolSizes = poolSizes.data();
+	poolInfo.maxSets = descriptorSetSize;
+
+	VulkanHelper::VkCheck(vkCreateDescriptorPool(device, &poolInfo, nullptr, &descriptorPool), "Creating descriptor pool has failed!");
+	/// @@ End of creating Descriptor Pool
+
+
+	/// @@ Create Descriptor Sets
+	std::vector<VkDescriptorSetLayout> layouts(descriptorSetSize, descriptorSetLayout);
+	VkDescriptorSetAllocateInfo allocInfo{};
+	allocInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+	allocInfo.pNext = nullptr;
+	allocInfo.descriptorPool = descriptorPool;
+	allocInfo.descriptorSetCount = static_cast<uint32_t>(descriptorSetSize);
+	allocInfo.pSetLayouts = layouts.data();
+
+	// vkAllocateDescriptorSets may fail with the error code VK_ERROR_POOL_OUT_OF_MEMORY 
+		// if the pool is not sufficiently large, 
+		// but the driver may also try to solve the problem internally.
+	VulkanHelper::VkCheck(vkAllocateDescriptorSets(device, &allocInfo, descriptorSets.data()), "Allocating descriptor sets has failed!");
+	/// @@ End of creating Descriptor Sets
+}
+
 VkDescriptorSetLayout* DescriptorSet::GetDescriptorSetLayoutPtr()
 {
 	return &descriptorSetLayout;

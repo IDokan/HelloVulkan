@@ -52,12 +52,12 @@ bool MyScene::InitScene(Graphics* _graphics)
 	{
 		graphicResources.push_back(new Texture(graphics, std::string("diffuseImage") + std::to_string(i), paths[i]));
 	}
-	graphicResources.push_back(new Buffer(graphics, "skeletonBuffer", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(LineVertex) * 2 * model->GetBoneCount(), model->GetBoneDataForDrawing()));
+	graphicResources.push_back(new Buffer(graphics, "skeletonBuffer", VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(LineVertex), 2 * model->GetBoneCount(), model->GetBoneDataForDrawing()));
 	const int meshSize = model->GetMeshSize();
 	for (int i = 0; i < meshSize; i++)
 	{
-		graphicResources.push_back(new Buffer(graphics, std::string("vertex") + std::to_string(i), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex) * model->GetVertexCount(i), model->GetVertexData(i)));
-		graphicResources.push_back(new Buffer(graphics, std::string("index") + std::to_string(i), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, model->GetIndexCount(i), model->GetIndexData(i)));
+		graphicResources.push_back(new Buffer(graphics, std::string("vertex") + std::to_string(i), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex), model->GetVertexCount(i), model->GetVertexData(i)));
+		graphicResources.push_back(new Buffer(graphics, std::string("index") + std::to_string(i), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, sizeof(uint32_t), model->GetIndexCount(i), model->GetIndexData(i)));
 	}
 
 	graphicResources.push_back(new UniformBuffer(graphics, std::string("uniformBuffer"), sizeof(UniformBufferObject), Graphics::MAX_FRAMES_IN_FLIGHT));
@@ -92,7 +92,7 @@ bool MyScene::InitScene(Graphics* _graphics)
 	DescriptorSet* blendingWeightDescriptor = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
 	graphicResources.push_back(new Pipeline(graphics, "blendingWeightPipeline", "spv/blendingWeight.vert.spv", "spv/blendingWeight.frag.spv", Vertex::GetBindingDescription(), Vertex::GetAttributeDescriptions(), sizeof(int), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptor->GetDescriptorSetLayoutPtr()));
 
-	graphicResources.push_back(new Pipeline(graphics, "vertexPipeline", "spv/vertexPoints.vert.spv", "spv/vertexPoints.frag.spv", LineVertex::GetBindingDescription(), LineVertex::GetAttributeDescriptions(), sizeof(float), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptor->GetDescriptorSetLayoutPtr(), VK_PRIMITIVE_TOPOLOGY_POINT_LIST));
+	graphicResources.push_back(new Pipeline(graphics, "vertexPipeline", "spv/vertexPoints.vert.spv", "spv/vertexPoints.frag.spv", Vertex::GetBindingDescription(), Vertex::GetAttributeDescriptions(), sizeof(float), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptor->GetDescriptorSetLayoutPtr(), VK_PRIMITIVE_TOPOLOGY_POINT_LIST));
 
 	graphicResources.push_back(new Pipeline(graphics, "linePipeline", "spv/skeleton.vert.spv", "spv/skeleton.frag.spv", LineVertex::GetBindingDescription(), LineVertex::GetAttributeDescriptions(), sizeof(int), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptor->GetDescriptorSetLayoutPtr(), VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_FALSE));
 
@@ -123,15 +123,6 @@ void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t curren
 	RecordDrawModelCalls(commandBuffer);
 
 	RecordDrawSkeletonCall(commandBuffer);
-}
-
-void MyScene::ResizeModelBuffers(int size)
-{
-	vertexBuffers.resize(size);
-	vertexBufferMemories.resize(size);
-	indexBuffers.resize(size);
-	indexBufferMemories.resize(size);
-	indexCounts.resize(size);
 }
 
 void MyScene::FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize size, const float value)
@@ -193,8 +184,8 @@ void MyScene::LoadNewModel()
 		}
 		else
 		{
-			graphicResources.push_back(new Buffer(graphics, std::string("vertex") + std::to_string(i), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex) * model->GetVertexCount(i), model->GetVertexData(i)));
-			graphicResources.push_back(new Buffer(graphics, std::string("index") + std::to_string(i), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, model->GetIndexCount(i), model->GetIndexData(i)));
+			graphicResources.push_back(new Buffer(graphics, std::string("vertex") + std::to_string(i), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex), model->GetVertexCount(i), model->GetVertexData(i)));
+			graphicResources.push_back(new Buffer(graphics, std::string("index") + std::to_string(i), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, sizeof(uint32_t), model->GetIndexCount(i), model->GetIndexData(i)));
 		}
 	}
 	for (int i = meshSize; i < oldMeshSize; i++)
@@ -350,6 +341,7 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 		glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
 		glm::vec2 mouseDelta = input.GetMousePosition() - input.GetPresentMousePosition();
 
+		// Move mouse during pressing left alt, move target position
 		if (isMousePressed && isLeftAltPressed)
 		{
 			static constexpr glm::vec3 globalUp = glm::vec3(0.f, 0.f, 1.f);
@@ -364,13 +356,14 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 
 			glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
 		}
+		// Press wheel button, init target position
 		else if (input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_MIDDLE))
 		{
 			targetPoint = glm::vec3(0.f, 0.f, 0.f);
 			cameraPoint = glm::vec3(0.f, 2.f, 2.f);
 		}
 
-
+		// Move mouse, rotate a model
 		if (isMousePressed && !isLeftAltPressed)
 		{
 
@@ -399,7 +392,7 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 				uniformData.model;
 		}
 
-
+		// Zoom in & out
 		cameraPoint = cameraPoint + (static_cast<float>(input.MouseWheelScroll()) * (targetPoint - cameraPoint) * 0.1f);
 		uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 0.f, 1.f));
 
@@ -562,15 +555,18 @@ void MyScene::RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipel
 {
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 
+
 	const int meshSize = model->GetMeshSize();
 	for (int i = 0; i < meshSize; i++)
 	{
-		VkBuffer VB[] = { vertexBuffers[i] };
+		Buffer* vertexBuffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("vertex") + std::to_string(i)));
+		Buffer* indexBuffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("index") + std::to_string(i)));
+		VkBuffer VB[] = { vertexBuffer->GetBuffer() };
 		VkDeviceSize offsets[] = { 0 };
 		vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
-		vkCmdBindIndexBuffer(commandBuffer, indexBuffers[i], 0, VK_INDEX_TYPE_UINT32);
+		vkCmdBindIndexBuffer(commandBuffer, indexBuffer->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
 		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, descriptorSet->GetDescriptorSetPtr(i * Graphics::MAX_FRAMES_IN_FLIGHT + graphics->GetCurrentFrameID()), 0, nullptr);
 
-		vkCmdDrawIndexed(commandBuffer, indexCounts[i], 1, 0, 0, 0);
+		vkCmdDrawIndexed(commandBuffer, indexBuffer->GetBufferDataSize(), 1, 0, 0, 0);
 	}
 }

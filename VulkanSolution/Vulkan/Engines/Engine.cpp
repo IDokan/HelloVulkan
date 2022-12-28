@@ -96,9 +96,9 @@ void Engine::Clean()
 
 	MyImGUI::DestroyGUIResources();
 
-	graphics->CleanVulkan();
-
 	scene->CleanScene();
+
+	graphics->CleanVulkan();
 }
 
 bool Engine::IsUpdate()

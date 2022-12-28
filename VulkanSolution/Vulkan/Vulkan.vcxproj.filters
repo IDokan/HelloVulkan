@@ -121,6 +121,9 @@
     <ClCompile Include="Graphics\Buffer\UniformBuffer.cpp">
       <Filter>Graphics\Buffer</Filter>
     </ClCompile>
+    <ClCompile Include="Helper\VulkanHelper.cpp">
+      <Filter>Helper</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GLMath.h">

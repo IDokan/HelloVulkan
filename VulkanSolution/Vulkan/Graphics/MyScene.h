@@ -48,10 +48,6 @@ private:
 	// I'm gonna change it.
 	void RecordDrawModelCalls(VkCommandBuffer commandBuffer);
 
-	void ResizeModelBuffers(int size);
-
-	
-	
 	void CreateUniformBuffers();
 	void InitUniformBufferData();
 	void UpdateUniformBuffer(uint32_t currentFrameID);
@@ -68,13 +64,6 @@ private:
 
 private:
 	Window* windowHolder;
-	
-	std::vector<uint32_t> indexCounts;
-
-	std::vector<VkBuffer> vertexBuffers;
-	std::vector<VkDeviceMemory> vertexBufferMemories;
-	std::vector<VkBuffer> indexBuffers;
-	std::vector<VkDeviceMemory> indexBufferMemories;
 	
 	Model* model;
 

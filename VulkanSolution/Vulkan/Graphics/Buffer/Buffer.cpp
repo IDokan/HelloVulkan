@@ -11,12 +11,14 @@ Creation Date: 12.20.2022
 #include "Buffer.h"
 #include <Graphics/Graphics.h>
 
-Buffer::Buffer(Graphics* graphics, std::string bufferName, VkBufferUsageFlags usage, VkDeviceSize bufferSize, void* data)
-	: Object(bufferName), graphics(graphics), usage(usage)
+Buffer::Buffer(Graphics* graphics, std::string bufferName, VkBufferUsageFlags usage, unsigned int dataTypeSize, size_t dataSize, void* data)
+	: Object(bufferName), graphics(graphics), usage(usage), dataTypeSize(dataTypeSize), dataSize(dataSize)
 {
 	// Use two buffers.
 	// One for writing vertex data, the other is actual vertex buffer which we cannot see and use(map) at CPU.
 	// The reason why use two buffers is the buffer we can see at CPU is not a good buffer from the GPU side.
+
+	VkDeviceSize bufferSize = dataTypeSize * dataSize;
 
 	VkBuffer stagingBuffer;
 	VkDeviceMemory stagingBufferMemory;
@@ -56,6 +58,16 @@ void Buffer::Clean()
 	const VkDevice device = graphics->GetDevice();
 	vkDestroyBuffer(device, buffer, nullptr);
 	vkFreeMemory(device, bufferMemory, nullptr);
+}
+
+unsigned int Buffer::GetBufferDataTypeSize()
+{
+	return dataTypeSize;
+}
+
+size_t Buffer::GetBufferDataSize()
+{
+	return dataSize;
 }
 
 const VkBuffer Buffer::GetBuffer()

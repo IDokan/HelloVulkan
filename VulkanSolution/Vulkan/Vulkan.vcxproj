@@ -195,6 +195,7 @@ xcopy /y /d "$(FBX_SDK)\lib\vs2019\$(PlatformTarget)\$(Configuration)\*.dll" "$(
     <ClCompile Include="Graphics\Pipelines\Pipeline.cpp" />
     <ClCompile Include="Graphics\Structures\Structs.cpp" />
     <ClCompile Include="Graphics\Textures\Texture.cpp" />
+    <ClCompile Include="Helper\VulkanHelper.cpp" />
     <ClCompile Include="ImGUI\backends\imgui_impl_glfw.cpp">
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">false</ExcludedFromBuild>
       <ExcludedFromBuild Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">false</ExcludedFromBuild>

@@ -17,13 +17,15 @@ class Graphics;
 class Buffer : public Object
 {
 public:
-	Buffer(Graphics* graphics, std::string bufferName, VkBufferUsageFlags usage, VkDeviceSize bufferSize, void* data);
+	Buffer(Graphics* graphics, std::string bufferName, VkBufferUsageFlags usage, unsigned int dataTypeSize, size_t dataSize, void* data);
 	~Buffer();
 
 	bool Init();
 	void Update(float dt);
 	void Clean();
 
+	unsigned int GetBufferDataTypeSize();
+	size_t GetBufferDataSize();
 	const VkBuffer GetBuffer();
 	const VkDeviceMemory GetBufferMemory();
 
@@ -32,6 +34,9 @@ private:
 	Graphics* graphics;
 
 	VkBufferUsageFlags usage;
+
+	unsigned int dataTypeSize;
+	size_t dataSize;
 
 	VkBuffer buffer;
 	VkDeviceMemory bufferMemory;

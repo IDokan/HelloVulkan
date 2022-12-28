@@ -228,7 +228,7 @@ bool Graphics::CreateInstance(const char* appName, uint32_t appVersion)
 	applicationInfo.applicationVersion = appVersion;
 	applicationInfo.pEngineName = "Sinil Engine";
 	applicationInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-	applicationInfo.apiVersion = VK_API_VERSION_1_0;
+	applicationInfo.apiVersion = VK_API_VERSION_1_3;
 
 	uint32_t glfwExtensionCount;
 	const char** extensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);

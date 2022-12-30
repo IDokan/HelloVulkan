@@ -102,7 +102,7 @@ void Graphics::CleanVulkan()
 	DestroyInstance();
 }
 
-void Graphics::StartDrawing()
+bool Graphics::StartDrawing()
 {
 	// Synchronize with GPU
 	vkWaitForFences(device, 1, &inFlightFences[currentFrameID], VK_TRUE, UINT64_MAX);
@@ -112,12 +112,13 @@ void Graphics::StartDrawing()
 	{
 		windowHolder->SetWindowFramebufferResized(false);
 		RecreateSwapchain();
-		return;
+		return false;
 	}
 	else if (resultGetNextImage != VK_SUCCESS && resultGetNextImage != VK_SUBOPTIMAL_KHR)
 	{
 		std::cout << "Acquiring next image has failed!" << std::endl;
 		abort();
+		return false;
 	}
 
 
@@ -127,6 +128,8 @@ void Graphics::StartDrawing()
 	vkResetCommandBuffer(commandBuffers[currentFrameID], 0);
 
 	RecordCommandBuffer(commandBuffers[currentFrameID], imageIndex);
+
+	return true;
 }
 
 void Graphics::EndDrawing()
@@ -1070,6 +1073,8 @@ const VkExtent2D Graphics::ChooseSwapExtent(const VkSurfaceCapabilitiesKHR& capa
 
 void Graphics::RecreateSwapchain()
 {
+	DeviceWaitIdle();
+
 	int width = 0;
 	int height = 0;
 	glfwGetFramebufferSize(windowHolder->glfwWindow, &width, &height);
@@ -1083,8 +1088,6 @@ void Graphics::RecreateSwapchain()
 	DestroyImageViews();
 	DestroyDepthResources();
 	DestroySwapchain();
-
-	DeviceWaitIdle();
 
 	CreateSwapchain();
 	CreateImageViews();

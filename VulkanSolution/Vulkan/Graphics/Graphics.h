@@ -34,7 +34,7 @@ public:
 	bool InitVulkan(const char* appName, uint32_t appVersion, Window* windowHolder);
 	void CleanVulkan();
 
-	void StartDrawing();
+	bool StartDrawing();
 	void EndDrawing();
 
 	void DeviceWaitIdle();

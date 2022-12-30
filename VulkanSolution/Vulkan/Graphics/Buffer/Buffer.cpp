@@ -9,6 +9,7 @@ Creation Date: 12.20.2022
 	Source file for Buffers.
 ******************************************************************************/
 #include "Buffer.h"
+#include <Engines/Objects/Object.h>
 #include <Graphics/Graphics.h>
 
 Buffer::Buffer(Graphics* graphics, std::string bufferName, VkBufferUsageFlags usage, unsigned int dataTypeSize, size_t dataSize, void* data)
@@ -70,18 +71,22 @@ size_t Buffer::GetBufferDataSize()
 	return dataSize;
 }
 
-const VkBuffer Buffer::GetBuffer()
+VkBuffer Buffer::GetBuffer()
 {
 	return buffer;
 }
 
-const VkDeviceMemory Buffer::GetBufferMemory()
+VkDeviceMemory Buffer::GetBufferMemory()
 {
 	return bufferMemory;
 }
 
-void Buffer::ChangeBufferData(VkDeviceSize bufferSize, void* data)
+void Buffer::ChangeBufferData(unsigned int _dataTypeSize, size_t _dataSize, void* data)
 {
+	dataTypeSize = _dataTypeSize;
+	dataSize = _dataSize;
+	VkDeviceSize bufferSize = dataTypeSize * dataSize;
+
 	const VkDevice device = graphics->GetDevice();
 	vkDestroyBuffer(device, buffer, nullptr);
 	vkFreeMemory(device, bufferMemory, nullptr);

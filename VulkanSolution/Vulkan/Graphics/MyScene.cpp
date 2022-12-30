@@ -34,7 +34,7 @@ Creation Date: 06.12.2021
 #include <Graphics/Pipelines/Pipeline.h>
 
 MyScene::MyScene(Window* window)
-	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), boneSize(0), animationCount(0), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f)
+	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f)
 {
 }
 
@@ -175,12 +175,12 @@ void MyScene::LoadNewModel()
 	const int meshSize = model->GetMeshSize();
 	for (int i = 0; i < meshSize; i++)
 	{
-		if (i < oldTextureSize)
+		if (i < oldMeshSize)
 		{
 			Buffer* buffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("vertex") + std::to_string(i)));
-			buffer->ChangeBufferData(sizeof(Vertex) * model->GetVertexCount(i), model->GetVertexData(i));
+			buffer->ChangeBufferData(sizeof(Vertex), model->GetVertexCount(i), model->GetVertexData(i));
 			Buffer* indexBuffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("index") + std::to_string(i)));
-			indexBuffer->ChangeBufferData(sizeof(Vertex) * model->GetIndexCount(i), model->GetIndexData(i));
+			indexBuffer->ChangeBufferData(sizeof(uint32_t), model->GetIndexCount(i), model->GetIndexData(i));
 		}
 		else
 		{
@@ -200,7 +200,7 @@ void MyScene::LoadNewModel()
 	}
 
 	Buffer* skeletonBuffer = dynamic_cast<Buffer*>(FindObjectByName("skeletonBuffer"));
-	skeletonBuffer->ChangeBufferData(sizeof(LineVertex) * 2 * model->GetBoneCount(), model->GetBoneDataForDrawing());
+	skeletonBuffer->ChangeBufferData(sizeof(LineVertex), 2 * model->GetBoneCount(), model->GetBoneDataForDrawing());
 
 
 	UniformBuffer* animationUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));
@@ -226,13 +226,10 @@ void MyScene::LoadNewModel()
 			blendingDes->ChangeDescriptorSet(Graphics::MAX_FRAMES_IN_FLIGHT * meshSize, {
 				{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
 				{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
-			});
+				});
 		}
-		else
-		{
-			WriteWaxDescriptorSet();
-			WriteBlendingWeightDescriptorSet();
-		}
+		WriteWaxDescriptorSet();
+		WriteBlendingWeightDescriptorSet();
 
 		return;
 	}
@@ -254,11 +251,8 @@ void MyScene::LoadNewModel()
 			{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
 			});
 	}
-	else
-	{
-		WriteDescriptorSet();
-		WriteBlendingWeightDescriptorSet();
-	}
+	WriteDescriptorSet();
+	WriteBlendingWeightDescriptorSet();
 
 }
 
@@ -463,7 +457,7 @@ void MyScene::WriteWaxDescriptorSet()
 
 void MyScene::UpdateAnimationUniformBuffer(uint32_t currentFrameID)
 {
-	if (boneSize <= 0)
+	if (model->GetBoneCount() <= 0)
 	{
 		return;
 	}
@@ -523,6 +517,7 @@ bool MyScene::HasStencilComponent(VkFormat format)
 
 void MyScene::RecordDrawSkeletonCall(VkCommandBuffer commandBuffer)
 {
+	const int boneSize = model->GetBoneCount();
 	if (boneSize <= 0 || showSkeletonFlag == false)
 	{
 		return;

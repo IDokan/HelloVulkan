@@ -76,9 +76,6 @@ private:
 
 
 	// @@ Line drawing variables
-	int boneSize;
-
-	int animationCount;
 	void UpdateAnimationUniformBuffer(uint32_t currentFrameID);
 
 	bool bindPoseFlag;

@@ -26,10 +26,10 @@ public:
 
 	unsigned int GetBufferDataTypeSize();
 	size_t GetBufferDataSize();
-	const VkBuffer GetBuffer();
-	const VkDeviceMemory GetBufferMemory();
+	VkBuffer GetBuffer();
+	VkDeviceMemory GetBufferMemory();
 
-	void ChangeBufferData(VkDeviceSize bufferSize, void* data);
+	void ChangeBufferData(unsigned int dataTypeSize, size_t dataSize, void* data);
 private:
 	Graphics* graphics;
 

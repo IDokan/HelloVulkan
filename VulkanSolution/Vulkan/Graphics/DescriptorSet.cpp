@@ -120,6 +120,7 @@ void DescriptorSet::ChangeDescriptorSet(unsigned int _descriptorSetSize, std::ve
 	allocInfo.descriptorSetCount = static_cast<uint32_t>(descriptorSetSize);
 	allocInfo.pSetLayouts = layouts.data();
 
+	descriptorSets.resize(descriptorSetSize);
 	// vkAllocateDescriptorSets may fail with the error code VK_ERROR_POOL_OUT_OF_MEMORY 
 		// if the pool is not sufficiently large, 
 		// but the driver may also try to solve the problem internally.

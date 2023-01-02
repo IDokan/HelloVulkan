@@ -81,8 +81,9 @@ VkDeviceSize UniformBuffer::GetBufferSize()
 	return bufferSize;
 }
 
-void UniformBuffer::ChangeBufferData(VkDeviceSize bufferSize, int numOfBuffer)
+void UniformBuffer::ChangeBufferData(VkDeviceSize _bufferSize, int numOfBuffer)
 {
+	bufferSize = _bufferSize;
 	const VkDevice device = graphics->GetDevice();
 
 	for (VkBuffer& buffer : buffers)

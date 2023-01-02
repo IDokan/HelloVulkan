@@ -206,7 +206,6 @@ void MyScene::LoadNewModel()
 	UniformBuffer* animationUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));
 	animationUniformBuffer->ChangeBufferData(sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT);
 
-
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
 

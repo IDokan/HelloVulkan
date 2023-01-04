@@ -61,6 +61,7 @@ DescriptorSet::DescriptorSet(Graphics* graphics, std::string name, unsigned int 
 
 DescriptorSet::~DescriptorSet()
 {
+	Clean();
 }
 
 bool DescriptorSet::Init()

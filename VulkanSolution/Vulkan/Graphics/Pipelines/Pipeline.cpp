@@ -317,6 +317,7 @@ Pipeline::Pipeline(Graphics* graphics, std::string pipelineName, const std::stri
 
 Pipeline::~Pipeline()
 {
+	Clean();
 }
 
 bool Pipeline::Init()

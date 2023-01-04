@@ -351,4 +351,4 @@ MigrationBackup/
 
 VulkanSolution/ThirdParty/
 VulkanSolution/Vulkan/Graphics/Model/models/
-VulkanSolution/Vulkan/Graphics/Textures/
+VulkanSolution/Vulkan/Graphics/Textures/*.jpg

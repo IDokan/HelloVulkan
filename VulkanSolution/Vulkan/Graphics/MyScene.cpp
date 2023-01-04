@@ -106,7 +106,7 @@ void MyScene::CleanScene()
 
 	for (Object* obj : graphicResources)
 	{
-		obj->Clean();
+		delete obj;
 	}
 
 	delete model;
@@ -169,6 +169,7 @@ void MyScene::LoadNewModel()
 		Object* WillBeDeleted = FindObjectByName(std::string("diffuseImage") + std::to_string(i));
 		const auto& iter = std::find(graphicResources.begin(), graphicResources.end(), WillBeDeleted);
 		graphicResources.erase(iter);
+		delete WillBeDeleted;
 	}
 
 	// Reload model buffers
@@ -193,10 +194,12 @@ void MyScene::LoadNewModel()
 		Object* WillBeDeleted = FindObjectByName(std::string("vertex") + std::to_string(i));
 		const auto& iter = std::find(graphicResources.begin(), graphicResources.end(), WillBeDeleted);
 		graphicResources.erase(iter);
+		delete WillBeDeleted;
 
 		Object* WillBeDeleted2 = FindObjectByName(std::string("index") + std::to_string(i));
 		const auto& iter2 = std::find(graphicResources.begin(), graphicResources.end(), WillBeDeleted2);
 		graphicResources.erase(iter2);
+		delete WillBeDeleted2;
 	}
 
 	Buffer* skeletonBuffer = dynamic_cast<Buffer*>(FindObjectByName("skeletonBuffer"));

@@ -43,6 +43,7 @@ Buffer::Buffer(Graphics* graphics, std::string bufferName, VkBufferUsageFlags us
 
 Buffer::~Buffer()
 {
+	Clean();
 }
 
 bool Buffer::Init()

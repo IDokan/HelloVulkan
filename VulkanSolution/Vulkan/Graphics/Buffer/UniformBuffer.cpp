@@ -31,6 +31,7 @@ UniformBuffer::UniformBuffer(Graphics* graphics, std::string bufferName, VkDevic
 
 UniformBuffer::~UniformBuffer()
 {
+	Clean();
 }
 
 bool UniformBuffer::Init()

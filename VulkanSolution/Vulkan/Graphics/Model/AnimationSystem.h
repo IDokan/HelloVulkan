@@ -42,6 +42,9 @@ public:
 	int GetBoneIDByName(const std::string& name);
 	std::string GetBoneName(unsigned int boneID);
 
+	// Return the first bone whose parent bone is given bone ID.
+	int GetChildrenBoneID(int boneID);
+
 	// Gate function for cluster data (Gate function indicates precede function to get another data)
 	void GetDeformerData(FbxMesh* mesh);
 

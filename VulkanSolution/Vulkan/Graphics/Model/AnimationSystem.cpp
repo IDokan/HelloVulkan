@@ -180,6 +180,21 @@ std::string AnimationSystem::GetBoneName(unsigned int boneID)
 	return skeleton.GetBoneNameByID(boneID);
 }
 
+int AnimationSystem::GetChildrenBoneID(int boneID)
+{
+	size_t size = skeleton.GetSkeletonSize();
+
+	for (size_t i = boneID + 1; i < size; i++)
+	{
+		const Bone& b = skeleton.GetBoneByBoneID(i);
+		if (b.parentID == boneID)
+			return i;
+	}
+
+	// If no children found,
+	return -1;
+}
+
 void AnimationSystem::GetDeformerData(FbxMesh* mesh)
 {
 	const int deformerCount = mesh->GetDeformerCount();

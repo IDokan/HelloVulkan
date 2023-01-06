@@ -479,11 +479,18 @@ void Model::InitBoneData()
 	size_t boneCount = animationSystem->GetBoneCount();
 	bones.resize(boneCount * 2);
 
-	const int boneDataSize = 2 * static_cast<int>(boneCount);
 	for (int i = 0; i < boneCount; i++)
 	{
-		bones[i * 2] = toBoneFromUnit[i] * glm::vec4(0.f, 1.f, 0.f, 1.f);
-		bones[i * 2 + 1] = toBoneFromUnit[i] * glm::vec4(0.f, 0.f, 0.f, 1.f);
+		bones[i * 2] = toBoneFromUnit[i] * glm::vec4(0.f, 0.f, 0.f, 1.f);
+		int childrenID = animationSystem->GetChildrenBoneID(i);
+		if (childrenID < 0)
+		{
+			bones[i * 2 + 1] = toBoneFromUnit[i] * glm::vec4(0.f, 1.f, 0.f, 1.f);
+		}
+		else
+		{
+			bones[i * 2 + 1] = toBoneFromUnit[childrenID] * glm::vec4(0.f, 0.f, 0.f, 1.f);
+		}
 	}
 }
 

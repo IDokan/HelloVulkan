@@ -29,6 +29,7 @@ namespace MyImGUI
         void BlendingWeightsSkeletonSelectionRecursively(int currentBoneIndex, int boneSize, ImGuiTreeNodeFlags baseFlags, bool nodeOpened = false);
         void Skeleton();
         void Animation();
+        void Configuration();
     }
 }
 
@@ -50,6 +51,11 @@ namespace
     unsigned int selected = 0;
     bool* blendingWeightMode;
     int* selectedBone;
+
+    std::vector<std::string> meshNameList;
+    int* selectedMesh;
+
+    float* mouseSensitivity;
 }
 
 namespace MyImGUI
@@ -215,7 +221,7 @@ void MyImGUI::DrawGUI()
     }
     ImGui::End();
 
-    // ImGui::ShowDemoWindow();
+     //ImGui::ShowDemoWindow();
 
 
     ImGui::Begin("Controller");
@@ -223,6 +229,7 @@ void MyImGUI::DrawGUI()
     Helper::ModelStats();
     Helper::Skeleton();
     Helper::Animation();
+    Helper::Configuration();
 
     ImGui::End();
     ImGui::EndFrame();
@@ -256,6 +263,24 @@ void MyImGUI::Helper::ModelStats()
         if (*vertexPointsMode)
         {
             ImGui::SliderFloat("Vertex Size", pointSize, 1.f, 10.f);
+
+            std::string preview = meshNameList[*selectedMesh];
+            if (ImGui::BeginCombo("Display mesh", preview.c_str()))
+            {
+                for (int i = 0; i < meshNameList.size(); i++)
+                {
+                    const bool isSelected = (*selectedMesh == i);
+                    if (ImGui::Selectable(meshNameList[i].c_str(), isSelected))
+                    {
+                        *selectedMesh = i;
+                    }
+                    if (isSelected)
+                    {
+                        ImGui::SetItemDefaultFocus();
+                    }
+                }
+                ImGui::EndCombo();
+            }
         }
     }
 }
@@ -337,12 +362,13 @@ void MyImGUI::Helper::Skeleton()
     }
 }
 
-void MyImGUI::SendModelInfo(Model* _model, bool* _showModel, bool* _vertexPointsMode, float* _pointSize)
+void MyImGUI::SendModelInfo(Model* _model, bool* _showModel, bool* _vertexPointsMode, float* _pointSize, int* _selectedMesh)
 {
     model = _model;
     showModel = _showModel;
     vertexPointsMode = _vertexPointsMode;
     pointSize = _pointSize;
+    selectedMesh = _selectedMesh;
 }
 
 void MyImGUI::SendSkeletonInfo(bool* _showSkeletonFlag, bool* _blendingWeightMode, int* _selectedBone)
@@ -356,6 +382,11 @@ void MyImGUI::SendAnimationInfo(float* _worldTimer, bool* _bindPoseFlag)
 {
     worldTimer = _worldTimer;
     bindPoseFlag = _bindPoseFlag;
+}
+
+void MyImGUI::SendConfigInfo(float* _mouseSensitivity)
+{
+    mouseSensitivity = _mouseSensitivity;
 }
 
 void MyImGUI::UpdateAnimationNameList()
@@ -401,6 +432,19 @@ void MyImGUI::UpdateBoneNameList()
     }
 }
 
+void MyImGUI::UpdateMeshNameList()
+{
+    const int meshSize = model->GetMeshSize();
+    meshNameList.resize(meshSize + 1);
+
+    for (int i = 0; i < meshSize; i++)
+    {
+        meshNameList[i] = model->GetMeshName(i);
+    }
+    meshNameList[meshSize] = "All meshes";
+    *selectedMesh = meshSize;
+}
+
 bool MyImGUI::IsMouseOnImGUIWindow()
 {
     return ImGui::GetIO().WantCaptureMouse;
@@ -440,5 +484,15 @@ void MyImGUI::Helper::Animation()
             ImGui::TextWrapped(("\t" + std::to_string(duration)).c_str());
             ImGui::SliderFloat("Animation Time", worldTimer, 0.f, duration);
         }
+    }
+}
+
+
+
+void MyImGUI::Helper::Configuration()
+{
+    if (ImGui::CollapsingHeader("Configuration"))
+    {
+        ImGui::SliderFloat("Mouse Sensitivity", mouseSensitivity, 1.f, 100.f);
     }
 }

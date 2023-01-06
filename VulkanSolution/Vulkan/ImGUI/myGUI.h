@@ -21,12 +21,14 @@ namespace MyImGUI
 		VkPhysicalDevice physicalDevice, VkQueue queue, VkRenderPass renderPass, 
 		VkCommandBuffer commandBuffer);
 
-    void SendModelInfo(Model* model, bool* showModel, bool* vertexPointsMode, float* pointSize);
+    void SendModelInfo(Model* model, bool* showModel, bool* vertexPointsMode, float* pointSize, int* selectedMesh);
     void SendSkeletonInfo(bool* showSkeletonFlag, bool* blendingWeightMode, int* selectedBone);
     void SendAnimationInfo(float* worldTimer, bool* bindPoseFlag);
+    void SendConfigInfo(float* mouseSensitivity);
 
     void UpdateAnimationNameList();
     void UpdateBoneNameList();
+    void UpdateMeshNameList();
 
     bool IsMouseOnImGUIWindow();
 

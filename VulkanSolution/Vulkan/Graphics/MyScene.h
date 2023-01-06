@@ -60,7 +60,6 @@ private:
 	bool HasStencilComponent(VkFormat format);
 
 	void RecordDrawSkeletonCall(VkCommandBuffer commandBuffer);
-	void RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipeline, VkPipelineLayout pipelineLayout, DescriptorSet* descriptorSet);
 
 private:
 	Window* windowHolder;
@@ -97,9 +96,12 @@ private:
 	bool showModel;
 	bool vertexPointsMode;
 	float pointSize;
+	int selectedMesh;
 
 	Graphics* graphics;
 	std::vector<Object*> graphicResources;
+
+	float mouseSensitivity;
 private:
 	Object* FindObjectByName(std::string name);
 

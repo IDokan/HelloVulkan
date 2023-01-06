@@ -1,4 +1,4 @@
-/******************************************************************************
+﻿/******************************************************************************
 Copyright (C) 2021 DigiPen Institute of Technology.
 Reproduction or disclosure of this file or its contents without the prior
 written consent of DigiPen Institute of Technology is prohibited.
@@ -34,7 +34,7 @@ Creation Date: 06.12.2021
 #include <Graphics/Pipelines/Pipeline.h>
 
 MyScene::MyScene(Window* window)
-	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f)
+	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f)
 {
 }
 
@@ -42,7 +42,7 @@ bool MyScene::InitScene(Graphics* _graphics)
 {
 	model = new Model("../Vulkan/Graphics/Model/models/Sitting Laughing.fbx");
 	model->SetAnimationIndex(0);
-
+	selectedMesh = model->GetMeshSize();
 
 	graphics = _graphics;
 
@@ -211,6 +211,7 @@ void MyScene::LoadNewModel()
 
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
+	MyImGUI::UpdateMeshNameList();
 
 	InitUniformBufferData();
 
@@ -260,11 +261,14 @@ void MyScene::LoadNewModel()
 
 void MyScene::InitGUI()
 {
-	MyImGUI::SendModelInfo(model, &showModel, &vertexPointsMode, &pointSize);
+	MyImGUI::SendModelInfo(model, &showModel, &vertexPointsMode, &pointSize, &selectedMesh);
 	MyImGUI::SendSkeletonInfo(&showSkeletonFlag, &blendingWeightMode, &selectedBone);
 	MyImGUI::SendAnimationInfo(&timer, &bindPoseFlag);
+	MyImGUI::SendConfigInfo(&mouseSensitivity);
+
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
+	MyImGUI::UpdateMeshNameList();
 }
 
 void MyScene::UpdateTimer(float dt)
@@ -279,40 +283,61 @@ void MyScene::UpdateTimer(float dt)
 
 void MyScene::RecordDrawModelCalls(VkCommandBuffer commandBuffer)
 {
-	// If show model flag is on, display model and blending weight model
-	if (showModel == true)
+
+	const int meshSize = model->GetMeshSize();
+	for (int i = 0; i < meshSize; i++)
 	{
-		if (blendingWeightMode == true)
+		Buffer* vertexBuffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("vertex") + std::to_string(i)));
+		Buffer* indexBuffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("index") + std::to_string(i)));
+		VkBuffer VB[] = { vertexBuffer->GetBuffer() };
+		VkDeviceSize offsets[] = { 0 };
+		vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
+		vkCmdBindIndexBuffer(commandBuffer, indexBuffer->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+		// If show model flag is on, display model and blending weight model
+		if (showModel == true)
 		{
-			Pipeline* bwPipeline = dynamic_cast<Pipeline*>(FindObjectByName("blendingWeightPipeline"));
-			DescriptorSet* bwDes = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
-			RecordPushConstants(commandBuffer, bwPipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &selectedBone, sizeof(int));
-			RecordDrawMeshCall(commandBuffer, bwPipeline->GetPipeline(), bwPipeline->GetPipelineLayout(), bwDes);
-		}
-		else
-		{
-			if (model->GetDiffuseImagePaths().size() <= 0)
+			if (blendingWeightMode == true)
 			{
-				Pipeline* wPipeline = dynamic_cast<Pipeline*>(FindObjectByName("waxPipeline"));
-				DescriptorSet* wDes = dynamic_cast<DescriptorSet*>(FindObjectByName("waxDescriptor"));
-				RecordDrawMeshCall(commandBuffer, wPipeline->GetPipeline(), wPipeline->GetPipelineLayout(), wDes);
+				Pipeline* bwPipeline = dynamic_cast<Pipeline*>(FindObjectByName("blendingWeightPipeline"));
+				DescriptorSet* bwDes = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
+				RecordPushConstants(commandBuffer, bwPipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &selectedBone, sizeof(int));
+
+				vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bwPipeline->GetPipeline());
+				vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, bwPipeline->GetPipelineLayout(), 0, 1, bwDes->GetDescriptorSetPtr(i * Graphics::MAX_FRAMES_IN_FLIGHT + graphics->GetCurrentFrameID()), 0, nullptr);
+				vkCmdDrawIndexed(commandBuffer, indexBuffer->GetBufferDataSize(), 1, 0, 0, 0);
 			}
 			else
 			{
-				Pipeline* pipeline = dynamic_cast<Pipeline*>(FindObjectByName("pipeline"));
-				DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("descriptor"));
-				RecordDrawMeshCall(commandBuffer, pipeline->GetPipeline(), pipeline->GetPipelineLayout(), des);
+				if (model->GetDiffuseImagePaths().size() <= 0)
+				{
+					Pipeline* wPipeline = dynamic_cast<Pipeline*>(FindObjectByName("waxPipeline"));
+					DescriptorSet* wDes = dynamic_cast<DescriptorSet*>(FindObjectByName("waxDescriptor"));
+					vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, wPipeline->GetPipeline());
+					vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, wPipeline->GetPipelineLayout(), 0, 1, wDes->GetDescriptorSetPtr(i * Graphics::MAX_FRAMES_IN_FLIGHT + graphics->GetCurrentFrameID()), 0, nullptr);
+					vkCmdDrawIndexed(commandBuffer, indexBuffer->GetBufferDataSize(), 1, 0, 0, 0);
+				}
+				else
+				{
+					Pipeline* pipeline = dynamic_cast<Pipeline*>(FindObjectByName("pipeline"));
+					DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("descriptor"));
+					vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->GetPipeline());
+					vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->GetPipelineLayout(), 0, 1, des->GetDescriptorSetPtr(i * Graphics::MAX_FRAMES_IN_FLIGHT + graphics->GetCurrentFrameID()), 0, nullptr);
+					vkCmdDrawIndexed(commandBuffer, indexBuffer->GetBufferDataSize(), 1, 0, 0, 0);
+				}
 			}
 		}
-	}
 
-	// No matter showing model or not, display vertex points if and only if vertex points mode is on.
-	if (vertexPointsMode == true)
-	{
-		Pipeline* vPipeline = dynamic_cast<Pipeline*>(FindObjectByName("vertexPipeline"));
-		DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
-		RecordPushConstants(commandBuffer, vPipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &pointSize, sizeof(float));
-		RecordDrawMeshCall(commandBuffer, vPipeline->GetPipeline(), vPipeline->GetPipelineLayout(), des);
+		// No matter showing model or not, display vertex points if and only if vertex points mode is on.
+		if (vertexPointsMode == true && ((selectedMesh == i) || selectedMesh == meshSize))
+		{
+			Pipeline* vPipeline = dynamic_cast<Pipeline*>(FindObjectByName("vertexPipeline"));
+			DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
+			RecordPushConstants(commandBuffer, vPipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &pointSize, sizeof(float));
+			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vPipeline->GetPipeline());
+			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vPipeline->GetPipelineLayout(), 0, 1, des->GetDescriptorSetPtr(i * Graphics::MAX_FRAMES_IN_FLIGHT + graphics->GetCurrentFrameID()), 0, nullptr);
+			vkCmdDrawIndexed(commandBuffer, indexBuffer->GetBufferDataSize(), 1, 0, 0, 0);
+		}
 	}
 }
 
@@ -335,7 +360,7 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 		const bool isMousePressed = input.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_1);
 		const bool isLeftAltPressed = input.IsKeyPressed(GLFW_KEY_LEFT_ALT);
 		glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
-		glm::vec2 mouseDelta = input.GetMousePosition() - input.GetPresentMousePosition();
+		glm::vec2 mouseDelta = glm::vec2(input.GetMousePosition() - input.GetPresentMousePosition()) * 0.01f * mouseSensitivity;
 
 		// Move mouse during pressing left alt, move target position
 		if (isMousePressed && isLeftAltPressed)
@@ -362,7 +387,6 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 		// Move mouse, rotate a model
 		if (isMousePressed && !isLeftAltPressed)
 		{
-
 			uniformData.model = glm::rotate(glm::mat4(1.f), mouseDelta.x * glm::radians(1.f), glm::vec3(0.0f, view.z, -view.y)) *
 				glm::rotate(glm::mat4(1.f), mouseDelta.y * glm::radians(1.f), glm::vec3(-view.y, view.x, 0.0f)) *
 				uniformData.model;
@@ -546,24 +570,4 @@ void MyScene::RecordDrawSkeletonCall(VkCommandBuffer commandBuffer)
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipeline->GetPipelineLayout(), 0, 1, bwDescriptor->GetDescriptorSetPtr(graphics->GetCurrentFrameID()), 0, nullptr);
 
 	vkCmdDraw(commandBuffer, boneSize * 2, 1, 0, 0);
-}
-
-void MyScene::RecordDrawMeshCall(VkCommandBuffer commandBuffer, VkPipeline pipeline, VkPipelineLayout pipelineLayout, DescriptorSet* descriptorSet)
-{
-	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
-
-
-	const int meshSize = model->GetMeshSize();
-	for (int i = 0; i < meshSize; i++)
-	{
-		Buffer* vertexBuffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("vertex") + std::to_string(i)));
-		Buffer* indexBuffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("index") + std::to_string(i)));
-		VkBuffer VB[] = { vertexBuffer->GetBuffer() };
-		VkDeviceSize offsets[] = { 0 };
-		vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
-		vkCmdBindIndexBuffer(commandBuffer, indexBuffer->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
-		vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, descriptorSet->GetDescriptorSetPtr(i * Graphics::MAX_FRAMES_IN_FLIGHT + graphics->GetCurrentFrameID()), 0, nullptr);
-
-		vkCmdDrawIndexed(commandBuffer, indexBuffer->GetBufferDataSize(), 1, 0, 0, 0);
-	}
 }

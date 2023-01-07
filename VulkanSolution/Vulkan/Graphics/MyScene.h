@@ -52,6 +52,8 @@ private:
 	void InitUniformBufferData();
 	void UpdateUniformBuffer(uint32_t currentFrameID);
 
+	glm::vec3 GetMousePositionInWorldSpace();
+
 	void WriteDescriptorSet();
 
 	void WriteWaxDescriptorSet();

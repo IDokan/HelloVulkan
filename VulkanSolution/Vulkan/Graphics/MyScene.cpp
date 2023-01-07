@@ -118,6 +118,8 @@ void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t curren
 
 
 	UpdateUniformBuffer(currentFrameID);
+
+
 	UpdateAnimationUniformBuffer(currentFrameID);
 
 	RecordDrawModelCalls(commandBuffer);
@@ -344,7 +346,7 @@ void MyScene::RecordDrawModelCalls(VkCommandBuffer commandBuffer)
 void MyScene::InitUniformBufferData()
 {
 	uniformData.model = model->CalculateAdjustBoundingBoxMatrix();
-	uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 0.f, 1.f));
+	uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 1.f, 0.f));
 	VkExtent2D swapchainExtent = graphics->GetSwapchainExtent();
 	uniformData.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 10.f);
 	// flip the sign of the element because GLM originally designed for OpenGL, where Y coordinate of the clip coorinates is inverted.
@@ -361,11 +363,11 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 		const bool isLeftAltPressed = input.IsKeyPressed(GLFW_KEY_LEFT_ALT);
 		glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
 		glm::vec2 mouseDelta = glm::vec2(input.GetMousePosition() - input.GetPresentMousePosition()) * 0.01f * mouseSensitivity;
-
+		std::cout << mouseDelta << std::endl;
 		// Move mouse during pressing left alt, move target position
 		if (isMousePressed && isLeftAltPressed)
 		{
-			static constexpr glm::vec3 globalUp = glm::vec3(0.f, 0.f, 1.f);
+			static constexpr glm::vec3 globalUp = glm::vec3(0.f, 1.f, 0.f);
 
 
 			glm::vec3 newX = glm::normalize(glm::cross(globalUp, view));
@@ -375,7 +377,7 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 			targetPoint += delta;
 			cameraPoint += delta;
 
-			glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
+			view = glm::normalize(targetPoint - cameraPoint);
 		}
 		// Press wheel button, init target position
 		else if (input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_MIDDLE))
@@ -387,8 +389,12 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 		// Move mouse, rotate a model
 		if (isMousePressed && !isLeftAltPressed)
 		{
-			uniformData.model = glm::rotate(glm::mat4(1.f), mouseDelta.x * glm::radians(1.f), glm::vec3(0.0f, view.z, -view.y)) *
-				glm::rotate(glm::mat4(1.f), mouseDelta.y * glm::radians(1.f), glm::vec3(-view.y, view.x, 0.0f)) *
+			//uniformData.model = glm::rotate(glm::mat4(1.f), mouseDelta.x * glm::radians(1.f), glm::vec3(0.0f, view.z, -view.y)) *
+			//	glm::rotate(glm::mat4(1.f), mouseDelta.y * glm::radians(1.f), glm::vec3(-view.y, view.x, 0.0f)) *
+			//	uniformData.model;
+			// @@@ TODO: Rotates it by locally.
+			uniformData.model = glm::rotate(glm::mat4(1.f), mouseDelta.x * glm::radians(1.f), glm::vec3(0.0f, 1.f, 0.f)) *
+				glm::rotate(glm::mat4(1.f), mouseDelta.y * glm::radians(1.f), glm::vec3(-1.f, 0.f, 0.0f)) *
 				uniformData.model;
 		}
 
@@ -414,7 +420,7 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 
 		// Zoom in & out
 		cameraPoint = cameraPoint + (static_cast<float>(input.MouseWheelScroll()) * (targetPoint - cameraPoint) * 0.1f);
-		uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 0.f, 1.f));
+		uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 1.f, 0.f));
 
 		VkExtent2D swapchainExtent = graphics->GetSwapchainExtent();
 		uniformData.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 10.f);
@@ -424,10 +430,28 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 
 	UniformBuffer* uniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("uniformBuffer"));
 
+	glm::vec3 mousePosition = GetMousePositionInWorldSpace();
+
+	uniformData.model = glm::translate(glm::vec3(0.f, 0.5f, 0.f)) * uniformData.model;
+
 	void* data;
 	vkMapMemory(graphics->GetDevice(), uniformBuffer->GetBufferMemory(currentFrameID), 0, uniformBuffer->GetBufferSize(), 0, &data);
 	memcpy(data, &uniformData, uniformBuffer->GetBufferSize());
 	vkUnmapMemory(graphics->GetDevice(), uniformBuffer->GetBufferMemory(currentFrameID));
+
+	uniformData.model = glm::translate(-glm::vec3(0.f, 0.5f, 0.f)) * uniformData.model;
+}
+
+glm::vec3 MyScene::GetMousePositionInWorldSpace()
+{
+	glm::ivec2 rawPosition = input.GetMousePosition();
+	glm::ivec2 windowSize = windowHolder->GetWindowSize();
+	//glm::vec4 mousePosition{rawPosition.x + (windowSize.x / 2), (windowSize.y / 2) - rawPosition.y, 0.f, 1.f};
+	glm::vec4 mousePosition{ rawPosition.x, rawPosition.y, 0.f, 1.f };
+	glm::vec4 projectedPosition = glm::inverse(uniformData.view) * glm::inverse(uniformData.proj) * mousePosition;
+	projectedPosition /= projectedPosition.w;
+	std::cout << "projectedPosition" << projectedPosition << std::endl;
+	return projectedPosition;
 }
 
 void MyScene::WriteDescriptorSet()

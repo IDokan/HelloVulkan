@@ -198,3 +198,27 @@ Bone& Bone::operator=(Bone&& b)
 	toModelFromBone = b.toModelFromBone;
 	return *this;
 }
+
+std::ostream& operator<<(std::ostream& os, const glm::vec4& data)
+{
+	os << data.x << ", " << data.y << ", " << data.z << ", " << data.w;
+	return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const glm::vec3& data)
+{
+	os << data.x << ", " << data.y << ", " << data.z;
+	return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const glm::vec2& data)
+{
+	os << data.x << ", " << data.y;
+	return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const glm::ivec2& data)
+{
+	os << data.x << ", " << data.y;
+	return os;
+}

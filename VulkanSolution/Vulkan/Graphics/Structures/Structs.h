@@ -9,6 +9,7 @@ Creation Date: 09.27.2022
 	header file for custom structures.
 ******************************************************************************/
 #pragma once
+#include <iostream>
 #include <vector>
 #include "Vulkan/vulkan.h"
 #include <GLMath.h>
@@ -220,3 +221,8 @@ struct Animation
 	float duration;
 	std::vector<Track> tracks;
 };
+
+std::ostream& operator<<(std::ostream& os, const glm::vec4& data);
+std::ostream& operator<<(std::ostream& os, const glm::vec3& data);
+std::ostream& operator<<(std::ostream& os, const glm::vec2& data);
+std::ostream& operator<<(std::ostream& os, const glm::ivec2& data);

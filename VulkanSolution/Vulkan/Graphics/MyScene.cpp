@@ -34,7 +34,7 @@ Creation Date: 06.12.2021
 #include <Graphics/Pipelines/Pipeline.h>
 
 MyScene::MyScene(Window* window)
-	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 2.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f)
+	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f)
 {
 }
 
@@ -363,7 +363,6 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 		const bool isLeftAltPressed = input.IsKeyPressed(GLFW_KEY_LEFT_ALT);
 		glm::vec3 view = glm::normalize(targetPoint - cameraPoint);
 		glm::vec2 mouseDelta = glm::vec2(input.GetMousePosition() - input.GetPresentMousePosition()) * 0.01f * mouseSensitivity;
-		std::cout << mouseDelta << std::endl;
 		// Move mouse during pressing left alt, move target position
 		if (isMousePressed && isLeftAltPressed)
 		{
@@ -383,18 +382,14 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 		else if (input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_MIDDLE))
 		{
 			targetPoint = glm::vec3(0.f, 0.f, 0.f);
-			cameraPoint = glm::vec3(0.f, 2.f, 2.f);
+			cameraPoint = glm::vec3(0.f, 0.f, 2.f);
 		}
 
 		// Move mouse, rotate a model
 		if (isMousePressed && !isLeftAltPressed)
 		{
-			//uniformData.model = glm::rotate(glm::mat4(1.f), mouseDelta.x * glm::radians(1.f), glm::vec3(0.0f, view.z, -view.y)) *
-			//	glm::rotate(glm::mat4(1.f), mouseDelta.y * glm::radians(1.f), glm::vec3(-view.y, view.x, 0.0f)) *
-			//	uniformData.model;
-			// @@@ TODO: Rotates it by locally.
 			uniformData.model = glm::rotate(glm::mat4(1.f), mouseDelta.x * glm::radians(1.f), glm::vec3(0.0f, 1.f, 0.f)) *
-				glm::rotate(glm::mat4(1.f), mouseDelta.y * glm::radians(1.f), glm::vec3(-1.f, 0.f, 0.0f)) *
+				glm::rotate(glm::mat4(1.f), -mouseDelta.y * glm::radians(1.f), glm::vec3(1.f, 0.f, 0.f)) *
 				uniformData.model;
 		}
 
@@ -432,26 +427,36 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 
 	glm::vec3 mousePosition = GetMousePositionInWorldSpace();
 
-	uniformData.model = glm::translate(glm::vec3(0.f, 0.5f, 0.f)) * uniformData.model;
+	uniformData.model = glm::translate(mousePosition) * uniformData.model;
 
 	void* data;
 	vkMapMemory(graphics->GetDevice(), uniformBuffer->GetBufferMemory(currentFrameID), 0, uniformBuffer->GetBufferSize(), 0, &data);
 	memcpy(data, &uniformData, uniformBuffer->GetBufferSize());
 	vkUnmapMemory(graphics->GetDevice(), uniformBuffer->GetBufferMemory(currentFrameID));
 
-	uniformData.model = glm::translate(-glm::vec3(0.f, 0.5f, 0.f)) * uniformData.model;
+	uniformData.model = glm::translate(-mousePosition) * uniformData.model;
 }
 
 glm::vec3 MyScene::GetMousePositionInWorldSpace()
 {
 	glm::ivec2 rawPosition = input.GetMousePosition();
 	glm::ivec2 windowSize = windowHolder->GetWindowSize();
-	//glm::vec4 mousePosition{rawPosition.x + (windowSize.x / 2), (windowSize.y / 2) - rawPosition.y, 0.f, 1.f};
-	glm::vec4 mousePosition{ rawPosition.x, rawPosition.y, 0.f, 1.f };
+	glm::vec4 mousePosition{ static_cast<float>(rawPosition.x) / (windowSize.x/2.f), static_cast<float>(rawPosition.y) / (windowSize.y/2.f), 0.f, 1.f };
+
+	// Flip temporarily to get top == positive y coordinate value
+	uniformData.proj[1][1] *= -1;
+
 	glm::vec4 projectedPosition = glm::inverse(uniformData.view) * glm::inverse(uniformData.proj) * mousePosition;
 	projectedPosition /= projectedPosition.w;
-	std::cout << "projectedPosition" << projectedPosition << std::endl;
-	return projectedPosition;
+	glm::vec3 projectionVector{ projectedPosition.x - cameraPoint.x, projectedPosition.y - cameraPoint.y, projectedPosition.z - cameraPoint.z };
+
+	 float t = -cameraPoint.z / projectionVector.z;
+	 glm::vec3 result = cameraPoint + t * projectionVector;
+
+	// Restore projection matrix
+	uniformData.proj[1][1] *= -1;
+
+	return result;
 }
 
 void MyScene::WriteDescriptorSet()

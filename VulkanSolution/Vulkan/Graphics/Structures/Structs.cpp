@@ -1,22 +1,22 @@
 #include "Structs.h"
 
 Mesh::Mesh()
-	:meshName(), indices(), vertices()
+	:meshName(), indices(), vertices(), uniqueVertices()
 {
 }
 
-Mesh::Mesh(const std::string& name, const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices)
-	: meshName(name), indices(indices), vertices(vertices)
+Mesh::Mesh(const std::string& name, const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices, const std::vector<Vertex>& uniqueVertices)
+	: meshName(name), indices(indices), vertices(vertices), uniqueVertices(uniqueVertices)
 {
 }
 
 Mesh::Mesh(const Mesh& m)
-	: meshName(m.meshName), indices(m.indices), vertices(m.vertices)
+	: meshName(m.meshName), indices(m.indices), vertices(m.vertices), uniqueVertices(m.uniqueVertices)
 {
 }
 
 Mesh::Mesh(Mesh&& m)
-	: meshName(m.meshName), indices(m.indices), vertices(m.vertices)
+	: meshName(m.meshName), indices(m.indices), vertices(m.vertices), uniqueVertices(m.uniqueVertices)
 {
 }
 
@@ -25,6 +25,7 @@ Mesh& Mesh::operator=(const Mesh& m)
 	meshName = m.meshName;
 	indices = m.indices;
 	vertices = m.vertices;
+	uniqueVertices = m.uniqueVertices;
 	return *this;
 }
 
@@ -33,6 +34,7 @@ Mesh& Mesh::operator=(Mesh&& m)
 	meshName = m.meshName;
 	indices = m.indices;
 	vertices = m.vertices;
+	uniqueVertices = m.uniqueVertices;
 	return *this;
 }
 

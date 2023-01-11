@@ -157,7 +157,7 @@ struct UniformBufferObject {
 struct Mesh
 {
 	Mesh();
-	Mesh(const std::string& name, const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices);
+	Mesh(const std::string& name, const std::vector<uint32_t>& indices, const std::vector<Vertex>& vertices, const std::vector<Vertex>& uniqueVertices);
 	Mesh(const Mesh& m);
 	Mesh(Mesh&& m);
 	Mesh& operator=(const Mesh& m);
@@ -166,6 +166,7 @@ struct Mesh
 	std::string meshName;
 	std::vector<uint32_t> indices;
 	std::vector<Vertex> vertices;
+	std::vector<Vertex> uniqueVertices;
 };
 
 struct Bone

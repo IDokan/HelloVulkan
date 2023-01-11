@@ -40,7 +40,7 @@ MyScene::MyScene(Window* window)
 
 bool MyScene::InitScene(Graphics* _graphics)
 {
-	model = new Model("../Vulkan/Graphics/Model/models/room.obj");
+	model = new Model("../Vulkan/Graphics/Model/models/Remy.fbx");
 	model->SetAnimationIndex(0);
 	selectedMesh = model->GetMeshSize();
 
@@ -58,6 +58,7 @@ bool MyScene::InitScene(Graphics* _graphics)
 	{
 		graphicResources.push_back(new Buffer(graphics, std::string("vertex") + std::to_string(i), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex), model->GetVertexCount(i), model->GetVertexData(i)));
 		graphicResources.push_back(new Buffer(graphics, std::string("index") + std::to_string(i), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, sizeof(uint32_t), model->GetIndexCount(i), model->GetIndexData(i)));
+		graphicResources.push_back(new Buffer(graphics, std::string("uniqueVertex") + std::to_string(i), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex), model->GetUniqueVertexCount(i), model->GetUniqueVertexData(i)));
 	}
 
 	graphicResources.push_back(new UniformBuffer(graphics, std::string("uniformBuffer"), sizeof(UniformBufferObject), Graphics::MAX_FRAMES_IN_FLIGHT));
@@ -333,6 +334,9 @@ void MyScene::RecordDrawModelCalls(VkCommandBuffer commandBuffer)
 		// No matter showing model or not, display vertex points if and only if vertex points mode is on.
 		if (vertexPointsMode == true && ((selectedMesh == i) || selectedMesh == meshSize))
 		{
+			Buffer* uniqueBuffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("uniqueVertex") + std::to_string(i)));
+			VkBuffer uniqueVB[] = { uniqueBuffer->GetBuffer() };
+			vkCmdBindVertexBuffers(commandBuffer, 0, 1, uniqueVB, offsets);
 			Pipeline* vPipeline = dynamic_cast<Pipeline*>(FindObjectByName("vertexPipeline"));
 			DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
 			VertexPipelinePushConstants tmp;
@@ -341,7 +345,7 @@ void MyScene::RecordDrawModelCalls(VkCommandBuffer commandBuffer)
 			RecordPushConstants(commandBuffer, vPipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &tmp, sizeof(VertexPipelinePushConstants));
 			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vPipeline->GetPipeline());
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vPipeline->GetPipelineLayout(), 0, 1, des->GetDescriptorSetPtr(i * Graphics::MAX_FRAMES_IN_FLIGHT + graphics->GetCurrentFrameID()), 0, nullptr);
-			vkCmdDrawIndexed(commandBuffer, indexBuffer->GetBufferDataSize(), 1, 0, 0, 0);
+			vkCmdDraw(commandBuffer, uniqueBuffer->GetBufferDataSize(), 1, 0, 0);
 		}
 	}
 }

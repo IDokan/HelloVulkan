@@ -118,6 +118,16 @@ int Model::GetIndexCount(int i)
 	return static_cast<int>(meshes[i].indices.size());
 }
 
+void* Model::GetUniqueVertexData(int i)
+{
+	return reinterpret_cast<void*>(meshes[i].uniqueVertices.data());
+}
+
+int Model::GetUniqueVertexCount(int i)
+{
+	return static_cast<int>(meshes[i].uniqueVertices.size());
+}
+
 bool Model::IsModelValid()
 {
 	return isModelValid;
@@ -326,6 +336,12 @@ void Model::GetMesh(FbxNode* node)
 
 bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 {
+	// 현재 복수의 중복되는 Vertex Data가 저장되어 있음
+	// 그래서 특정 Vertex를 선택해도 중복되는 vertex가 덧씌어버려서 시각적으로 feedback이 없음
+		// Solutions
+		// 1. 개인 vertex들만 관리하는 data structure를 하나 추가한다.
+		//			// 걱정되는 추후 발생 예상 문제점: 선택된 Vertex들만 physics를 적용시켰을 때 어떻게 해야할지 모르겠음.
+		// 2. Change Mesh Import method.
 	const uint32_t polygonCount = mesh->GetPolygonCount();
 	if (polygonCount <= 0)
 	{
@@ -335,6 +351,22 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 	// @@ Get Vertices
 	const uint32_t verticesCount = mesh->GetControlPointsCount();
 	FbxVector4* vertices = mesh->GetControlPoints();
+	m.uniqueVertices.resize(verticesCount);
+	for (size_t i = 0; i < verticesCount; i++)
+	{
+		FbxVector4 v = vertices[i];
+		m.uniqueVertices[i].position = glm::vec3(v[0], v[1], v[2]);
+		glm::ivec4 boneID = animationSystem->GetBoneIndex(i);
+		m.uniqueVertices[i].boneIDs = boneID;
+		glm::vec4 boneWeights = animationSystem->GetBoneWeight(i);
+		float sum = 0.f;
+		for (int x = 0; x < 4; x++)
+		{
+			sum += boneWeights[x];
+		}
+		boneWeights /= sum;
+		m.uniqueVertices[i].boneWeights = boneWeights;
+	}
 	const uint32_t indicesCount = mesh->GetPolygonVertexCount();
 	int* indices = mesh->GetPolygonVertices();
 	// @@ End of getting vertices
@@ -380,7 +412,7 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 		for (size_t i = 0; i < indicesCount; i++)
 		{
 			int iInt = static_cast<int>(i);
-			FbxVector4 v = vertices[indices[i]] /* * _scene_scale */;
+			FbxVector4 v = vertices[indices[i]];
 			m.indices[i] = static_cast<uint32_t>(m.vertices.size());
 			m.vertices.emplace_back();
 			glm::vec3 position = glm::vec3(v[0], v[1], v[2]);

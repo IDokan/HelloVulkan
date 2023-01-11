@@ -33,6 +33,9 @@ public:
 
 	void* GetIndexData(int i);
 	int GetIndexCount(int i);
+
+	void* GetUniqueVertexData(int i);
+	int GetUniqueVertexCount(int i);
 	
 	bool IsModelValid();
 

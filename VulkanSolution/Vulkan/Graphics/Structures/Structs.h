@@ -50,25 +50,27 @@ struct Vertex {
 	{
 		position = glm::vec3(0.f, 0.f, 0.f);
 		normal = glm::vec3(0.f, 0.f, 0.f);
+		vertexColor = glm::vec3(1.f, 1.f, 1.f);
 		texCoord = glm::vec2(0.f, 0.f);
 		boneIDs = glm::ivec4(0);
 		boneWeights = glm::vec4(0.f);
 	}
-	Vertex(glm::vec3 position, glm::vec3 normal, glm::vec2 texCoord, glm::ivec4 boneIDs, glm::vec4 boneWeights)
-		:position(position), normal(normal), texCoord(texCoord), boneIDs(boneIDs), boneWeights(boneWeights)
+	Vertex(glm::vec3 position, glm::vec3 normal, glm::vec3 vertexColor, glm::vec2 texCoord, glm::ivec4 boneIDs, glm::vec4 boneWeights)
+		:position(position), normal(normal), vertexColor(vertexColor), texCoord(texCoord), boneIDs(boneIDs), boneWeights(boneWeights)
 	{}
 
 	Vertex(const Vertex& v)
-		:position(v.position), normal(v.normal), texCoord(v.texCoord), boneIDs(v.boneIDs), boneWeights(v.boneWeights)
+		:position(v.position), normal(v.normal), vertexColor(v.vertexColor), texCoord(v.texCoord), boneIDs(v.boneIDs), boneWeights(v.boneWeights)
 	{}
 
 	Vertex(Vertex&& v)
-		:position(v.position), normal(v.normal), texCoord(v.texCoord), boneIDs(v.boneIDs), boneWeights(v.boneWeights)
+		:position(v.position), normal(v.normal), vertexColor(v.vertexColor), texCoord(v.texCoord), boneIDs(v.boneIDs), boneWeights(v.boneWeights)
 	{}
 	Vertex& operator=(const Vertex& v)
 	{
 		position = v.position;
 		normal = v.normal;
+		vertexColor = v.vertexColor;
 		texCoord = v.texCoord;
 		boneIDs = v.boneIDs;
 		boneWeights = v.boneWeights;
@@ -78,6 +80,7 @@ struct Vertex {
 	{
 		position = v.position;
 		normal = v.normal;
+		vertexColor = v.vertexColor;
 		texCoord = v.texCoord;
 		boneIDs = v.boneIDs;
 		boneWeights = v.boneWeights;
@@ -86,6 +89,7 @@ struct Vertex {
 
 	glm::vec3 position;
 	glm::vec3 normal;
+	glm::vec3 vertexColor;
 	glm::vec2 texCoord;
 	glm::ivec4 boneIDs;
 	glm::vec4 boneWeights;
@@ -102,7 +106,7 @@ struct Vertex {
 
 	static const std::vector<VkVertexInputAttributeDescription>& GetAttributeDescriptions()
 	{
-		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(5);
+		static std::vector<VkVertexInputAttributeDescription> attributeDescriptions(6);
 
 		attributeDescriptions[0].binding = 0;
 		attributeDescriptions[0].location = 0;
@@ -116,18 +120,23 @@ struct Vertex {
 
 		attributeDescriptions[2].binding = 0;
 		attributeDescriptions[2].location = 2;
-		attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;		// two 32-bit floats
-		attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
+		attributeDescriptions[2].format = VK_FORMAT_R32G32B32_SFLOAT;		// three 32-bit floats
+		attributeDescriptions[2].offset = offsetof(Vertex, vertexColor);
 
 		attributeDescriptions[3].binding = 0;
 		attributeDescriptions[3].location = 3;
-		attributeDescriptions[3].format = VK_FORMAT_R32G32B32A32_SINT;		// four 32-bit unsigned int
-		attributeDescriptions[3].offset = offsetof(Vertex, boneIDs);
+		attributeDescriptions[3].format = VK_FORMAT_R32G32_SFLOAT;		// two 32-bit floats
+		attributeDescriptions[3].offset = offsetof(Vertex, texCoord);
 
 		attributeDescriptions[4].binding = 0;
 		attributeDescriptions[4].location = 4;
-		attributeDescriptions[4].format = VK_FORMAT_R32G32B32A32_SFLOAT;		// Four 32-bit floats
-		attributeDescriptions[4].offset = offsetof(Vertex, boneWeights);
+		attributeDescriptions[4].format = VK_FORMAT_R32G32B32A32_SINT;		// four 32-bit unsigned int
+		attributeDescriptions[4].offset = offsetof(Vertex, boneIDs);
+
+		attributeDescriptions[5].binding = 0;
+		attributeDescriptions[5].location = 5;
+		attributeDescriptions[5].format = VK_FORMAT_R32G32B32A32_SFLOAT;		// Four 32-bit floats
+		attributeDescriptions[5].offset = offsetof(Vertex, boneWeights);
 
 		return attributeDescriptions;
 	}
@@ -220,6 +229,12 @@ struct Animation
 	std::string animationName;
 	float duration;
 	std::vector<Track> tracks;
+};
+
+struct VertexPipelinePushConstants
+{
+	float pointSize;
+	int vertexID;
 };
 
 std::ostream& operator<<(std::ostream& os, const glm::vec4& data);

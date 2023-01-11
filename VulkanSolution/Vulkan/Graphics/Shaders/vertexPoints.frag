@@ -6,10 +6,10 @@ layout(location = 0) out vec4 outColor;
 
 layout(location = 0) in vec3 normal;
 layout(location = 1) in vec3 viewVector;
-layout(location = 2) in vec2 fragTexCoord;
+layout(location = 3) in vec3 vertexColor;
 
 void main()
 {
-	vec3 color = vec3(0.f, 1.f, 0.f) * dot(normal, viewVector);
-	outColor = vec4(color, 1.f);
+	vec3 color = vertexColor * dot(normal, viewVector);
+	outColor = vec4(vertexColor, 1.f);
 }

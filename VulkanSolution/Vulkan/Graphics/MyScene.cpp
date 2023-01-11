@@ -40,7 +40,7 @@ MyScene::MyScene(Window* window)
 
 bool MyScene::InitScene(Graphics* _graphics)
 {
-	model = new Model("../Vulkan/Graphics/Model/models/Sitting Laughing.fbx");
+	model = new Model("../Vulkan/Graphics/Model/models/room.obj");
 	model->SetAnimationIndex(0);
 	selectedMesh = model->GetMeshSize();
 
@@ -92,7 +92,7 @@ bool MyScene::InitScene(Graphics* _graphics)
 	DescriptorSet* blendingWeightDescriptor = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
 	graphicResources.push_back(new Pipeline(graphics, "blendingWeightPipeline", "spv/blendingWeight.vert.spv", "spv/blendingWeight.frag.spv", Vertex::GetBindingDescription(), Vertex::GetAttributeDescriptions(), sizeof(int), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptor->GetDescriptorSetLayoutPtr()));
 
-	graphicResources.push_back(new Pipeline(graphics, "vertexPipeline", "spv/vertexPoints.vert.spv", "spv/vertexPoints.frag.spv", Vertex::GetBindingDescription(), Vertex::GetAttributeDescriptions(), sizeof(float), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptor->GetDescriptorSetLayoutPtr(), VK_PRIMITIVE_TOPOLOGY_POINT_LIST));
+	graphicResources.push_back(new Pipeline(graphics, "vertexPipeline", "spv/vertexPoints.vert.spv", "spv/vertexPoints.frag.spv", Vertex::GetBindingDescription(), Vertex::GetAttributeDescriptions(), sizeof(VertexPipelinePushConstants), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptor->GetDescriptorSetLayoutPtr(), VK_PRIMITIVE_TOPOLOGY_POINT_LIST));
 
 	graphicResources.push_back(new Pipeline(graphics, "linePipeline", "spv/skeleton.vert.spv", "spv/skeleton.frag.spv", LineVertex::GetBindingDescription(), LineVertex::GetAttributeDescriptions(), sizeof(int), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptor->GetDescriptorSetLayoutPtr(), VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_FALSE));
 
@@ -335,7 +335,10 @@ void MyScene::RecordDrawModelCalls(VkCommandBuffer commandBuffer)
 		{
 			Pipeline* vPipeline = dynamic_cast<Pipeline*>(FindObjectByName("vertexPipeline"));
 			DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
-			RecordPushConstants(commandBuffer, vPipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &pointSize, sizeof(float));
+			VertexPipelinePushConstants tmp;
+			tmp.pointSize = pointSize;
+			tmp.vertexID = 0;
+			RecordPushConstants(commandBuffer, vPipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &tmp, sizeof(VertexPipelinePushConstants));
 			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vPipeline->GetPipeline());
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vPipeline->GetPipelineLayout(), 0, 1, des->GetDescriptorSetPtr(i * Graphics::MAX_FRAMES_IN_FLIGHT + graphics->GetCurrentFrameID()), 0, nullptr);
 			vkCmdDrawIndexed(commandBuffer, indexBuffer->GetBufferDataSize(), 1, 0, 0, 0);
@@ -425,19 +428,15 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 
 	UniformBuffer* uniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("uniformBuffer"));
 
-	glm::vec3 mousePosition = GetMousePositionInWorldSpace();
-
-	uniformData.model = glm::translate(mousePosition) * uniformData.model;
+	glm::vec3 mousePosition = GetMousePositionInWorldSpace(0.f);
 
 	void* data;
 	vkMapMemory(graphics->GetDevice(), uniformBuffer->GetBufferMemory(currentFrameID), 0, uniformBuffer->GetBufferSize(), 0, &data);
 	memcpy(data, &uniformData, uniformBuffer->GetBufferSize());
 	vkUnmapMemory(graphics->GetDevice(), uniformBuffer->GetBufferMemory(currentFrameID));
-
-	uniformData.model = glm::translate(-mousePosition) * uniformData.model;
 }
 
-glm::vec3 MyScene::GetMousePositionInWorldSpace()
+glm::vec3 MyScene::GetMousePositionInWorldSpace(float targetZ)
 {
 	glm::ivec2 rawPosition = input.GetMousePosition();
 	glm::ivec2 windowSize = windowHolder->GetWindowSize();
@@ -450,7 +449,7 @@ glm::vec3 MyScene::GetMousePositionInWorldSpace()
 	projectedPosition /= projectedPosition.w;
 	glm::vec3 projectionVector{ projectedPosition.x - cameraPoint.x, projectedPosition.y - cameraPoint.y, projectedPosition.z - cameraPoint.z };
 
-	 float t = -cameraPoint.z / projectionVector.z;
+	 float t = (targetZ - cameraPoint.z) / projectionVector.z;
 	 glm::vec3 result = cameraPoint + t * projectionVector;
 
 	// Restore projection matrix

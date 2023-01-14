@@ -53,6 +53,7 @@ private:
 	void UpdateUniformBuffer(uint32_t currentFrameID);
 
 	glm::vec3 GetMousePositionInWorldSpace(float targetZ);
+	glm::vec3 GetProjectionVectorFromCamera();
 
 	void WriteDescriptorSet();
 
@@ -62,6 +63,8 @@ private:
 	bool HasStencilComponent(VkFormat format);
 
 	void RecordDrawSkeletonCall(VkCommandBuffer commandBuffer);
+
+	int GetSelectedVertexID(int selectedMesh);
 
 private:
 	Window* windowHolder;

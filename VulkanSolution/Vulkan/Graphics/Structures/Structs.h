@@ -236,6 +236,7 @@ struct VertexPipelinePushConstants
 {
 	float pointSize;
 	int vertexID;
+	bool isMousePressed;
 };
 
 std::ostream& operator<<(std::ostream& os, const glm::vec4& data);

@@ -185,11 +185,14 @@ void MyScene::LoadNewModel()
 			buffer->ChangeBufferData(sizeof(Vertex), model->GetVertexCount(i), model->GetVertexData(i));
 			Buffer* indexBuffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("index") + std::to_string(i)));
 			indexBuffer->ChangeBufferData(sizeof(uint32_t), model->GetIndexCount(i), model->GetIndexData(i));
+			Buffer* uniqueBuffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("uniqueVertex") + std::to_string(i)));
+			uniqueBuffer->ChangeBufferData(sizeof(Vertex), model->GetUniqueVertexCount(i), model->GetUniqueVertexData(i));
 		}
 		else
 		{
 			graphicResources.push_back(new Buffer(graphics, std::string("vertex") + std::to_string(i), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex), model->GetVertexCount(i), model->GetVertexData(i)));
 			graphicResources.push_back(new Buffer(graphics, std::string("index") + std::to_string(i), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, sizeof(uint32_t), model->GetIndexCount(i), model->GetIndexData(i)));
+			graphicResources.push_back(new Buffer(graphics, std::string("uniqueVertex") + std::to_string(i), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex), model->GetUniqueVertexCount(i), model->GetUniqueVertexData(i)));
 		}
 	}
 	for (int i = meshSize; i < oldMeshSize; i++)
@@ -203,6 +206,11 @@ void MyScene::LoadNewModel()
 		const auto& iter2 = std::find(graphicResources.begin(), graphicResources.end(), WillBeDeleted2);
 		graphicResources.erase(iter2);
 		delete WillBeDeleted2;
+
+		Object* WillBeDeleted3 = FindObjectByName(std::string("uniqueVertex") + std::to_string(i));
+		const auto& iter3 = std::find(graphicResources.begin(), graphicResources.end(), WillBeDeleted3);
+		graphicResources.erase(iter3);
+		delete WillBeDeleted3;
 	}
 
 	Buffer* skeletonBuffer = dynamic_cast<Buffer*>(FindObjectByName("skeletonBuffer"));
@@ -212,6 +220,7 @@ void MyScene::LoadNewModel()
 	UniformBuffer* animationUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));
 	animationUniformBuffer->ChangeBufferData(sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT);
 
+	MyImGUI::UpdateClickedVertexAddress(nullptr);
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
 	MyImGUI::UpdateMeshNameList();
@@ -339,9 +348,28 @@ void MyScene::RecordDrawModelCalls(VkCommandBuffer commandBuffer)
 			vkCmdBindVertexBuffers(commandBuffer, 0, 1, uniqueVB, offsets);
 			Pipeline* vPipeline = dynamic_cast<Pipeline*>(FindObjectByName("vertexPipeline"));
 			DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("blendingWeightDescriptor"));
+			
 			VertexPipelinePushConstants tmp;
 			tmp.pointSize = pointSize;
-			tmp.vertexID = 0;
+			tmp.vertexID = GetSelectedVertexID(selectedMesh);
+			tmp.isMousePressed = input.IsMouseButtonPressed(GLFW_MOUSE_BUTTON_1);
+			
+			if (
+				input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_1) &&
+				(MyImGUI::IsMouseOnImGUIWindow() == false)
+				)
+			{
+				if (tmp.vertexID != -1)
+				{
+					Vertex* vertices = reinterpret_cast<Vertex*>(model->GetUniqueVertexData(selectedMesh));
+					MyImGUI::UpdateClickedVertexAddress(&vertices[tmp.vertexID]);
+				}
+				else
+				{
+					MyImGUI::UpdateClickedVertexAddress(nullptr);
+				}
+			}
+			
 			RecordPushConstants(commandBuffer, vPipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &tmp, sizeof(VertexPipelinePushConstants));
 			vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vPipeline->GetPipeline());
 			vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vPipeline->GetPipelineLayout(), 0, 1, des->GetDescriptorSetPtr(i * Graphics::MAX_FRAMES_IN_FLIGHT + graphics->GetCurrentFrameID()), 0, nullptr);
@@ -432,7 +460,6 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 
 	UniformBuffer* uniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("uniformBuffer"));
 
-	glm::vec3 mousePosition = GetMousePositionInWorldSpace(0.f);
 
 	void* data;
 	vkMapMemory(graphics->GetDevice(), uniformBuffer->GetBufferMemory(currentFrameID), 0, uniformBuffer->GetBufferSize(), 0, &data);
@@ -442,9 +469,19 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 
 glm::vec3 MyScene::GetMousePositionInWorldSpace(float targetZ)
 {
+	glm::vec3 projectionVector = GetProjectionVectorFromCamera();
+
+	 float t = (targetZ - cameraPoint.z) / projectionVector.z;
+	 glm::vec3 result = cameraPoint + t * projectionVector;
+
+	return result;
+}
+
+glm::vec3 MyScene::GetProjectionVectorFromCamera()
+{
 	glm::ivec2 rawPosition = input.GetMousePosition();
 	glm::ivec2 windowSize = windowHolder->GetWindowSize();
-	glm::vec4 mousePosition{ static_cast<float>(rawPosition.x) / (windowSize.x/2.f), static_cast<float>(rawPosition.y) / (windowSize.y/2.f), 0.f, 1.f };
+	glm::vec4 mousePosition{ static_cast<float>(rawPosition.x) / (windowSize.x / 2.f), static_cast<float>(rawPosition.y) / (windowSize.y / 2.f), 0.f, 1.f };
 
 	// Flip temporarily to get top == positive y coordinate value
 	uniformData.proj[1][1] *= -1;
@@ -453,13 +490,10 @@ glm::vec3 MyScene::GetMousePositionInWorldSpace(float targetZ)
 	projectedPosition /= projectedPosition.w;
 	glm::vec3 projectionVector{ projectedPosition.x - cameraPoint.x, projectedPosition.y - cameraPoint.y, projectedPosition.z - cameraPoint.z };
 
-	 float t = (targetZ - cameraPoint.z) / projectionVector.z;
-	 glm::vec3 result = cameraPoint + t * projectionVector;
-
 	// Restore projection matrix
 	uniformData.proj[1][1] *= -1;
 
-	return result;
+	return projectionVector;
 }
 
 void MyScene::WriteDescriptorSet()
@@ -602,4 +636,33 @@ void MyScene::RecordDrawSkeletonCall(VkCommandBuffer commandBuffer)
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, linePipeline->GetPipelineLayout(), 0, 1, bwDescriptor->GetDescriptorSetPtr(graphics->GetCurrentFrameID()), 0, nullptr);
 
 	vkCmdDraw(commandBuffer, boneSize * 2, 1, 0, 0);
+}
+
+int MyScene::GetSelectedVertexID(int selectedMesh)
+{
+	if (selectedMesh == model->GetMeshSize())
+	{
+		return -1;
+	}
+	glm::vec3 projectionVector = GetProjectionVectorFromCamera();
+
+	int dataSize = model->GetUniqueVertexCount(selectedMesh);
+	Vertex* vertices = reinterpret_cast<Vertex*>(model->GetUniqueVertexData(selectedMesh));
+	for (int i = 0; i < dataSize; i++)
+	{
+		glm::vec4 tmp = uniformData.model * glm::vec4(vertices[i].position.x, vertices[i].position.y, vertices[i].position.z, 1.f);
+		glm::vec3 position(tmp.x, tmp.y, tmp.z);
+
+		float t = (position.z - cameraPoint.z) / projectionVector.z;
+		glm::vec3 projectedPoint = cameraPoint + t * projectionVector;
+		glm::vec3 diff(projectedPoint - position);
+		float distance = glm::dot(diff, diff);
+
+		if (distance <= std::numeric_limits<float>::epsilon() * 15 * pointSize)
+		{
+			return i;
+		}
+	}
+
+	return -1;
 }

@@ -11,6 +11,7 @@ Creation Date: 10.06.2022
 #pragma once
 #include "vulkan/vulkan.h"
 
+struct Vertex;
 struct GLFWwindow;
 class Model;
 
@@ -26,9 +27,11 @@ namespace MyImGUI
     void SendAnimationInfo(float* worldTimer, bool* bindPoseFlag);
     void SendConfigInfo(float* mouseSensitivity);
 
+    void UpdateClickedVertexAddress(Vertex* vertex);
     void UpdateAnimationNameList();
     void UpdateBoneNameList();
     void UpdateMeshNameList();
+    
 
     bool IsMouseOnImGUIWindow();
 

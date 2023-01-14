@@ -17,6 +17,7 @@ Creation Date: 10.06.2022
 #include <xutility>
 #include "Engines/Window.h"
 #include "Graphics/Model/Model.h"
+#include <Graphics/Structures/Structs.h>
 
 VkDescriptorPool imguiDescriptorPool{ VK_NULL_HANDLE };
 VkDevice guiDevice;
@@ -26,6 +27,7 @@ namespace MyImGUI
     namespace Helper
     {
         void ModelStats();
+        void VertexSpectator();
         void BlendingWeightsSkeletonSelectionRecursively(int currentBoneIndex, int boneSize, ImGuiTreeNodeFlags baseFlags, bool nodeOpened = false);
         void Skeleton();
         void Animation();
@@ -56,6 +58,8 @@ namespace
     int* selectedMesh;
 
     float* mouseSensitivity;
+
+    Vertex* clickedVertex = nullptr;
 }
 
 namespace MyImGUI
@@ -221,7 +225,7 @@ void MyImGUI::DrawGUI()
     }
     ImGui::End();
 
-     //ImGui::ShowDemoWindow();
+    //ImGui::ShowDemoWindow();
 
 
     ImGui::Begin("Controller");
@@ -281,8 +285,34 @@ void MyImGUI::Helper::ModelStats()
                 }
                 ImGui::EndCombo();
             }
+
+            ImGui::Separator();
+
+            Helper::VertexSpectator();
         }
     }
+}
+
+void MyImGUI::Helper::VertexSpectator()
+{
+    // Do not output vertex data if selected mesh == meshNameList size - 1
+    if (*selectedMesh == meshNameList.size() - 1)
+    {
+        clickedVertex == nullptr;
+    }
+    if (clickedVertex == nullptr)
+    {
+        ImGui::Text("Please click a vertex to inspect");
+        return;
+    }
+
+    ImGui::BulletText("Position) %f, %f, %f", clickedVertex->position.x, clickedVertex->position.y, clickedVertex->position.z);
+    ImGui::BulletText("Normal) %f, %f, %f", clickedVertex->normal.x, clickedVertex->normal.y, clickedVertex->normal.z);
+    ImGui::BulletText("Vertex Color) %f, %f, %f", clickedVertex->vertexColor.x, clickedVertex->vertexColor.y, clickedVertex->vertexColor.z);
+    ImGui::BulletText("Tex Coord) %f, %f", clickedVertex->texCoord.x, clickedVertex->texCoord.y);
+    ImGui::BulletText("Bone ID) %d, %d, %d", clickedVertex->boneIDs.x, clickedVertex->boneIDs.y, clickedVertex->boneIDs.z, clickedVertex->boneIDs.w);
+    ImGui::BulletText("Bone Weights) %f, %f, %f, %f", clickedVertex->boneWeights.x, clickedVertex->boneWeights.y, clickedVertex->boneWeights.z, clickedVertex->boneWeights.w);
+
 }
 
 void MyImGUI::Helper::BlendingWeightsSkeletonSelectionRecursively(int currentBoneIndex, int boneSize, ImGuiTreeNodeFlags baseFlags, bool nodeOpened)
@@ -387,6 +417,11 @@ void MyImGUI::SendAnimationInfo(float* _worldTimer, bool* _bindPoseFlag)
 void MyImGUI::SendConfigInfo(float* _mouseSensitivity)
 {
     mouseSensitivity = _mouseSensitivity;
+}
+
+void MyImGUI::UpdateClickedVertexAddress(Vertex* _vertex)
+{
+    clickedVertex = _vertex;
 }
 
 void MyImGUI::UpdateAnimationNameList()

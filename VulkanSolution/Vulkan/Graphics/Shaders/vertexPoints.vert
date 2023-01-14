@@ -35,6 +35,7 @@ layout(push_constant) uniform constants
 {
 	float pointSize;
 	int vertexID;
+	bool isMousePressed;
 } PushConstants;
 
 void main()
@@ -56,7 +57,14 @@ void main()
 	vertexColor = vec3(1, 0, 0);
 	if(gl_VertexIndex == PushConstants.vertexID)
 	{
-		vertexColor = vec3(1, 1, 1);
+		if(PushConstants.isMousePressed)
+		{
+			vertexColor = vec3(0, 1, 0);
+		}
+		else
+		{
+			vertexColor = vec3(1, 1, 1);
+		}
 	}
 	
 }

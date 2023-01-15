@@ -417,7 +417,9 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 			m.vertices.emplace_back();
 			glm::vec3 position = glm::vec3(v[0], v[1], v[2]);
 			glm::vec3 normal = glm::vec3(normals[iInt][0], normals[iInt][1], normals[iInt][2]);
+			 m.normalByVertex[position].push_back(normal);
 			glm::vec2 uv = glm::vec2(uvs[iInt][0], uvs[iInt][1]);
+			 m.uvByVertex[position].push_back(uv);
 			glm::ivec4 boneID = animationSystem->GetBoneIndex(indices[i]);
 			glm::vec4 boneWeights = animationSystem->GetBoneWeight(indices[i]);
 			float sum = 0.f;

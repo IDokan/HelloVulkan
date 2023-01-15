@@ -224,3 +224,153 @@ std::ostream& operator<<(std::ostream& os, const glm::ivec2& data)
 	os << data.x << ", " << data.y;
 	return os;
 }
+
+bool operator<(const glm::vec3& lhs, const glm::vec3& rhs)
+{
+	if (lhs.x < rhs.x)
+	{
+		return true;
+	}
+	else if (lhs.y < rhs.y)
+	{
+		return true;
+	}
+	else if (lhs.z < rhs.z)
+	{
+		return true;
+	}
+	return false;
+}
+
+bool operator>(const glm::vec3& lhs, const glm::vec3& rhs)
+{
+	if (lhs.x > rhs.x)
+	{
+		return true;
+	}
+	else if (lhs.y > rhs.y)
+	{
+		return true;
+	}
+	else if (lhs.z > rhs.z)
+	{
+		return true;
+	}
+	return false;
+}
+
+bool operator<(const glm::vec2& lhs, const glm::vec2& rhs)
+{
+	if (lhs.x < rhs.x)
+	{
+		return true;
+	}
+	else if (lhs.y < rhs.y)
+	{
+		return true;
+	}
+	return false;
+}
+
+bool operator>(const glm::vec2& lhs, const glm::vec2& rhs)
+{
+	if (lhs.x > rhs.x)
+	{
+		return true;
+	}
+	else if (lhs.y > rhs.y)
+	{
+		return true;
+	}
+	return false;
+}
+
+bool operator<(glm::vec3&& lhs, glm::vec3&& rhs)
+{
+	if (lhs.x < rhs.x)
+	{
+		return true;
+	}
+	else if (lhs.y < rhs.y)
+	{
+		return true;
+	}
+	else if (lhs.z < rhs.z)
+	{
+		return true;
+	}
+	return false;
+}
+
+bool operator>(glm::vec3&& lhs, glm::vec3&& rhs)
+{
+	if (lhs.x > rhs.x)
+	{
+		return true;
+	}
+	else if (lhs.y > rhs.y)
+	{
+		return true;
+	}
+	else if (lhs.z > rhs.z)
+	{
+		return true;
+	}
+	return false;
+}
+
+bool operator<(glm::vec2&& lhs, glm::vec2&& rhs)
+{
+	if (lhs.x < rhs.x)
+	{
+		return true;
+	}
+	else if (lhs.y < rhs.y)
+	{
+		return true;
+	}
+	return false;
+}
+
+bool operator>(glm::vec2&& lhs, glm::vec2&& rhs)
+{
+	if (lhs.x > rhs.x)
+	{
+		return true;
+	}
+	else if (lhs.y > rhs.y)
+	{
+		return true;
+	}
+	return false;
+}
+
+bool vec3Compare::operator()(const glm::vec3& lhs, const glm::vec3& rhs) const
+{
+	//if (lhs.x < rhs.x)
+	//{
+	//	return true;
+	//}
+	//else if (lhs.y < rhs.y)
+	//{
+	//	return true;
+	//}
+	//else if (lhs.z < rhs.z)
+	//{
+	//	return true;
+	//}
+	return lhs.x < rhs.x;
+}
+
+bool vec2Compare::operator()(const glm::vec2& lhs, const glm::vec2& rhs) const
+{
+	//if (lhs.x < rhs.x)
+	//{
+	//	return true;
+	//}
+	//else if (lhs.y < rhs.y)
+	//{
+	//	return true;
+	//}
+	return lhs.x < rhs.x;
+}

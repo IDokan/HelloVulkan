@@ -154,6 +154,16 @@ struct UniformBufferObject {
 	glm::mat4 proj;
 };
 
+struct vec3Compare
+{
+	bool operator() (const glm::vec3& lhs, const glm::vec3& rhs) const;
+};
+
+struct vec2Compare
+{
+	bool operator() (const glm::vec2& lhs, const glm::vec2& rhs) const;
+};
+
 struct Mesh
 {
 	Mesh();
@@ -167,6 +177,8 @@ struct Mesh
 	std::vector<uint32_t> indices;
 	std::vector<Vertex> vertices;
 	std::vector<Vertex> uniqueVertices;
+	std::map<glm::vec3, std::vector<glm::vec3>, vec3Compare> normalByVertex;
+	std::map<glm::vec3, std::vector<glm::vec2>, vec2Compare> uvByVertex;
 };
 
 struct Bone
@@ -243,3 +255,13 @@ std::ostream& operator<<(std::ostream& os, const glm::vec4& data);
 std::ostream& operator<<(std::ostream& os, const glm::vec3& data);
 std::ostream& operator<<(std::ostream& os, const glm::vec2& data);
 std::ostream& operator<<(std::ostream& os, const glm::ivec2& data);
+
+bool operator<(const glm::vec3& lhs, const glm::vec3& rhs);
+bool operator>(const glm::vec3& lhs, const glm::vec3& rhs);
+bool operator<(const glm::vec2& lhs, const glm::vec2& rhs);
+bool operator>(const glm::vec2& lhs, const glm::vec2& rhs);
+
+bool operator<(glm::vec3&& lhs, glm::vec3&& rhs);
+bool operator>(glm::vec3&& lhs, glm::vec3&& rhs);
+bool operator<(glm::vec2&& lhs, glm::vec2&& rhs);
+bool operator>(glm::vec2&& lhs, glm::vec2&& rhs);

@@ -18,6 +18,7 @@ Creation Date: 10.06.2022
 #include "Engines/Window.h"
 #include "Graphics/Model/Model.h"
 #include <Graphics/Structures/Structs.h>
+#include <Engines/Objects/HairBone.h>
 
 VkDescriptorPool imguiDescriptorPool{ VK_NULL_HANDLE };
 VkDevice guiDevice;
@@ -28,6 +29,7 @@ namespace MyImGUI
     {
         void ModelStats();
         void VertexSpectator();
+        void HairBoneInspector();
         void BlendingWeightsSkeletonSelectionRecursively(int currentBoneIndex, int boneSize, ImGuiTreeNodeFlags baseFlags, bool nodeOpened = false);
         void Skeleton();
         void Animation();
@@ -60,6 +62,9 @@ namespace
     float* mouseSensitivity;
 
     Vertex* clickedVertex = nullptr;
+
+    HairBone* hairBone = nullptr;
+    int selectedHairBone = 0;
 }
 
 namespace MyImGUI
@@ -225,7 +230,7 @@ void MyImGUI::DrawGUI()
     }
     ImGui::End();
 
-    //ImGui::ShowDemoWindow();
+    // ImGui::ShowDemoWindow();
 
 
     ImGui::Begin("Controller");
@@ -289,6 +294,8 @@ void MyImGUI::Helper::ModelStats()
             ImGui::Separator();
 
             Helper::VertexSpectator();
+            ImGui::Separator();
+            Helper::HairBoneInspector();
         }
     }
 }
@@ -313,6 +320,34 @@ void MyImGUI::Helper::VertexSpectator()
     ImGui::BulletText("Bone ID) %d, %d, %d", clickedVertex->boneIDs.x, clickedVertex->boneIDs.y, clickedVertex->boneIDs.z, clickedVertex->boneIDs.w);
     ImGui::BulletText("Bone Weights) %f, %f, %f, %f", clickedVertex->boneWeights.x, clickedVertex->boneWeights.y, clickedVertex->boneWeights.z, clickedVertex->boneWeights.w);
 
+}
+
+void MyImGUI::Helper::HairBoneInspector()
+{
+
+    ImGui::Text("Hair Bone Size: %d", hairBone->GetBoneSize());
+    if (ImGui::Button("Add new bone"))
+    {
+        hairBone->AddBone();
+    }
+    ImGui::SameLine();
+    if (ImGui::Button("Remove bone"))
+    {
+        hairBone->RemoveBone();
+    }
+
+    ImGui::InputInt("Select Bone", &selectedHairBone, 1);
+    int currentBoneSize = hairBone->GetBoneSize();
+    if (selectedHairBone >= currentBoneSize)
+    {
+        selectedHairBone = currentBoneSize - 1;
+    }
+    if (selectedHairBone < 0)
+    {
+        selectedHairBone = 0;
+    }
+    glm::vec4* data = reinterpret_cast<glm::vec4*>(hairBone->GetBoneData());
+    ImGui::SliderFloat3("Bone", reinterpret_cast<float*>(&data[selectedHairBone]), -20.f, 20.f);
 }
 
 void MyImGUI::Helper::BlendingWeightsSkeletonSelectionRecursively(int currentBoneIndex, int boneSize, ImGuiTreeNodeFlags baseFlags, bool nodeOpened)
@@ -417,6 +452,11 @@ void MyImGUI::SendAnimationInfo(float* _worldTimer, bool* _bindPoseFlag)
 void MyImGUI::SendConfigInfo(float* _mouseSensitivity)
 {
     mouseSensitivity = _mouseSensitivity;
+}
+
+void MyImGUI::SendHairBoneInfo(HairBone* _hairBone)
+{
+    hairBone = _hairBone;
 }
 
 void MyImGUI::UpdateClickedVertexAddress(Vertex* _vertex)

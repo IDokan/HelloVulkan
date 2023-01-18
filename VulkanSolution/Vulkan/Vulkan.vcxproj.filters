@@ -124,6 +124,9 @@
     <ClCompile Include="Helper\VulkanHelper.cpp">
       <Filter>Helper</Filter>
     </ClCompile>
+    <ClCompile Include="Engines\Objects\HairBone.cpp">
+      <Filter>Engines\Objects</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="GLMath.h">
@@ -207,6 +210,9 @@
     <ClInclude Include="Graphics\Buffer\UniformBuffer.h">
       <Filter>Graphics\Buffer</Filter>
     </ClInclude>
+    <ClInclude Include="Engines\Objects\HairBone.h">
+      <Filter>Engines\Objects</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <Text Include="Notes\Chp1.OverviewOfVulkan.txt">
@@ -269,6 +275,12 @@
       <Filter>Graphics\Shaders</Filter>
     </CustomBuild>
     <CustomBuild Include="Graphics\Shaders\vertexPoints.vert">
+      <Filter>Graphics\Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Graphics\Shaders\hairBone.vert">
+      <Filter>Graphics\Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Graphics\Shaders\hairBone.frag">
       <Filter>Graphics\Shaders</Filter>
     </CustomBuild>
   </ItemGroup>

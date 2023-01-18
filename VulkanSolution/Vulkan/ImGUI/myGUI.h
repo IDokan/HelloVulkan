@@ -14,6 +14,7 @@ Creation Date: 10.06.2022
 struct Vertex;
 struct GLFWwindow;
 class Model;
+class HairBone;
 
 namespace MyImGUI
 {
@@ -26,6 +27,7 @@ namespace MyImGUI
     void SendSkeletonInfo(bool* showSkeletonFlag, bool* blendingWeightMode, int* selectedBone);
     void SendAnimationInfo(float* worldTimer, bool* bindPoseFlag);
     void SendConfigInfo(float* mouseSensitivity);
+    void SendHairBoneInfo(HairBone* hairBone);
 
     void UpdateClickedVertexAddress(Vertex* vertex);
     void UpdateAnimationNameList();

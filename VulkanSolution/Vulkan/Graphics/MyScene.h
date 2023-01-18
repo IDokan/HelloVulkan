@@ -14,10 +14,12 @@ Creation Date: 06.12.2021
 #include "Graphics/Structures/Structs.h"
 #include <Engines/Objects/Object.h>
 
+
 class Model;
 class Window;
 class DescriptorSet;
 class Graphics;
+class HairBone;
 
 class MyScene
 {
@@ -107,6 +109,11 @@ private:
 	std::vector<Object*> graphicResources;
 
 	float mouseSensitivity;
+
+	HairBone* hairBone0;
+	void WriteBasicDescriptorSet();
+	void RecordDrawHairBoneCall(VkCommandBuffer commandBuffer);
+	void UpdateHairBoneBuffer(uint32_t currentFrameID);
 private:
 	Object* FindObjectByName(std::string name);
 

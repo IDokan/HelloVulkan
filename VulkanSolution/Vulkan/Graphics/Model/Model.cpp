@@ -768,6 +768,11 @@ void Model::GetAnimationData(float t, std::vector<glm::mat4>& data, bool bindPos
 	animationSystem->GetAnimationData(t, data);
 }
 
+void Model::GetUnitBoneData(std::vector<glm::mat4>& data)
+{
+	animationSystem->GetToBoneFromUnit(data);
+}
+
 std::string Model::GetAnimationName()
 {
 	return animationSystem->GetAnimationName();

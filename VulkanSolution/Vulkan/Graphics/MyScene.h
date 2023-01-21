@@ -111,7 +111,7 @@ private:
 	float mouseSensitivity;
 
 	HairBone* hairBone0;
-	void WriteBasicDescriptorSet();
+	void WriteHairBoneDescriptorSet();
 	void RecordDrawHairBoneCall(VkCommandBuffer commandBuffer);
 	void UpdateHairBoneBuffer(uint32_t currentFrameID);
 private:

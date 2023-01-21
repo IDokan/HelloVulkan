@@ -51,6 +51,7 @@ public:
 	unsigned int GetSelectedAnimationIndex();
 	void SetAnimationIndex(unsigned int i);
 	void GetAnimationData(float t, std::vector<glm::mat4>& data, bool bindPoseFlag = false);
+	void GetUnitBoneData(std::vector<glm::mat4>& data);
 	std::string GetAnimationName();
 	float GetAnimationDuration();
 	// @@ End of getter & setter.

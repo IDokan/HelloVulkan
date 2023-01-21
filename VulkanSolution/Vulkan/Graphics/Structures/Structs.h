@@ -251,6 +251,12 @@ struct VertexPipelinePushConstants
 	bool isMousePressed;
 };
 
+struct HairBonePushConstants
+{
+	float pointSize;
+	int selectedBone;
+};
+
 std::ostream& operator<<(std::ostream& os, const glm::vec4& data);
 std::ostream& operator<<(std::ostream& os, const glm::vec3& data);
 std::ostream& operator<<(std::ostream& os, const glm::vec2& data);

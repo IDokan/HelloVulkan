@@ -64,6 +64,7 @@ bool MyScene::InitScene(Graphics* _graphics)
 
 	graphicResources.push_back(new UniformBuffer(graphics, std::string("uniformBuffer"), sizeof(UniformBufferObject), Graphics::MAX_FRAMES_IN_FLIGHT));
 	graphicResources.push_back(new UniformBuffer(graphics, std::string("animationUniformBuffer"), sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT));
+	graphicResources.push_back(new UniformBuffer(graphics, std::string("unitBoneUniformBuffer"), sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT));
 
 	graphicResources.push_back(new DescriptorSet(graphics, "descriptor", Graphics::MAX_FRAMES_IN_FLIGHT * meshSize, {
 		{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
@@ -103,14 +104,16 @@ bool MyScene::InitScene(Graphics* _graphics)
 	hairBone0 = new HairBone("HairBone");
 	graphicResources.push_back(new Buffer(graphics, std::string("HairBone"), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(glm::vec3), hairBone0->GetBoneSize(), hairBone0->GetBoneData()));
 	graphicResources.push_back(new UniformBuffer(graphics, std::string("HairBoneUniform"), hairBone0->GetHairBoneMaxDataSize(), Graphics::MAX_FRAMES_IN_FLIGHT));
-	DescriptorSet* basicDescriptor = new DescriptorSet(graphics, "basicDescriptor", Graphics::MAX_FRAMES_IN_FLIGHT,
+	DescriptorSet* hairBoneDescriptor = new DescriptorSet(graphics, "hairBoneDescriptor", Graphics::MAX_FRAMES_IN_FLIGHT,
 		{
 			{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
-			{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
+			{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+			{2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+			{3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
 		});
-	graphicResources.push_back(basicDescriptor);
-	WriteBasicDescriptorSet();
-	graphicResources.push_back(new Pipeline(graphics, "hairBonePipeline", "spv/hairBone.vert.spv", "spv/hairBone.frag.spv", LineVertex::GetBindingDescription(), LineVertex::GetAttributeDescriptions(), sizeof(float), VK_SHADER_STAGE_VERTEX_BIT, basicDescriptor->GetDescriptorSetLayoutPtr(), VK_PRIMITIVE_TOPOLOGY_POINT_LIST, VK_FALSE));
+	graphicResources.push_back(hairBoneDescriptor);
+	WriteHairBoneDescriptorSet();
+	graphicResources.push_back(new Pipeline(graphics, "hairBonePipeline", "spv/hairBone.vert.spv", "spv/hairBone.frag.spv", LineVertex::GetBindingDescription(), LineVertex::GetAttributeDescriptions(), sizeof(HairBonePushConstants), VK_SHADER_STAGE_VERTEX_BIT, hairBoneDescriptor->GetDescriptorSetLayoutPtr(), VK_PRIMITIVE_TOPOLOGY_POINT_LIST, VK_FALSE));
 
 	return true;
 }
@@ -238,6 +241,9 @@ void MyScene::LoadNewModel()
 	UniformBuffer* animationUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));
 	animationUniformBuffer->ChangeBufferData(sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT);
 
+	UniformBuffer* unitBoneUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("unitBoneUniformBuffer"));
+	unitBoneUniformBuffer->ChangeBufferData(sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT);
+
 	MyImGUI::UpdateClickedVertexAddress(nullptr);
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
@@ -260,9 +266,19 @@ void MyScene::LoadNewModel()
 				{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
 				{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
 				});
+
+			DescriptorSet* hairBoneDescriptor = dynamic_cast<DescriptorSet*>(FindObjectByName("hairBoneDescriptor"));
+			hairBoneDescriptor->ChangeDescriptorSet(Graphics::MAX_FRAMES_IN_FLIGHT,
+				{
+			{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+			{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+			{2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+			{3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
+				});
 		}
 		WriteWaxDescriptorSet();
 		WriteBlendingWeightDescriptorSet();
+		WriteHairBoneDescriptorSet();
 
 		return;
 	}
@@ -283,9 +299,19 @@ void MyScene::LoadNewModel()
 			{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
 			{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
 			});
+
+		DescriptorSet* hairBoneDescriptor = dynamic_cast<DescriptorSet*>(FindObjectByName("hairBoneDescriptor"));
+		hairBoneDescriptor->ChangeDescriptorSet(Graphics::MAX_FRAMES_IN_FLIGHT,
+			{
+		{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+		{1, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+		{2, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr},
+		{3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
+			});
 	}
 	WriteDescriptorSet();
 	WriteBlendingWeightDescriptorSet();
+	WriteHairBoneDescriptorSet();
 
 }
 
@@ -584,6 +610,13 @@ void MyScene::UpdateAnimationUniformBuffer(uint32_t currentFrameID)
 	vkMapMemory(graphics->GetDevice(), animationUniformBuffer->GetBufferMemory(currentFrameID), 0, animationUniformBuffer->GetBufferSize(), 0, &data);
 	memcpy(data, animationBufferData.data(), animationUniformBuffer->GetBufferSize());
 	vkUnmapMemory(graphics->GetDevice(), animationUniformBuffer->GetBufferMemory(currentFrameID));
+
+
+	model->GetUnitBoneData(animationBufferData);
+	UniformBuffer* unitBoneUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("unitBoneUniformBuffer"));
+	vkMapMemory(graphics->GetDevice(), unitBoneUniformBuffer->GetBufferMemory(currentFrameID), 0, unitBoneUniformBuffer->GetBufferSize(), 0, &data);
+	memcpy(data, animationBufferData.data(), unitBoneUniformBuffer->GetBufferSize());
+	vkUnmapMemory(graphics->GetDevice(), unitBoneUniformBuffer->GetBufferMemory(currentFrameID));
 }
 
 void MyScene::WriteBlendingWeightDescriptorSet()
@@ -611,16 +644,20 @@ void MyScene::RecordPushConstants(VkCommandBuffer commandBuffer, VkPipelineLayou
 	vkCmdPushConstants(commandBuffer, layout, targetStage, 0, dataSize, data);
 }
 
-void MyScene::WriteBasicDescriptorSet()
+void MyScene::WriteHairBoneDescriptorSet()
 {
-	DescriptorSet* basicDescriptor = dynamic_cast<DescriptorSet*>(FindObjectByName("basicDescriptor"));
+	DescriptorSet* hairBoneDescriptor = dynamic_cast<DescriptorSet*>(FindObjectByName("hairBoneDescriptor"));
 	UniformBuffer* uniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("uniformBuffer"));
+	UniformBuffer* animationUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));
+	UniformBuffer* unitBoneUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("unitBoneUniformBuffer"));
 	UniformBuffer* uniformBuffer2 = dynamic_cast<UniformBuffer*>(FindObjectByName("HairBoneUniform"));
 
 	for (int j = 0; j < Graphics::MAX_FRAMES_IN_FLIGHT; j++)
 	{
-		basicDescriptor->Write(j, 0, uniformBuffer->GetBuffer(j), uniformBuffer->GetBufferSize());
-		basicDescriptor->Write(j, 1, uniformBuffer2->GetBuffer(j), uniformBuffer2->GetBufferSize());
+		hairBoneDescriptor->Write(j, 0, uniformBuffer->GetBuffer(j), uniformBuffer->GetBufferSize());
+		hairBoneDescriptor->Write(j, 1, animationUniformBuffer->GetBuffer(j), animationUniformBuffer->GetBufferSize());
+		hairBoneDescriptor->Write(j, 2, unitBoneUniformBuffer->GetBuffer(j), unitBoneUniformBuffer->GetBufferSize());
+		hairBoneDescriptor->Write(j, 3, uniformBuffer2->GetBuffer(j), uniformBuffer2->GetBufferSize());
 	}
 }
 
@@ -634,12 +671,12 @@ void MyScene::RecordDrawHairBoneCall(VkCommandBuffer commandBuffer)
 	VkBuffer VB[] = { vertexBuffer->GetBuffer() };
 	VkDeviceSize offsets[] = { 0 };
 	Pipeline* pipeline = dynamic_cast<Pipeline*>(FindObjectByName("hairBonePipeline"));
-	DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("basicDescriptor"));
+	DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("hairBoneDescriptor"));
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
-
-	RecordPushConstants(commandBuffer, pipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &pointSize, sizeof(float));
+	HairBonePushConstants hpc{ pointSize, selectedBone };
+	RecordPushConstants(commandBuffer, pipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &hpc, sizeof(HairBonePushConstants));
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->GetPipeline());
-	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->GetPipelineLayout(), 0, 1, des->GetDescriptorSetPtr(selectedMesh * Graphics::MAX_FRAMES_IN_FLIGHT + graphics->GetCurrentFrameID()), 0, nullptr);
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->GetPipelineLayout(), 0, 1, des->GetDescriptorSetPtr(graphics->GetCurrentFrameID()), 0, nullptr);
 	vkCmdDraw(commandBuffer, 1, hairBone0->GetBoneSize(), 0, 0);
 }
 

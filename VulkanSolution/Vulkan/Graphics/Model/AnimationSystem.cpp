@@ -108,7 +108,9 @@ void AnimationSystem::GetAnimationData(float t, std::vector<glm::mat4>& data)
 
 	const std::vector<Track>& tracks = animations[selectedAnimation].tracks;
 	size_t trackSize = tracks.size();
-	data.resize(trackSize);
+
+	size_t skeletonSize = skeleton.GetSkeletonSize();
+	data.resize(skeletonSize);
 	
 	for (size_t trackIndex = 0; trackIndex < trackSize; trackIndex++)
 	{
@@ -143,8 +145,14 @@ void AnimationSystem::GetAnimationData(float t, std::vector<glm::mat4>& data)
 		}
 	}
 
+	for (size_t modifiedBoneIndex = trackSize; modifiedBoneIndex < skeletonSize; modifiedBoneIndex++)
+	{
+		int parentID = skeleton.GetBoneByBoneID(static_cast<int>(modifiedBoneIndex)).parentID;
+		data[modifiedBoneIndex] = data[parentID];
+	}
+
 	// Multiply toModelFromBone matrix at here.
-	for (size_t i = 0; i < trackSize; i++)
+	for (size_t i = 0; i < skeletonSize; i++)
 	{
 		data[i] = data[i] * skeleton.GetBoneByBoneID(static_cast<int>(i)).toModelFromBone;
 	}
@@ -178,6 +186,11 @@ int AnimationSystem::GetBoneIDByName(const std::string& name)
 std::string AnimationSystem::GetBoneName(unsigned int boneID)
 {
 	return skeleton.GetBoneNameByID(boneID);
+}
+
+void AnimationSystem::AddBone(const Bone& newBone)
+{
+	skeleton.AddBone(newBone);
 }
 
 int AnimationSystem::GetChildrenBoneID(int boneID)

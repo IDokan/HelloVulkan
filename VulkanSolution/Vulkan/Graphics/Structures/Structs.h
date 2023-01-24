@@ -202,6 +202,7 @@ class Skeleton
 public:
 	Skeleton();
 	void AddBone(std::string name, int parentID);
+	void AddBone(const Bone& newBone);
 	int GetBoneIDByName(const std::string& name);
 	// Return empty bone when bone ID is invalid
 	const Bone& GetBoneByBoneID(int boneID);

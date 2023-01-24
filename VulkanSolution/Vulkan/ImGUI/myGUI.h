@@ -27,7 +27,7 @@ namespace MyImGUI
     void SendSkeletonInfo(bool* showSkeletonFlag, bool* blendingWeightMode, int* selectedBone);
     void SendAnimationInfo(float* worldTimer, bool* bindPoseFlag);
     void SendConfigInfo(float* mouseSensitivity);
-    void SendHairBoneInfo(HairBone* hairBone);
+    void SendHairBoneInfo(HairBone* hairBone, bool* applyingBone);
 
     void UpdateClickedVertexAddress(Vertex* vertex);
     void UpdateAnimationNameList();

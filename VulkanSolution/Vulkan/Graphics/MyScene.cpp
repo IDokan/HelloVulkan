@@ -35,7 +35,7 @@ Creation Date: 06.12.2021
 #include <Engines/Objects/HairBone.h>
 
 MyScene::MyScene(Window* window)
-	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f)
+	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f), applyingBone(false)
 {
 }
 
@@ -132,11 +132,11 @@ void MyScene::CleanScene()
 
 void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t currentFrameID)
 {
+	ModifyBone();
+
 	UpdateTimer(dt);
 
-
 	UpdateUniformBuffer(currentFrameID);
-
 
 	UpdateAnimationUniformBuffer(currentFrameID);
 
@@ -321,7 +321,7 @@ void MyScene::InitGUI()
 	MyImGUI::SendSkeletonInfo(&showSkeletonFlag, &blendingWeightMode, &selectedBone);
 	MyImGUI::SendAnimationInfo(&timer, &bindPoseFlag);
 	MyImGUI::SendConfigInfo(&mouseSensitivity);
-	MyImGUI::SendHairBoneInfo(hairBone0);
+	MyImGUI::SendHairBoneInfo(hairBone0, &applyingBone);
 
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
@@ -701,6 +701,50 @@ Object* MyScene::FindObjectByName(std::string name)
 			return obj;
 	}
 	return nullptr;
+}
+
+void MyScene::ModifyBone()
+{
+	if (applyingBone == false)
+	{
+		return;
+	}
+	applyingBone = false;
+	
+	static int newBoneIndex = 0;
+	// Modify Bone at here.
+	Bone newBone;
+	newBone.name = std::string("newBone" + std::to_string(newBoneIndex++));
+	newBone.id = model->GetBoneCount();
+	newBone.parentID = selectedBone;
+	const Bone& parentBone = model->GetBone(selectedBone);
+	glm::vec4 trans = hairBone0->GetBoneData(0);
+	newBone.toBoneFromUnit = glm::translate(glm::vec3(trans.x, trans.y, trans.z)) * parentBone.toBoneFromUnit;
+	newBone.toModelFromBone = parentBone.toModelFromBone;
+	/*
+	@@ TODO: Find out which one is correct
+	newBone.toModelFromBone = parentBone.toModelFromBone /** glm::translate(-glm::vec3(trans.x, trans.y, trans.z));
+	*/
+	model->AddBone(newBone);
+
+	MyImGUI::UpdateBoneNameList();
+
+	graphics->DeviceWaitIdle();
+	
+	Buffer* skeleton = dynamic_cast<Buffer*>(FindObjectByName("skeletonBuffer"));
+	skeleton->ChangeBufferData(sizeof(LineVertex), 2 * model->GetBoneCount(), model->GetBoneDataForDrawing());
+
+	UniformBuffer* animation = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));
+	animation->ChangeBufferData(sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT);
+
+	UniformBuffer* unitBoneUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("unitBoneUniformBuffer"));
+	unitBoneUniformBuffer->ChangeBufferData(sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT);
+	WriteDescriptorSet();
+	WriteWaxDescriptorSet();
+	WriteBlendingWeightDescriptorSet();
+	WriteHairBoneDescriptorSet();
+
+	hairBone0->SetBoneData(0, glm::vec4(0.f, 0.f, 0.f, 1.f));
 }
 
 bool MyScene::HasStencilComponent(VkFormat format)

@@ -30,6 +30,8 @@ public:
 	void AddBone();
 	void RemoveBone();
 	void* GetBoneData();
+	void SetBoneData(int i, glm::vec4 data);
+	glm::vec4 GetBoneData(int i);
 
 private:
 	size_t size;

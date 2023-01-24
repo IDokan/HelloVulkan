@@ -65,6 +65,7 @@ namespace
 
     HairBone* hairBone = nullptr;
     int selectedHairBone = 0;
+    bool* applyingBoneRef = nullptr;
 }
 
 namespace MyImGUI
@@ -348,6 +349,11 @@ void MyImGUI::Helper::HairBoneInspector()
     }
     glm::vec4* data = reinterpret_cast<glm::vec4*>(hairBone->GetBoneData());
     ImGui::SliderFloat3("Bone", reinterpret_cast<float*>(&data[selectedHairBone]), -20.f, 20.f);
+
+    if (ImGui::Button("Apply Bone"))
+    {
+        *applyingBoneRef = true;
+    }
 }
 
 void MyImGUI::Helper::BlendingWeightsSkeletonSelectionRecursively(int currentBoneIndex, int boneSize, ImGuiTreeNodeFlags baseFlags, bool nodeOpened)
@@ -454,9 +460,10 @@ void MyImGUI::SendConfigInfo(float* _mouseSensitivity)
     mouseSensitivity = _mouseSensitivity;
 }
 
-void MyImGUI::SendHairBoneInfo(HairBone* _hairBone)
+void MyImGUI::SendHairBoneInfo(HairBone* _hairBone, bool* applyingBone)
 {
     hairBone = _hairBone;
+    applyingBoneRef = applyingBone;
 }
 
 void MyImGUI::UpdateClickedVertexAddress(Vertex* _vertex)

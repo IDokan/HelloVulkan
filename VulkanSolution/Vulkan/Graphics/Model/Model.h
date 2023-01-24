@@ -45,6 +45,7 @@ public:
 	void* GetBoneDataForDrawing();
 	void GetToBoneFromUnit(std::vector<glm::mat4>& data);
 	void GetToModelFromBone(std::vector<glm::mat4>& data);
+	void AddBone(const Bone& newBone);
 
 	// @@ Getter&Setter of animation system
 	unsigned int GetAnimationCount();

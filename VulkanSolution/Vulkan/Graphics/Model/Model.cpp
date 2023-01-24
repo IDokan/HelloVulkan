@@ -793,6 +793,14 @@ void Model::GetToModelFromBone(std::vector<glm::mat4>& data)
 	animationSystem->GetToModelFromBone(data);
 }
 
+void Model::AddBone(const Bone& newBone)
+{
+	animationSystem->AddBone(newBone);
+
+	bones.push_back(newBone.toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
+	bones.push_back(animationSystem->GetBone(newBone.parentID).toBoneFromUnit* glm::vec4(0.f, 0.f, 0.f, 1.f));
+}
+
 void Model::ReadMaterial(const aiScene* scene, const std::string& path)
 {
 	//std::string::size_type slashIndex = path.find_last_of('/');

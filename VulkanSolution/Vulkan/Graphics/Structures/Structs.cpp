@@ -49,6 +49,12 @@ void Skeleton::AddBone(std::string name, int parentID)
 	boneSize += 1;
 }
 
+void Skeleton::AddBone(const Bone& newBone)
+{
+	bones.push_back(newBone);
+	boneSize += 1;
+}
+
 int Skeleton::GetBoneIDByName(const std::string& name)
 {
 	int id = 0;

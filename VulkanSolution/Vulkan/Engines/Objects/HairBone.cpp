@@ -57,3 +57,13 @@ void* HairBone::GetBoneData()
 {
 	return bones.data();
 }
+
+void HairBone::SetBoneData(int i, glm::vec4 data)
+{
+	bones[i] = data;
+}
+
+glm::vec4 HairBone::GetBoneData(int i)
+{
+	return bones[i];
+}

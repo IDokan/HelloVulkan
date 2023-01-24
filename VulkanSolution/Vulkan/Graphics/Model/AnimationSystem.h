@@ -41,6 +41,7 @@ public:
 	const Bone& GetBone(int boneID);
 	int GetBoneIDByName(const std::string& name);
 	std::string GetBoneName(unsigned int boneID);
+	void AddBone(const Bone& newBone);
 
 	// Return the first bone whose parent bone is given bone ID.
 	int GetChildrenBoneID(int boneID);

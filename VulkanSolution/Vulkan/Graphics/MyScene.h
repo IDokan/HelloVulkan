@@ -117,4 +117,7 @@ private:
 private:
 	Object* FindObjectByName(std::string name);
 
+	bool applyingBone;
+	void ModifyBone();
+
 };

@@ -148,6 +148,12 @@ const char* Model::GetErrorString()
 	return lImporter->GetStatus().GetErrorString();
 }
 
+void Model::GetBoundingBoxMinMax(glm::vec3& min, glm::vec3& max)
+{
+	min = boundingBox[0];
+	max = boundingBox[1];
+}
+
 glm::mat4 Model::CalculateAdjustBoundingBoxMatrix()
 {
 	glm::vec3 modelScale = GetModelScale();

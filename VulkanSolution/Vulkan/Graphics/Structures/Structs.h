@@ -258,6 +258,13 @@ struct HairBonePushConstants
 	int selectedBone;
 };
 
+struct SpherePushConstants
+{
+	glm::mat4 sphereBoundingMatrix;
+	glm::mat4 translation;
+	float radius;
+};
+
 std::ostream& operator<<(std::ostream& os, const glm::vec4& data);
 std::ostream& operator<<(std::ostream& os, const glm::vec3& data);
 std::ostream& operator<<(std::ostream& os, const glm::vec2& data);

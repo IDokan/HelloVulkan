@@ -10,6 +10,7 @@ Creation Date: 10.06.2022
 ******************************************************************************/
 #pragma once
 #include "vulkan/vulkan.h"
+#include "glm/vec3.hpp"
 
 struct Vertex;
 struct GLFWwindow;
@@ -27,12 +28,13 @@ namespace MyImGUI
     void SendSkeletonInfo(bool* showSkeletonFlag, bool* blendingWeightMode, int* selectedBone);
     void SendAnimationInfo(float* worldTimer, bool* bindPoseFlag);
     void SendConfigInfo(float* mouseSensitivity);
-    void SendHairBoneInfo(HairBone* hairBone, bool* applyingBone);
+    void SendHairBoneInfo(HairBone* hairBone, bool* applyingBone, float* sphereTrans, float min, float max, float* sphereRadius);
 
     void UpdateClickedVertexAddress(Vertex* vertex);
     void UpdateAnimationNameList();
     void UpdateBoneNameList();
     void UpdateMeshNameList();
+    void UpdateSphereMinMaxRange(float min, float max);
     
 
     bool IsMouseOnImGUIWindow();

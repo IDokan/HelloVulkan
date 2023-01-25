@@ -283,6 +283,12 @@
     <CustomBuild Include="Graphics\Shaders\hairBone.frag">
       <Filter>Graphics\Shaders</Filter>
     </CustomBuild>
+    <CustomBuild Include="Graphics\Shaders\sphere.vert">
+      <Filter>Graphics\Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Graphics\Shaders\sphere.frag">
+      <Filter>Graphics\Shaders</Filter>
+    </CustomBuild>
   </ItemGroup>
   <ItemGroup>
     <None Include="ImGUI\.editorconfig">

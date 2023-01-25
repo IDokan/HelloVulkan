@@ -120,4 +120,9 @@ private:
 	bool applyingBone;
 	void ModifyBone();
 
+	Model* sphereMesh;
+	void WriteSphereDescriptorSet();
+	void RecordDrawSphereCall(VkCommandBuffer commandBuffer);
+	glm::vec3 sphereTrans;
+	float sphereRadius;
 };

@@ -60,6 +60,7 @@ public:
 	const char* GetErrorString();
 
 	// Return matrix to transfrom model in [-1,-1,-1] and [1,1,1]
+	void GetBoundingBoxMinMax(glm::vec3& min, glm::vec3& max);
 	glm::mat4 CalculateAdjustBoundingBoxMatrix();
 
 	const std::vector<std::string>& GetDiffuseImagePaths();

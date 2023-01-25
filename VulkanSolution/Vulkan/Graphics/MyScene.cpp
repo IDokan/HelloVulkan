@@ -45,6 +45,8 @@ bool MyScene::InitScene(Graphics* _graphics)
 	model->SetAnimationIndex(0);
 	selectedMesh = model->GetMeshSize();
 
+	sphereMesh = new Model("../Vulkan/Graphics/Model/models/sphere.fbx");
+
 	graphics = _graphics;
 
 	graphicResources.push_back(new Texture(graphics, "EmergencyTexture", "../Vulkan/Graphics/Model/EssentialImages/transparent.png"));
@@ -61,6 +63,8 @@ bool MyScene::InitScene(Graphics* _graphics)
 		graphicResources.push_back(new Buffer(graphics, std::string("index") + std::to_string(i), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, sizeof(uint32_t), model->GetIndexCount(i), model->GetIndexData(i)));
 		graphicResources.push_back(new Buffer(graphics, std::string("uniqueVertex") + std::to_string(i), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex), model->GetUniqueVertexCount(i), model->GetUniqueVertexData(i)));
 	}
+	graphicResources.push_back(new Buffer(graphics, std::string("sphereVertex"), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex), sphereMesh->GetVertexCount(0), sphereMesh->GetVertexData(0)));
+	graphicResources.push_back(new Buffer(graphics, std::string("sphereIndex"), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, sizeof(uint32_t), model->GetIndexCount(0), model->GetIndexData(0)));
 
 	graphicResources.push_back(new UniformBuffer(graphics, std::string("uniformBuffer"), sizeof(UniformBufferObject), Graphics::MAX_FRAMES_IN_FLIGHT));
 	graphicResources.push_back(new UniformBuffer(graphics, std::string("animationUniformBuffer"), sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT));
@@ -86,6 +90,13 @@ bool MyScene::InitScene(Graphics* _graphics)
 		}));
 	WriteBlendingWeightDescriptorSet();
 
+	graphicResources.push_back(new DescriptorSet(graphics, "sphereDescriptor", Graphics::MAX_FRAMES_IN_FLIGHT,
+		{
+			{0, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1, VK_SHADER_STAGE_VERTEX_BIT, nullptr}
+		}));
+	WriteSphereDescriptorSet();
+
+
 	DescriptorSet* descriptorSet = dynamic_cast<DescriptorSet*>(FindObjectByName("descriptor"));
 	graphicResources.push_back(new Pipeline(graphics, "pipeline", "spv/vertexShader.vert.spv", "spv/fragShader.frag.spv", descriptorSet->GetDescriptorSetLayoutPtr()));
 
@@ -98,6 +109,9 @@ bool MyScene::InitScene(Graphics* _graphics)
 	graphicResources.push_back(new Pipeline(graphics, "vertexPipeline", "spv/vertexPoints.vert.spv", "spv/vertexPoints.frag.spv", Vertex::GetBindingDescription(), Vertex::GetAttributeDescriptions(), sizeof(VertexPipelinePushConstants), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptor->GetDescriptorSetLayoutPtr(), VK_PRIMITIVE_TOPOLOGY_POINT_LIST));
 
 	graphicResources.push_back(new Pipeline(graphics, "linePipeline", "spv/skeleton.vert.spv", "spv/skeleton.frag.spv", LineVertex::GetBindingDescription(), LineVertex::GetAttributeDescriptions(), sizeof(int), VK_SHADER_STAGE_VERTEX_BIT, blendingWeightDescriptor->GetDescriptorSetLayoutPtr(), VK_PRIMITIVE_TOPOLOGY_LINE_LIST, VK_FALSE));
+
+	DescriptorSet* sphereDescriptor = dynamic_cast<DescriptorSet*>(FindObjectByName("sphereDescriptor"));
+	graphicResources.push_back(new Pipeline(graphics, "spherePipeline", "spv/sphere.vert.spv", "spv/sphere.frag.spv", Vertex::GetBindingDescription(), Vertex::GetAttributeDescriptions(), sizeof(SpherePushConstants), VK_SHADER_STAGE_VERTEX_BIT, sphereDescriptor->GetDescriptorSetLayoutPtr()));
 
 	InitUniformBufferData();
 
@@ -127,6 +141,7 @@ void MyScene::CleanScene()
 	}
 
 	delete hairBone0;
+	delete sphereMesh;
 	delete model;
 }
 
@@ -147,6 +162,8 @@ void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t curren
 	RecordDrawSkeletonCall(commandBuffer);
 
 	RecordDrawHairBoneCall(commandBuffer);
+
+	RecordDrawSphereCall(commandBuffer);
 }
 
 void MyScene::FillBufferWithFloats(VkCommandBuffer cmdBuffer, VkBuffer dstBuffer, VkDeviceSize offset, VkDeviceSize size, const float value)
@@ -248,6 +265,10 @@ void MyScene::LoadNewModel()
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
 	MyImGUI::UpdateMeshNameList();
+	glm::vec3 min;
+	glm::vec3 max;
+	model->GetBoundingBoxMinMax(min, max);
+	MyImGUI::UpdateSphereMinMaxRange(std::min(std::min(min.x, min.y), min.z), std::max(std::max(max.x, max.y), max.z));
 
 	InitUniformBufferData();
 
@@ -321,7 +342,14 @@ void MyScene::InitGUI()
 	MyImGUI::SendSkeletonInfo(&showSkeletonFlag, &blendingWeightMode, &selectedBone);
 	MyImGUI::SendAnimationInfo(&timer, &bindPoseFlag);
 	MyImGUI::SendConfigInfo(&mouseSensitivity);
-	MyImGUI::SendHairBoneInfo(hairBone0, &applyingBone);
+	glm::vec3 min;
+	glm::vec3 max;
+	model->GetBoundingBoxMinMax(min, max);
+
+	float minF = std::min(std::min(min.x, min.y), min.z);
+	float maxF = std::max(std::max(max.x, max.y), max.z);
+
+	MyImGUI::SendHairBoneInfo(hairBone0, &applyingBone, reinterpret_cast<float*>(&sphereTrans), minF, maxF, &sphereRadius);
 
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
@@ -710,7 +738,7 @@ void MyScene::ModifyBone()
 		return;
 	}
 	applyingBone = false;
-	
+
 	static int newBoneIndex = 0;
 	// Modify Bone at here.
 	Bone newBone;
@@ -730,7 +758,7 @@ void MyScene::ModifyBone()
 	MyImGUI::UpdateBoneNameList();
 
 	graphics->DeviceWaitIdle();
-	
+
 	Buffer* skeleton = dynamic_cast<Buffer*>(FindObjectByName("skeletonBuffer"));
 	skeleton->ChangeBufferData(sizeof(LineVertex), 2 * model->GetBoneCount(), model->GetBoneDataForDrawing());
 
@@ -745,6 +773,43 @@ void MyScene::ModifyBone()
 	WriteHairBoneDescriptorSet();
 
 	hairBone0->SetBoneData(0, glm::vec4(0.f, 0.f, 0.f, 1.f));
+}
+
+void MyScene::WriteSphereDescriptorSet()
+{
+	DescriptorSet* descriptorSet = dynamic_cast<DescriptorSet*>(FindObjectByName("sphereDescriptor"));
+	UniformBuffer* uniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("uniformBuffer"));
+	for (int j = 0; j < Graphics::MAX_FRAMES_IN_FLIGHT; j++)
+	{
+		descriptorSet->Write(j, 0, uniformBuffer->GetBuffer(j), uniformBuffer->GetBufferSize());
+	}
+}
+
+void MyScene::RecordDrawSphereCall(VkCommandBuffer commandBuffer)
+{
+	if (selectedMesh >= model->GetMeshSize() || selectedMesh < 0 || blendingWeightMode == false)
+	{
+		return;
+	}
+
+	Buffer* vertexBuffer = dynamic_cast<Buffer*>(FindObjectByName(std::string("sphereVertex")));
+	VkBuffer VB[] = { vertexBuffer->GetBuffer() };
+	VkDeviceSize offsets[] = { 0 };
+	Pipeline* pipeline = dynamic_cast<Pipeline*>(FindObjectByName("spherePipeline"));
+	DescriptorSet* des = dynamic_cast<DescriptorSet*>(FindObjectByName("sphereDescriptor"));
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, VB, offsets);
+	Buffer* indexBuffer = dynamic_cast<Buffer*>(FindObjectByName("sphereIndex"));
+	vkCmdBindIndexBuffer(commandBuffer, indexBuffer->GetBuffer(), 0, VK_INDEX_TYPE_UINT32);
+
+	SpherePushConstants pc;
+	pc.sphereBoundingMatrix = sphereMesh->CalculateAdjustBoundingBoxMatrix();
+	pc.translation = glm::translate(sphereTrans);
+	pc.radius = sphereRadius;
+	RecordPushConstants(commandBuffer, pipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &pc, sizeof(SpherePushConstants));
+	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->GetPipeline());
+	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->GetPipelineLayout(), 0, 1, des->GetDescriptorSetPtr(graphics->GetCurrentFrameID()), 0, nullptr);
+	vkCmdDrawIndexed(commandBuffer, indexBuffer->GetBufferDataSize(), 1, 0, 0, 0);
+
 }
 
 bool MyScene::HasStencilComponent(VkFormat format)

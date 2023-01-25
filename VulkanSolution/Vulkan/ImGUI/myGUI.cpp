@@ -30,6 +30,7 @@ namespace MyImGUI
         void ModelStats();
         void VertexSpectator();
         void HairBoneInspector();
+        void VertexSelectionSphereManipulator();
         void BlendingWeightsSkeletonSelectionRecursively(int currentBoneIndex, int boneSize, ImGuiTreeNodeFlags baseFlags, bool nodeOpened = false);
         void Skeleton();
         void Animation();
@@ -66,6 +67,10 @@ namespace
     HairBone* hairBone = nullptr;
     int selectedHairBone = 0;
     bool* applyingBoneRef = nullptr;
+    float* sphereTrans = nullptr;
+    float minimum;
+    float maximum;
+    float* sphereRadius = nullptr;
 }
 
 namespace MyImGUI
@@ -297,6 +302,8 @@ void MyImGUI::Helper::ModelStats()
             Helper::VertexSpectator();
             ImGui::Separator();
             Helper::HairBoneInspector();
+            ImGui::Separator();
+            Helper::VertexSelectionSphereManipulator();
         }
     }
 }
@@ -318,9 +325,8 @@ void MyImGUI::Helper::VertexSpectator()
     ImGui::BulletText("Normal) %f, %f, %f", clickedVertex->normal.x, clickedVertex->normal.y, clickedVertex->normal.z);
     ImGui::BulletText("Vertex Color) %f, %f, %f", clickedVertex->vertexColor.x, clickedVertex->vertexColor.y, clickedVertex->vertexColor.z);
     ImGui::BulletText("Tex Coord) %f, %f", clickedVertex->texCoord.x, clickedVertex->texCoord.y);
-    ImGui::BulletText("Bone ID) %d, %d, %d", clickedVertex->boneIDs.x, clickedVertex->boneIDs.y, clickedVertex->boneIDs.z, clickedVertex->boneIDs.w);
+    ImGui::BulletText("Bone ID) %d, %d, %d, %d", clickedVertex->boneIDs.x, clickedVertex->boneIDs.y, clickedVertex->boneIDs.z, clickedVertex->boneIDs.w);
     ImGui::BulletText("Bone Weights) %f, %f, %f, %f", clickedVertex->boneWeights.x, clickedVertex->boneWeights.y, clickedVertex->boneWeights.z, clickedVertex->boneWeights.w);
-
 }
 
 void MyImGUI::Helper::HairBoneInspector()
@@ -353,6 +359,32 @@ void MyImGUI::Helper::HairBoneInspector()
     if (ImGui::Button("Apply Bone"))
     {
         *applyingBoneRef = true;
+    }
+}
+
+void MyImGUI::Helper::VertexSelectionSphereManipulator()
+{
+    if (*selectedMesh == meshNameList.size() - 1 || *blendingWeightMode == false)
+    {
+        return;
+    }
+
+    static int boneIDIndex = 0;
+    ImGui::InputInt("Bone ID index", &boneIDIndex);
+    std::clamp(boneIDIndex, 0, 3);
+
+    ImGui::SliderFloat("Sphere Radius", sphereRadius, 1.f, 50.f);
+    ImGui::InputFloat3("Sphere Position", sphereTrans);
+
+    if (clickedVertex == nullptr)
+    {
+        return;
+    }
+    ImGui::SliderFloat4("Bone Weights", reinterpret_cast<float*>(&clickedVertex->boneWeights), 0.f, 1.f);
+    if (ImGui::Button("Apply selected bone"))
+    {
+        // @@ TODO: Add applying bone weight in the sphere
+        clickedVertex->boneIDs[boneIDIndex] = *selectedBone;
     }
 }
 
@@ -460,10 +492,13 @@ void MyImGUI::SendConfigInfo(float* _mouseSensitivity)
     mouseSensitivity = _mouseSensitivity;
 }
 
-void MyImGUI::SendHairBoneInfo(HairBone* _hairBone, bool* applyingBone)
+void MyImGUI::SendHairBoneInfo(HairBone* _hairBone, bool* applyingBone, float* _sphereTrans, float min, float max, float* _sphereRadius)
 {
     hairBone = _hairBone;
     applyingBoneRef = applyingBone;
+    sphereTrans = _sphereTrans;
+    UpdateSphereMinMaxRange(min, max);
+    sphereRadius = _sphereRadius;
 }
 
 void MyImGUI::UpdateClickedVertexAddress(Vertex* _vertex)
@@ -525,6 +560,12 @@ void MyImGUI::UpdateMeshNameList()
     }
     meshNameList[meshSize] = "All meshes";
     *selectedMesh = meshSize;
+}
+
+void MyImGUI::UpdateSphereMinMaxRange(float min, float max)
+{
+    minimum = min;
+    maximum = max;
 }
 
 bool MyImGUI::IsMouseOnImGUIWindow()

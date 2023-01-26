@@ -35,7 +35,7 @@ Creation Date: 06.12.2021
 #include <Engines/Objects/HairBone.h>
 
 MyScene::MyScene(Window* window)
-	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f), applyingBone(false)
+	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f), applyingBone(false), flagChangeBoneIndexInSphere(false), boneIDIndex(0)
 {
 }
 
@@ -148,6 +148,8 @@ void MyScene::CleanScene()
 void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t currentFrameID)
 {
 	ModifyBone();
+
+	ChangeBoneIndexInSphere();
 
 	UpdateTimer(dt);
 
@@ -349,7 +351,7 @@ void MyScene::InitGUI()
 	float minF = std::min(std::min(min.x, min.y), min.z);
 	float maxF = std::max(std::max(max.x, max.y), max.z);
 
-	MyImGUI::SendHairBoneInfo(hairBone0, &applyingBone, reinterpret_cast<float*>(&sphereTrans), minF, maxF, &sphereRadius);
+	MyImGUI::SendHairBoneInfo(hairBone0, &applyingBone, reinterpret_cast<float*>(&sphereTrans), minF, maxF, &sphereRadius, &boneIDIndex, reinterpret_cast<float*>(&userInputBoneWeights), &flagChangeBoneIndexInSphere);
 
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
@@ -810,6 +812,27 @@ void MyScene::RecordDrawSphereCall(VkCommandBuffer commandBuffer)
 	vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->GetPipelineLayout(), 0, 1, des->GetDescriptorSetPtr(graphics->GetCurrentFrameID()), 0, nullptr);
 	vkCmdDrawIndexed(commandBuffer, indexBuffer->GetBufferDataSize(), 1, 0, 0, 0);
 
+}
+
+void MyScene::ChangeBoneIndexInSphere()
+{
+	if (flagChangeBoneIndexInSphere == false)
+	{
+		return;
+	}
+
+	flagChangeBoneIndexInSphere = false;
+
+	graphics->DeviceWaitIdle();
+
+	// Update model data
+	model->ChangeBoneIndexInSphere(selectedMesh, sphereTrans, sphereRadius, boneIDIndex, selectedBone, userInputBoneWeights);
+
+	// Update buffer data
+	Buffer* vertex = dynamic_cast<Buffer*>(FindObjectByName(std::string("vertex") + std::to_string(selectedMesh)));
+	vertex->ChangeBufferData(sizeof(Vertex), model->GetVertexCount(selectedMesh), model->GetVertexData(selectedMesh));
+	Buffer* uniqueVertex = dynamic_cast<Buffer*>(FindObjectByName(std::string("uniqueVertex") + std::to_string(selectedMesh)));
+	uniqueVertex->ChangeBufferData(sizeof(Vertex), model->GetUniqueVertexCount(selectedMesh), model->GetUniqueVertexData(selectedMesh));
 }
 
 bool MyScene::HasStencilComponent(VkFormat format)

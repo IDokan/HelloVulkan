@@ -62,6 +62,7 @@ namespace
 
     float* mouseSensitivity;
 
+    // Don't use it to set clicked vertex's data
     Vertex* clickedVertex = nullptr;
 
     HairBone* hairBone = nullptr;
@@ -71,6 +72,9 @@ namespace
     float minimum;
     float maximum;
     float* sphereRadius = nullptr;
+    int* boneIDIndex = nullptr;
+    float* boneWeights = nullptr;
+    bool* flagChangeBoneIndexInSphere = nullptr;
 }
 
 namespace MyImGUI
@@ -369,9 +373,8 @@ void MyImGUI::Helper::VertexSelectionSphereManipulator()
         return;
     }
 
-    static int boneIDIndex = 0;
-    ImGui::InputInt("Bone ID index", &boneIDIndex);
-    std::clamp(boneIDIndex, 0, 3);
+    ImGui::InputInt("Bone ID index", boneIDIndex);
+    std::clamp(*boneIDIndex, 0, 3);
 
     ImGui::SliderFloat("Sphere Radius", sphereRadius, 1.f, 50.f);
     ImGui::InputFloat3("Sphere Position", sphereTrans);
@@ -380,11 +383,12 @@ void MyImGUI::Helper::VertexSelectionSphereManipulator()
     {
         return;
     }
-    ImGui::SliderFloat4("Bone Weights", reinterpret_cast<float*>(&clickedVertex->boneWeights), 0.f, 1.f);
+    ImGui::SliderFloat4("Bone Weights", boneWeights, 0.f, 1.f);
     if (ImGui::Button("Apply selected bone"))
     {
         // @@ TODO: Add applying bone weight in the sphere
-        clickedVertex->boneIDs[boneIDIndex] = *selectedBone;
+        //clickedVertex->boneIDs[*boneIDIndex] = *selectedBone;
+        *flagChangeBoneIndexInSphere = true;
     }
 }
 
@@ -492,13 +496,16 @@ void MyImGUI::SendConfigInfo(float* _mouseSensitivity)
     mouseSensitivity = _mouseSensitivity;
 }
 
-void MyImGUI::SendHairBoneInfo(HairBone* _hairBone, bool* applyingBone, float* _sphereTrans, float min, float max, float* _sphereRadius)
+void MyImGUI::SendHairBoneInfo(HairBone* _hairBone, bool* applyingBone, float* _sphereTrans, float min, float max, float* _sphereRadius, int* _boneIDIndex, float* _boneWeight, bool* _flagChange)
 {
     hairBone = _hairBone;
     applyingBoneRef = applyingBone;
     sphereTrans = _sphereTrans;
     UpdateSphereMinMaxRange(min, max);
     sphereRadius = _sphereRadius;
+    boneIDIndex = _boneIDIndex;
+    boneWeights = _boneWeight;
+    flagChangeBoneIndexInSphere = _flagChange;
 }
 
 void MyImGUI::UpdateClickedVertexAddress(Vertex* _vertex)

@@ -125,4 +125,8 @@ private:
 	void RecordDrawSphereCall(VkCommandBuffer commandBuffer);
 	glm::vec3 sphereTrans;
 	float sphereRadius;
+	bool flagChangeBoneIndexInSphere;
+	void ChangeBoneIndexInSphere();
+	int boneIDIndex;
+	glm::vec4 userInputBoneWeights;
 };

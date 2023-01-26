@@ -171,6 +171,32 @@ const std::vector<std::string>& Model::GetNormalImagePaths()
 	return normalImagePaths;
 }
 
+void Model::ChangeBoneIndexInSphere(int meshIndex, glm::vec3 trans, float radius, int boneIDIndex, int newBoneIndex, glm::vec4 weight)
+{
+	Mesh& mesh = meshes[meshIndex];
+	float radiusSquared = radius * radius;
+	for (Vertex& vertex : mesh.vertices)
+	{
+		glm::vec3 diff = vertex.position - trans;
+		float lengthSquared = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
+		if (lengthSquared <= radiusSquared)
+		{
+			vertex.boneIDs[boneIDIndex] = newBoneIndex;
+			vertex.boneWeights = weight;
+		}
+	}
+	for (Vertex& vertex : mesh.uniqueVertices)
+	{
+		glm::vec3 diff = vertex.position - trans;
+		float lengthSquared = diff.x * diff.x + diff.y * diff.y + diff.z * diff.z;
+		if (lengthSquared <= radiusSquared)
+		{
+			vertex.boneIDs[boneIDIndex] = newBoneIndex;
+			vertex.boneWeights = weight;
+		}
+	}
+}
+
 void Model::ExploreScene(FbxScene* scene)
 {
 	// The first root node is always empty

@@ -65,6 +65,8 @@ public:
 
 	const std::vector<std::string>& GetDiffuseImagePaths();
 	const std::vector<std::string>& GetNormalImagePaths();
+
+	void ChangeBoneIndexInSphere(int meshIndex, glm::vec3 trans, float radius, int boneIDIndex, int newBoneIndex, glm::vec4 weight);
 private:
 	// @@ Printing fbx data
 	void ExploreScene(FbxScene* scene);

@@ -17,6 +17,11 @@ AnimationSystem::AnimationSystem(unsigned int animationCount)
 	animations.resize(animationCount);
 }
 
+AnimationSystem::~AnimationSystem()
+{
+	Clear();
+}
+
 void AnimationSystem::ImportSkeleton(FbxNode* node, FbxNode* parentNode)
 {
 	int parentID = -1;
@@ -28,6 +33,11 @@ void AnimationSystem::ImportSkeleton(FbxNode* node, FbxNode* parentNode)
 	{
 		skeleton.AddBone(node->GetName(), skeleton.GetBoneIDByName(parentNode->GetName()));
 	}
+}
+
+void AnimationSystem::Update(float dt)
+{
+	skeleton.Update(dt);
 }
 
 void AnimationSystem::Clear()
@@ -129,7 +139,7 @@ void AnimationSystem::GetAnimationData(float t, std::vector<glm::mat4>& data)
 
 				glm::mat4 transform = (1.f - interpolateT) * keyFrames[transformIndex1].toModelFromBone + (interpolateT)*keyFrames[transformIndex2].toModelFromBone;
 
-				if (int parentID = skeleton.GetBoneByBoneID(static_cast<int>(trackIndex)).parentID;
+				if (int parentID = skeleton.GetBoneByBoneID(static_cast<int>(trackIndex))->parentID;
 					parentID >= 0)
 				{
 					data[trackIndex] = data[parentID] * transform;
@@ -147,14 +157,14 @@ void AnimationSystem::GetAnimationData(float t, std::vector<glm::mat4>& data)
 
 	for (size_t modifiedBoneIndex = trackSize; modifiedBoneIndex < skeletonSize; modifiedBoneIndex++)
 	{
-		int parentID = skeleton.GetBoneByBoneID(static_cast<int>(modifiedBoneIndex)).parentID;
+		int parentID = skeleton.GetBoneByBoneID(static_cast<int>(modifiedBoneIndex))->parentID;
 		data[modifiedBoneIndex] = data[parentID];
 	}
 
 	// Multiply toModelFromBone matrix at here.
 	for (size_t i = 0; i < skeletonSize; i++)
 	{
-		data[i] = data[i] * skeleton.GetBoneByBoneID(static_cast<int>(i)).toModelFromBone;
+		data[i] = data[i] * skeleton.GetBoneByBoneID(static_cast<int>(i))->toModelFromBone;
 	}
 }
 
@@ -173,7 +183,7 @@ size_t AnimationSystem::GetBoneCount()
 	return skeleton.GetSkeletonSize();
 }
 
-const Bone& AnimationSystem::GetBone(int boneID)
+const Bone* AnimationSystem::GetBone(int boneID)
 {
 	return skeleton.GetBoneByBoneID(boneID);
 }
@@ -188,7 +198,7 @@ std::string AnimationSystem::GetBoneName(unsigned int boneID)
 	return skeleton.GetBoneNameByID(boneID);
 }
 
-void AnimationSystem::AddBone(const Bone& newBone)
+void AnimationSystem::AddBone(Bone* newBone)
 {
 	skeleton.AddBone(newBone);
 }
@@ -199,8 +209,8 @@ int AnimationSystem::GetChildrenBoneID(int boneID)
 
 	for (size_t i = boneID + 1; i < size; i++)
 	{
-		const Bone& b = skeleton.GetBoneByBoneID(i);
-		if (b.parentID == boneID)
+		const Bone* b = skeleton.GetBoneByBoneID(i);
+		if (b->parentID == boneID)
 			return i;
 	}
 

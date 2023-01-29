@@ -25,6 +25,8 @@ public:
 	~Model();
 	bool LoadModel(const std::string& path);
 
+	void Update(float dt);
+
 	int GetMeshSize();
 
 	std::string GetMeshName(int i);
@@ -39,13 +41,13 @@ public:
 	
 	bool IsModelValid();
 
-	const Bone& GetBone(unsigned int boneID);
+	const Bone* GetBone(unsigned int boneID);
 	std::string GetBoneName(unsigned int boneID);
 	size_t GetBoneCount();
 	void* GetBoneDataForDrawing();
 	void GetToBoneFromUnit(std::vector<glm::mat4>& data);
 	void GetToModelFromBone(std::vector<glm::mat4>& data);
-	void AddBone(const Bone& newBone);
+	void AddBone(Bone* newBone);
 
 	// @@ Getter&Setter of animation system
 	unsigned int GetAnimationCount();
@@ -66,6 +68,10 @@ public:
 	const std::vector<std::string>& GetDiffuseImagePaths();
 	const std::vector<std::string>& GetNormalImagePaths();
 
+	// boneIDIndex is an index of the new given bone ID index
+	// [ ?, ?, ?, ? ] 
+	// If boneIDIndex == 1 -> [ ?, newBoneIndex, ?, ? ]
+	// glm::vec4 weight -> Set all weights altogether.
 	void ChangeBoneIndexInSphere(int meshIndex, glm::vec3 trans, float radius, int boneIDIndex, int newBoneIndex, glm::vec4 weight);
 private:
 	// @@ Printing fbx data

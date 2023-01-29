@@ -88,6 +88,11 @@ bool Model::LoadModel(const std::string& path)
 	return isModelValid;
 }
 
+void Model::Update(float dt)
+{
+	animationSystem->Update(dt);
+}
+
 int Model::GetMeshSize()
 {
 	return static_cast<int>(meshes.size());
@@ -315,7 +320,7 @@ void Model::GetScene(FbxNode* root)
 		{
 			GetScene(node);
 		}
-		
+
 	}
 }
 
@@ -336,7 +341,7 @@ void Model::GetMesh(FbxNode* node)
 	FbxGeometryConverter gc{ lSdkManager };
 
 	mesh = static_cast<FbxMesh*>(gc.Triangulate(mesh, true));
-	
+
 
 	if (!mesh || mesh->RemoveBadPolygons() < 0)
 	{
@@ -345,7 +350,7 @@ void Model::GetMesh(FbxNode* node)
 
 	Mesh m;
 	m.meshName = (node->GetName()[0] != '\0') ? node->GetName() : mesh->GetName();
-	
+
 	animationSystem->GetDeformerData(mesh);
 
 	if (GetMeshData(mesh, m))
@@ -353,7 +358,7 @@ void Model::GetMesh(FbxNode* node)
 		meshes.emplace_back(m);
 	}
 
-	
+
 	int materialCount = node->GetSrcObjectCount<FbxSurfaceMaterial>();
 	if (materialCount > 0)
 	{
@@ -449,9 +454,9 @@ bool Model::GetMeshData(FbxMesh* mesh, Mesh& m)
 			m.vertices.emplace_back();
 			glm::vec3 position = glm::vec3(v[0], v[1], v[2]);
 			glm::vec3 normal = glm::vec3(normals[iInt][0], normals[iInt][1], normals[iInt][2]);
-			 m.normalByVertex[position].push_back(normal);
+			m.normalByVertex[position].push_back(normal);
 			glm::vec2 uv = glm::vec2(uvs[iInt][0], uvs[iInt][1]);
-			 m.uvByVertex[position].push_back(uv);
+			m.uvByVertex[position].push_back(uv);
 			glm::ivec4 boneID = animationSystem->GetBoneIndex(indices[i]);
 			glm::vec4 boneWeights = animationSystem->GetBoneWeight(indices[i]);
 			float sum = 0.f;
@@ -547,6 +552,7 @@ void Model::InitBoneData()
 
 	for (int i = 0; i < boneCount; i++)
 	{
+		// @@ Bone to Child bone
 		bones[i * 2] = toBoneFromUnit[i] * glm::vec4(0.f, 0.f, 0.f, 1.f);
 		int childrenID = animationSystem->GetChildrenBoneID(i);
 		if (childrenID < 0)
@@ -695,8 +701,8 @@ void Model::ReadMesh(aiNode* node, const aiScene* scene)
 		Mesh m;
 		unsigned int baseIndex = vertexSize;
 		aiMesh* mesh = scene->mMeshes[node->mMeshes[i]];
-		for(unsigned int j = 0; j < mesh->mNumVertices; j++)
-		{ 
+		for (unsigned int j = 0; j < mesh->mNumVertices; j++)
+		{
 			Vertex vertex;
 			vertex.position = glm::vec3(mesh->mVertices[j].x, mesh->mVertices[j].y, mesh->mVertices[j].z);
 
@@ -704,11 +710,11 @@ void Model::ReadMesh(aiNode* node, const aiScene* scene)
 			{
 				vertex.normal = glm::vec3(mesh->mNormals[j].x, mesh->mNormals[j].y, mesh->mNormals[j].z);
 			}
-			
+
 			// Temporary texture coordinate data
 			if (mesh->HasTextureCoords(0))
 			{
-				vertex.texCoord = glm::vec2(mesh->mTextureCoords[0][j]. x, mesh->mTextureCoords[0][j].y);
+				vertex.texCoord = glm::vec2(mesh->mTextureCoords[0][j].x, mesh->mTextureCoords[0][j].y);
 			}
 			m.vertices.push_back(vertex);
 			UpdateBoundingBox(m.vertices.back().position);
@@ -723,7 +729,7 @@ void Model::ReadMesh(aiNode* node, const aiScene* scene)
 		}
 		meshes.push_back(m);
 	}
-	
+
 
 	// then do the same for each of its children
 	for (unsigned int i = 0; i < node->mNumChildren; i++)
@@ -747,7 +753,7 @@ std::string Model::GetBoneName(unsigned int boneID)
 	return animationSystem->GetBoneName(boneID);
 }
 
-const Bone& Model::GetBone(unsigned int boneID)
+const Bone* Model::GetBone(unsigned int boneID)
 {
 	return animationSystem->GetBone(boneID);
 }
@@ -825,12 +831,13 @@ void Model::GetToModelFromBone(std::vector<glm::mat4>& data)
 	animationSystem->GetToModelFromBone(data);
 }
 
-void Model::AddBone(const Bone& newBone)
+void Model::AddBone(Bone* newBone)
 {
 	animationSystem->AddBone(newBone);
 
-	bones.push_back(newBone.toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
-	bones.push_back(animationSystem->GetBone(newBone.parentID).toBoneFromUnit* glm::vec4(0.f, 0.f, 0.f, 1.f));
+	// Add skeleton bone vertex buffer
+	bones.push_back(newBone->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
+	bones.push_back(animationSystem->GetBone(newBone->parentID)->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
 }
 
 void Model::ReadMaterial(const aiScene* scene, const std::string& path)

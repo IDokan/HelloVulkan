@@ -183,12 +183,15 @@ struct Mesh
 
 struct Bone
 {
+public:
 	Bone();
 	Bone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4());
 	Bone(const Bone& b);
 	Bone(Bone&& b);
+	virtual void Update(float dt);
 	Bone& operator=(const Bone& b);
 	Bone& operator=(Bone&& b);
+	virtual ~Bone();
 
 	std::string name;
 	int parentID;
@@ -197,16 +200,35 @@ struct Bone
 	glm::mat4 toModelFromBone;
 };
 
+struct JiggleBone : public Bone
+{
+public:
+	JiggleBone();
+	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4());
+	JiggleBone(const JiggleBone& jb);
+	JiggleBone(JiggleBone&& jb);
+	virtual void Update(float dt);
+	JiggleBone& operator=(const JiggleBone& jb);
+	JiggleBone& operator=(JiggleBone&& jb);
+	virtual ~JiggleBone();
+
+	bool isUpdateJigglePhysics;
+};
+
 class Skeleton
 {
 public:
 	Skeleton();
+	~Skeleton();
+
+	void Update(float dt);
+
 	void AddBone(std::string name, int parentID);
-	void AddBone(const Bone& newBone);
+	void AddBone(Bone* newBone);
 	int GetBoneIDByName(const std::string& name);
 	// Return empty bone when bone ID is invalid
-	const Bone& GetBoneByBoneID(int boneID);
-	const Bone& GetBoneByName(const std::string& name);
+	const Bone* GetBoneByBoneID(int boneID);
+	const Bone* GetBoneByName(const std::string& name);
 	Bone& GetBoneReferenceByName(const std::string& name);
 	std::string GetBoneNameByID(unsigned int boneID);
 	size_t GetSkeletonSize();
@@ -215,7 +237,7 @@ public:
 	void GetToBoneFromUnit(std::vector<glm::mat4>& data);
 	void GetToModelFromBone(std::vector<glm::mat4>& data);
 private:
-	std::vector<Bone> bones;
+	std::vector<Bone*> bones;
 	int boneSize;
 };
 

@@ -28,6 +28,7 @@ namespace MyImGUI
     namespace Helper
     {
         void ModelStats();
+        void BoneEditor();
         void VertexSpectator();
         void HairBoneInspector();
         void VertexSelectionSphereManipulator();
@@ -67,6 +68,8 @@ namespace
 
     HairBone* hairBone = nullptr;
     int selectedHairBone = 0;
+    char* newBoneName = nullptr;
+    size_t boneNameContainerSize = 0;
     bool* applyingBoneRef = nullptr;
     float* sphereTrans = nullptr;
     float minimum;
@@ -247,6 +250,7 @@ void MyImGUI::DrawGUI()
 
     Helper::ModelStats();
     Helper::Skeleton();
+    Helper::BoneEditor();
     Helper::Animation();
     Helper::Configuration();
 
@@ -304,11 +308,37 @@ void MyImGUI::Helper::ModelStats()
             ImGui::Separator();
 
             Helper::VertexSpectator();
-            ImGui::Separator();
-            Helper::HairBoneInspector();
-            ImGui::Separator();
-            Helper::VertexSelectionSphereManipulator();
         }
+        else
+        {
+            // Initialize selected mesh parameter, if display vertex is turned off.
+            *selectedMesh = meshNameList.size() - 1;
+        }
+    }
+}
+
+void MyImGUI::Helper::BoneEditor()
+{
+    if (ImGui::CollapsingHeader("Bone Editor"))
+    {
+        bool isMeshNotSelected = (*selectedMesh == meshNameList.size() - 1);
+        bool isBoneNotSelected = (*blendingWeightMode == false);
+        if (isMeshNotSelected || isBoneNotSelected)
+        {
+            if (isMeshNotSelected)
+            {
+                ImGui::Text("Please select a mesh in \n\tBasicInformation::DisplayVertices");
+            }
+            if (isBoneNotSelected)
+            {
+                ImGui::Text("Please select a bone in \n\tSkeleton::BlendingWeightMode");
+            }
+            return;
+        }
+
+        Helper::HairBoneInspector();
+        ImGui::Separator();
+        Helper::VertexSelectionSphereManipulator();
     }
 }
 
@@ -335,30 +365,10 @@ void MyImGUI::Helper::VertexSpectator()
 
 void MyImGUI::Helper::HairBoneInspector()
 {
+    ImGui::InputText("Bone Name", newBoneName, boneNameContainerSize);
 
-    ImGui::Text("Hair Bone Size: %d", hairBone->GetBoneSize());
-    if (ImGui::Button("Add new bone"))
-    {
-        hairBone->AddBone();
-    }
-    ImGui::SameLine();
-    if (ImGui::Button("Remove bone"))
-    {
-        hairBone->RemoveBone();
-    }
-
-    ImGui::InputInt("Select Bone", &selectedHairBone, 1);
-    int currentBoneSize = hairBone->GetBoneSize();
-    if (selectedHairBone >= currentBoneSize)
-    {
-        selectedHairBone = currentBoneSize - 1;
-    }
-    if (selectedHairBone < 0)
-    {
-        selectedHairBone = 0;
-    }
     glm::vec4* data = reinterpret_cast<glm::vec4*>(hairBone->GetBoneData());
-    ImGui::SliderFloat3("Bone", reinterpret_cast<float*>(&data[selectedHairBone]), -20.f, 20.f);
+    ImGui::SliderFloat3("Bone Position", reinterpret_cast<float*>(&data[selectedHairBone]), -20.f, 20.f);
 
     if (ImGui::Button("Apply Bone"))
     {
@@ -368,10 +378,6 @@ void MyImGUI::Helper::HairBoneInspector()
 
 void MyImGUI::Helper::VertexSelectionSphereManipulator()
 {
-    if (*selectedMesh == meshNameList.size() - 1 || *blendingWeightMode == false)
-    {
-        return;
-    }
 
     ImGui::InputInt("Bone ID index", boneIDIndex);
     std::clamp(*boneIDIndex, 0, 3);
@@ -379,10 +385,6 @@ void MyImGUI::Helper::VertexSelectionSphereManipulator()
     ImGui::SliderFloat("Sphere Radius", sphereRadius, 1.f, 50.f);
     ImGui::InputFloat3("Sphere Position", sphereTrans);
 
-    if (clickedVertex == nullptr)
-    {
-        return;
-    }
     ImGui::SliderFloat4("Bone Weights", boneWeights, 0.f, 1.f);
     if (ImGui::Button("Apply selected bone"))
     {
@@ -465,6 +467,13 @@ void MyImGUI::Helper::Skeleton()
             static ImGuiTreeNodeFlags baseFlags = ImGuiTreeNodeFlags_None | ImGuiTreeNodeFlags_OpenOnArrow | ImGuiTreeNodeFlags_OpenOnDoubleClick;
             BlendingWeightsSkeletonSelectionRecursively(0, boneCount, baseFlags);
             ImGui::Unindent();
+
+            Bone* selectedBonePtr = const_cast<Bone*>(model->GetBone(*selectedBone));
+            if (JiggleBone* jiggleBonePtr = dynamic_cast<JiggleBone*>(selectedBonePtr);
+                jiggleBonePtr != nullptr)
+            {
+                ImGui::Checkbox("Set physics", &jiggleBonePtr->isUpdateJigglePhysics);
+            }
         }
     }
 }
@@ -496,9 +505,11 @@ void MyImGUI::SendConfigInfo(float* _mouseSensitivity)
     mouseSensitivity = _mouseSensitivity;
 }
 
-void MyImGUI::SendHairBoneInfo(HairBone* _hairBone, bool* applyingBone, float* _sphereTrans, float min, float max, float* _sphereRadius, int* _boneIDIndex, float* _boneWeight, bool* _flagChange)
+void MyImGUI::SendHairBoneInfo(HairBone* _hairBone, char* _newBoneName, size_t _boneContainerNameSize, bool* applyingBone, float* _sphereTrans, float min, float max, float* _sphereRadius, int* _boneIDIndex, float* _boneWeight, bool* _flagChange)
 {
     hairBone = _hairBone;
+    newBoneName = _newBoneName;
+    boneNameContainerSize = _boneContainerNameSize;
     applyingBoneRef = applyingBone;
     sphereTrans = _sphereTrans;
     UpdateSphereMinMaxRange(min, max);
@@ -549,10 +560,10 @@ void MyImGUI::UpdateBoneNameList()
 
     for (unsigned int i = 0; i < boneCount; i++)
     {
-        const Bone& bone = model->GetBone(i);
-        boneNameList[i] = bone.name;
-        boneIdPid[i].first = bone.id;
-        boneIdPid[i].second = bone.parentID;
+        const Bone* bone = model->GetBone(i);
+        boneNameList[i] = bone->name;
+        boneIdPid[i].first = bone->id;
+        boneIdPid[i].second = bone->parentID;
     }
 }
 

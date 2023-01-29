@@ -118,6 +118,10 @@ private:
 	Object* FindObjectByName(std::string name);
 
 	bool applyingBone;
+	static constexpr size_t boneNameContainerSize = 128;
+	char newBoneName[boneNameContainerSize] = "newBone";
+	// When player pressed "Apply Bone" button,
+	// add new bone.
 	void ModifyBone();
 
 	Model* sphereMesh;
@@ -126,6 +130,7 @@ private:
 	glm::vec3 sphereTrans;
 	float sphereRadius;
 	bool flagChangeBoneIndexInSphere;
+	// Change bone index in GUI sphere
 	void ChangeBoneIndexInSphere();
 	int boneIDIndex;
 	glm::vec4 userInputBoneWeights;

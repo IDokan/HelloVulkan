@@ -147,6 +147,8 @@ void MyScene::CleanScene()
 
 void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t currentFrameID)
 {
+	model->Update(dt);
+
 	ModifyBone();
 
 	ChangeBoneIndexInSphere();
@@ -351,7 +353,7 @@ void MyScene::InitGUI()
 	float minF = std::min(std::min(min.x, min.y), min.z);
 	float maxF = std::max(std::max(max.x, max.y), max.z);
 
-	MyImGUI::SendHairBoneInfo(hairBone0, &applyingBone, reinterpret_cast<float*>(&sphereTrans), minF, maxF, &sphereRadius, &boneIDIndex, reinterpret_cast<float*>(&userInputBoneWeights), &flagChangeBoneIndexInSphere);
+	MyImGUI::SendHairBoneInfo(hairBone0, newBoneName, boneNameContainerSize, &applyingBone, reinterpret_cast<float*>(&sphereTrans), minF, maxF, &sphereRadius, &boneIDIndex, reinterpret_cast<float*>(&userInputBoneWeights), &flagChangeBoneIndexInSphere);
 
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
@@ -743,18 +745,10 @@ void MyScene::ModifyBone()
 
 	static int newBoneIndex = 0;
 	// Modify Bone at here.
-	Bone newBone;
-	newBone.name = std::string("newBone" + std::to_string(newBoneIndex++));
-	newBone.id = model->GetBoneCount();
-	newBone.parentID = selectedBone;
-	const Bone& parentBone = model->GetBone(selectedBone);
+	const Bone* parentBone = model->GetBone(selectedBone);
 	glm::vec4 trans = hairBone0->GetBoneData(0);
-	newBone.toBoneFromUnit = glm::translate(glm::vec3(trans.x, trans.y, trans.z)) * parentBone.toBoneFromUnit;
-	newBone.toModelFromBone = parentBone.toModelFromBone;
-	/*
-	@@ TODO: Find out which one is correct
-	newBone.toModelFromBone = parentBone.toModelFromBone /** glm::translate(-glm::vec3(trans.x, trans.y, trans.z));
-	*/
+	JiggleBone* newBone = new JiggleBone(std::string(newBoneName) + std::to_string(newBoneIndex++), selectedBone, model->GetBoneCount(), 
+		glm::translate(glm::vec3(trans.x, trans.y, trans.z)) * parentBone->toBoneFromUnit, parentBone->toModelFromBone);
 	model->AddBone(newBone);
 
 	MyImGUI::UpdateBoneNameList();

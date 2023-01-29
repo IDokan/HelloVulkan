@@ -43,13 +43,29 @@ Skeleton::Skeleton()
 {
 }
 
+Skeleton::~Skeleton()
+{
+}
+
+void Skeleton::Update(float dt)
+{
+	// Iterate bones but usually useful bones are at the tails.
+	// It might be bad.
+		// Probabily use reversed iterator for better performance.
+	for (Bone* bone : bones)
+	{
+		bone->Update(dt);
+	}
+}
+
 void Skeleton::AddBone(std::string name, int parentID)
 {
-	bones.push_back(Bone(name, parentID, boneSize));
+	Bone* newBone = new Bone(name, parentID, boneSize);
+	bones.push_back(newBone);
 	boneSize += 1;
 }
 
-void Skeleton::AddBone(const Bone& newBone)
+void Skeleton::AddBone(Bone* newBone)
 {
 	bones.push_back(newBone);
 	boneSize += 1;
@@ -58,9 +74,9 @@ void Skeleton::AddBone(const Bone& newBone)
 int Skeleton::GetBoneIDByName(const std::string& name)
 {
 	int id = 0;
-	for (const Bone& bone : bones)
+	for (Bone* bone : bones)
 	{
-		if (bone.name.compare(name) == 0)
+		if (bone->name.compare(name) == 0)
 		{
 			return id;
 		}
@@ -70,16 +86,16 @@ int Skeleton::GetBoneIDByName(const std::string& name)
 	return INT32_MIN;
 }
 
-const Bone& Skeleton::GetBoneByBoneID(int boneID)
+const Bone* Skeleton::GetBoneByBoneID(int boneID)
 {
 	return bones[boneID];
 }
 
-const Bone& Skeleton::GetBoneByName(const std::string& name)
+const Bone* Skeleton::GetBoneByName(const std::string& name)
 {
-	for (const Bone& bone : bones)
+	for (const Bone* bone : bones)
 	{
-		if (bone.name.compare(name) == 0)
+		if (bone->name.compare(name) == 0)
 		{
 			return bone;
 		}
@@ -90,12 +106,12 @@ const Bone& Skeleton::GetBoneByName(const std::string& name)
 
 Bone& Skeleton::GetBoneReferenceByName(const std::string& name)
 {
-	return const_cast<Bone&>(GetBoneByName(name));
+	return const_cast<Bone&>(*GetBoneByName(name));
 }
 
 std::string Skeleton::GetBoneNameByID(unsigned int boneID)
 {
-	return bones[boneID].name;
+	return bones[boneID]->name;
 }
 
 size_t Skeleton::GetSkeletonSize()
@@ -105,6 +121,10 @@ size_t Skeleton::GetSkeletonSize()
 
 void Skeleton::Clear()
 {
+	for (Bone* bone : bones)
+	{
+		delete bone;
+	}
 	bones.clear();
 	boneSize = 0;
 }
@@ -114,7 +134,7 @@ void Skeleton::GetToBoneFromUnit(std::vector<glm::mat4>& data)
 	data.resize(boneSize);
 	for (int i = 0; i < boneSize; i++)
 	{
-		data[i] = bones[i].toBoneFromUnit;
+		data[i] = bones[i]->toBoneFromUnit;
 	}
 }
 
@@ -123,7 +143,7 @@ void Skeleton::GetToModelFromBone(std::vector<glm::mat4>& data)
 	data.resize(boneSize);
 	for (int i = 0; i < boneSize; i++)
 	{
-		data[i] = bones[i].toModelFromBone;
+		data[i] = bones[i]->toModelFromBone;
 	}
 }
 
@@ -187,6 +207,11 @@ Bone::Bone(Bone&& b)
 {
 }
 
+void Bone::Update(float dt)
+{
+	return;
+}
+
 Bone& Bone::operator=(const Bone& b)
 {
 	name = b.name;
@@ -205,6 +230,10 @@ Bone& Bone::operator=(Bone&& b)
 	toBoneFromUnit = b.toBoneFromUnit;
 	toModelFromBone = b.toModelFromBone;
 	return *this;
+}
+
+Bone::~Bone()
+{
 }
 
 std::ostream& operator<<(std::ostream& os, const glm::vec4& data)
@@ -379,4 +408,61 @@ bool vec2Compare::operator()(const glm::vec2& lhs, const glm::vec2& rhs) const
 	//	return true;
 	//}
 	return lhs.x < rhs.x;
+}
+
+JiggleBone::JiggleBone()
+	: Bone(), isUpdateJigglePhysics(false)
+{
+}
+
+JiggleBone::JiggleBone(std::string name, int parentID, int id, glm::mat4 toBoneFromModel, glm::mat4 toModelFromBone)
+	: Bone(name, parentID, id, toBoneFromModel, toModelFromBone), isUpdateJigglePhysics(false)
+{
+}
+
+JiggleBone::JiggleBone(const JiggleBone& jb)
+	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics)
+{
+}
+
+JiggleBone::JiggleBone(JiggleBone&& jb)
+	:Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics)
+{
+	
+}
+
+void JiggleBone::Update(float dt)
+{
+	if (isUpdateJigglePhysics == false)
+	{
+		return;
+	}
+
+	// @@ TODO: Implement jiggle physics here
+}
+
+JiggleBone& JiggleBone::operator=(const JiggleBone& jb)
+{
+	name = jb.name;
+	parentID = jb.parentID;
+	id = jb.id;
+	toBoneFromUnit = jb.toBoneFromUnit;
+	toModelFromBone = jb.toModelFromBone;
+	isUpdateJigglePhysics = jb.isUpdateJigglePhysics;
+	return *this;
+}
+
+JiggleBone& JiggleBone::operator=(JiggleBone&& jb)
+{
+	name = jb.name;
+	parentID = jb.parentID;
+	id = jb.id;
+	toBoneFromUnit = jb.toBoneFromUnit;
+	toModelFromBone = jb.toModelFromBone;
+	isUpdateJigglePhysics = jb.isUpdateJigglePhysics;
+	return *this;
+}
+
+JiggleBone::~JiggleBone()
+{
 }

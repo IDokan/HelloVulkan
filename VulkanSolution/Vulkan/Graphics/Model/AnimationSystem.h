@@ -21,8 +21,12 @@ class AnimationSystem
 {
 public:
 	AnimationSystem(unsigned int animationCount = 0);
+	~AnimationSystem();
 
 	void ImportSkeleton(FbxNode* node, FbxNode* parentNode = nullptr);
+
+	// Currently, it is only for updating jiggle bones right now..
+	void Update(float dt);
 
 	void Clear();
 
@@ -38,10 +42,10 @@ public:
 	void GetToBoneFromUnit(std::vector<glm::mat4>& data);
 	void GetToModelFromBone(std::vector<glm::mat4>& data);
 	size_t GetBoneCount();
-	const Bone& GetBone(int boneID);
+	const Bone* GetBone(int boneID);
 	int GetBoneIDByName(const std::string& name);
 	std::string GetBoneName(unsigned int boneID);
-	void AddBone(const Bone& newBone);
+	void AddBone(Bone* newBone);
 
 	// Return the first bone whose parent bone is given bone ID.
 	int GetChildrenBoneID(int boneID);

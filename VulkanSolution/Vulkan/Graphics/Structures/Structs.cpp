@@ -411,22 +411,22 @@ bool vec2Compare::operator()(const glm::vec2& lhs, const glm::vec2& rhs) const
 }
 
 JiggleBone::JiggleBone()
-	: Bone(), isUpdateJigglePhysics(false)
+	: Bone(), isUpdateJigglePhysics(false), modelUnitTranslation(glm::vec3(0.f))
 {
 }
 
-JiggleBone::JiggleBone(std::string name, int parentID, int id, glm::mat4 toBoneFromModel, glm::mat4 toModelFromBone)
-	: Bone(name, parentID, id, toBoneFromModel, toModelFromBone), isUpdateJigglePhysics(false)
+JiggleBone::JiggleBone(std::string name, int parentID, int id, glm::mat4 toBoneFromModel, glm::mat4 toModelFromBone, glm::vec3 modelUnitTranslation)
+	: Bone(name, parentID, id, toBoneFromModel, toModelFromBone), isUpdateJigglePhysics(false), modelUnitTranslation(modelUnitTranslation)
 {
 }
 
 JiggleBone::JiggleBone(const JiggleBone& jb)
-	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics)
+	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), modelUnitTranslation(jb.modelUnitTranslation)
 {
 }
 
 JiggleBone::JiggleBone(JiggleBone&& jb)
-	:Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics)
+	:Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), modelUnitTranslation(jb.modelUnitTranslation)
 {
 	
 }
@@ -439,6 +439,10 @@ void JiggleBone::Update(float dt)
 	}
 
 	// @@ TODO: Implement jiggle physics here
+	toModelFromBone = glm::translate(modelUnitTranslation) * 
+		glm::rotate(glm::half_pi<float>() / 3.f * dt, glm::vec3(1.f, 0.f, 0.f)) * 
+		glm::translate(-modelUnitTranslation) * 
+		toModelFromBone;
 }
 
 JiggleBone& JiggleBone::operator=(const JiggleBone& jb)
@@ -449,6 +453,7 @@ JiggleBone& JiggleBone::operator=(const JiggleBone& jb)
 	toBoneFromUnit = jb.toBoneFromUnit;
 	toModelFromBone = jb.toModelFromBone;
 	isUpdateJigglePhysics = jb.isUpdateJigglePhysics;
+	modelUnitTranslation = jb.modelUnitTranslation;
 	return *this;
 }
 
@@ -460,6 +465,7 @@ JiggleBone& JiggleBone::operator=(JiggleBone&& jb)
 	toBoneFromUnit = jb.toBoneFromUnit;
 	toModelFromBone = jb.toModelFromBone;
 	isUpdateJigglePhysics = jb.isUpdateJigglePhysics;
+	modelUnitTranslation = jb.modelUnitTranslation;
 	return *this;
 }
 

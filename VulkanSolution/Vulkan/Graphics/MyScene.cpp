@@ -746,9 +746,18 @@ void MyScene::ModifyBone()
 	static int newBoneIndex = 0;
 	// Modify Bone at here.
 	const Bone* parentBone = model->GetBone(selectedBone);
-	glm::vec4 trans = hairBone0->GetBoneData(0);
+	
+	glm::vec4 trans4 = hairBone0->GetBoneData(0);
+	glm::vec3 trans = glm::vec3(trans4.x, trans4.y, trans4.z);
+	glm::vec3 parentTrans = glm::vec3(0.f);
+	if (const JiggleBone* jbPtr = dynamic_cast<const JiggleBone*>(parentBone);
+		jbPtr != nullptr)
+	{
+		parentTrans = jbPtr->modelUnitTranslation;
+	}
+
 	JiggleBone* newBone = new JiggleBone(std::string(newBoneName) + std::to_string(newBoneIndex++), selectedBone, model->GetBoneCount(), 
-		glm::translate(glm::vec3(trans.x, trans.y, trans.z)) * parentBone->toBoneFromUnit, parentBone->toModelFromBone);
+		glm::translate(glm::vec3(trans)) * parentBone->toBoneFromUnit, parentBone->toModelFromBone, parentTrans + trans);
 	model->AddBone(newBone);
 
 	MyImGUI::UpdateBoneNameList();

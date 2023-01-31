@@ -204,7 +204,7 @@ struct JiggleBone : public Bone
 {
 public:
 	JiggleBone();
-	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4());
+	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4(), glm::vec3 modelUnitTranslation = glm::vec3());
 	JiggleBone(const JiggleBone& jb);
 	JiggleBone(JiggleBone&& jb);
 	virtual void Update(float dt);
@@ -213,6 +213,9 @@ public:
 	virtual ~JiggleBone();
 
 	bool isUpdateJigglePhysics;
+	// this is the translation that difference from the parent bone.
+	// In order to apply TRS appropriately, add and substitute the diff.
+	glm::vec3 modelUnitTranslation;
 };
 
 class Skeleton

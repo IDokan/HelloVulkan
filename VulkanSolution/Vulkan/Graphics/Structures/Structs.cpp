@@ -411,22 +411,22 @@ bool vec2Compare::operator()(const glm::vec2& lhs, const glm::vec2& rhs) const
 }
 
 JiggleBone::JiggleBone()
-	: Bone(), isUpdateJigglePhysics(false), modelUnitTranslation(glm::vec3(0.f))
+	: Bone(), isUpdateJigglePhysics(false), modelUnitTranslation(glm::vec3(0.f)), customPhysicsMatrix(glm::mat4(0.f)), physics()
 {
 }
 
 JiggleBone::JiggleBone(std::string name, int parentID, int id, glm::mat4 toBoneFromModel, glm::mat4 toModelFromBone, glm::vec3 modelUnitTranslation)
-	: Bone(name, parentID, id, toBoneFromModel, toModelFromBone), isUpdateJigglePhysics(false), modelUnitTranslation(modelUnitTranslation)
+	: Bone(name, parentID, id, toBoneFromModel, toModelFromBone), isUpdateJigglePhysics(false), modelUnitTranslation(modelUnitTranslation), customPhysicsMatrix(glm::identity<glm::mat4>()), physics()
 {
 }
 
 JiggleBone::JiggleBone(const JiggleBone& jb)
-	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), modelUnitTranslation(jb.modelUnitTranslation)
+	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), modelUnitTranslation(jb.modelUnitTranslation), customPhysicsMatrix(jb.customPhysicsMatrix), physics(jb.physics)
 {
 }
 
 JiggleBone::JiggleBone(JiggleBone&& jb)
-	:Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), modelUnitTranslation(jb.modelUnitTranslation)
+	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), modelUnitTranslation(jb.modelUnitTranslation), customPhysicsMatrix(jb.customPhysicsMatrix), physics(jb.physics)
 {
 	
 }
@@ -438,11 +438,18 @@ void JiggleBone::Update(float dt)
 		return;
 	}
 
-	// @@ TODO: Implement jiggle physics here
-	toModelFromBone = glm::translate(modelUnitTranslation) * 
-		glm::rotate(glm::half_pi<float>() / 3.f * dt, glm::vec3(1.f, 0.f, 0.f)) * 
-		glm::translate(-modelUnitTranslation) * 
-		toModelFromBone;
+	constexpr glm::vec3 force = glm::vec3(0.f, -4.9f, 0.f);
+
+	physics.UpdateByForce(dt, force);
+
+	//// @@ TODO: Implement jiggle physics here
+	//toModelFromBone = 
+	//	glm::translate(modelUnitTranslation) * 
+	//	glm::rotate(glm::half_pi<float>() / 3.f * dt, glm::vec3(1.f, 0.f, 0.f)) * 
+	//	glm::translate(-modelUnitTranslation) * 
+	//	toModelFromBone;
+
+	customPhysicsMatrix = glm::translate(physics.GetCenterOfMass());
 }
 
 JiggleBone& JiggleBone::operator=(const JiggleBone& jb)
@@ -454,6 +461,8 @@ JiggleBone& JiggleBone::operator=(const JiggleBone& jb)
 	toModelFromBone = jb.toModelFromBone;
 	isUpdateJigglePhysics = jb.isUpdateJigglePhysics;
 	modelUnitTranslation = jb.modelUnitTranslation;
+	customPhysicsMatrix = jb.customPhysicsMatrix;
+	physics = jb.physics;
 	return *this;
 }
 
@@ -466,9 +475,84 @@ JiggleBone& JiggleBone::operator=(JiggleBone&& jb)
 	toModelFromBone = jb.toModelFromBone;
 	isUpdateJigglePhysics = jb.isUpdateJigglePhysics;
 	modelUnitTranslation = jb.modelUnitTranslation;
+	customPhysicsMatrix = jb.customPhysicsMatrix;
+	physics = jb.physics;
 	return *this;
 }
 
 JiggleBone::~JiggleBone()
 {
+}
+
+void JiggleBone::SetIsUpdateJigglePhysics(bool isUpdate)
+{
+	isUpdateJigglePhysics = isUpdate;
+
+	if (isUpdateJigglePhysics)
+	{
+		physics.Initialize();
+	}
+}
+
+Physics::Physics()
+	:centerOfMass(), translation(), linearMomentum(), linearVelocity(), totalMass(), force()
+{
+}
+
+Physics::Physics(const Physics& p)
+	:centerOfMass(p.centerOfMass), translation(p.translation), linearMomentum(p.linearMomentum), linearVelocity(p.linearVelocity), totalMass(p.totalMass), force(p.force)
+{
+}
+
+Physics::Physics(Physics&& p)
+	: centerOfMass(p.centerOfMass), translation(p.translation), linearMomentum(p.linearMomentum), linearVelocity(p.linearVelocity), totalMass(p.totalMass), force(p.force)
+{
+}
+
+Physics& Physics::operator=(const Physics& p)
+{
+	centerOfMass = p.centerOfMass;
+	translation = p.translation;
+	linearMomentum = p.linearMomentum;
+	linearVelocity = p.linearVelocity;
+	totalMass = p.totalMass;
+	force = p.force;
+	return *this;
+}
+
+Physics& Physics::operator=(Physics&& p)
+{
+	centerOfMass = p.centerOfMass;
+	translation = p.translation;
+	linearMomentum = p.linearMomentum;
+	linearVelocity = p.linearVelocity;
+	totalMass = p.totalMass;
+	force = p.force;
+	return *this;
+}
+
+Physics::~Physics()
+{
+}
+
+void Physics::Initialize()
+{
+	centerOfMass = glm::vec3(0.f, 0.f, 0.f);
+
+	// @@ TODO: implement details of total mass later.
+	totalMass = 1.f;
+}
+
+void Physics::UpdateByForce(float dt, glm::vec3 _force)
+{
+	force = _force;
+	linearMomentum = dt * force;
+	linearVelocity = linearMomentum / totalMass;
+	translation += dt * linearVelocity;
+	centerOfMass = centerOfMass + translation;
+}
+
+glm::vec3 Physics::GetCenterOfMass()
+{
+	return centerOfMass;
 }

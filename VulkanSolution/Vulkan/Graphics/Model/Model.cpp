@@ -798,6 +798,13 @@ void Model::GetAnimationData(float t, std::vector<glm::mat4>& data, bool bindPos
 		for (int i = 0; i < boneCount; i++)
 		{
 			data[i] = glm::identity<glm::mat4>();
+
+			// Apply physics matrix in here for bind pose.
+			const JiggleBone* jb = dynamic_cast<const JiggleBone*>(animationSystem->GetBone(i));
+			if (jb != nullptr)
+			{
+				data[i] = jb->customPhysicsMatrix * data[i];
+			}
 		}
 
 		return;

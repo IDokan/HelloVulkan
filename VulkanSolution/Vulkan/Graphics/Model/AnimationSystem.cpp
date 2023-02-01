@@ -165,6 +165,13 @@ void AnimationSystem::GetAnimationData(float t, std::vector<glm::mat4>& data)
 	for (size_t i = 0; i < skeletonSize; i++)
 	{
 		data[i] = data[i] * skeleton.GetBoneByBoneID(static_cast<int>(i))->toModelFromBone;
+
+		// Apply physics matrix in here for animation.
+		const JiggleBone* jb = dynamic_cast<const JiggleBone*>(skeleton.GetBoneByBoneID(static_cast<int>(i)));
+		if (jb != nullptr)
+		{
+			data[i] = jb->customPhysicsMatrix * data[i];
+		}
 	}
 }
 

@@ -472,7 +472,15 @@ void MyImGUI::Helper::Skeleton()
             if (JiggleBone* jiggleBonePtr = dynamic_cast<JiggleBone*>(selectedBonePtr);
                 jiggleBonePtr != nullptr)
             {
-                ImGui::Checkbox("Set physics", &jiggleBonePtr->isUpdateJigglePhysics);
+                static bool isUpdatePrevious = false;
+                static bool isUpdateAfter = false;
+                isUpdatePrevious = jiggleBonePtr->isUpdateJigglePhysics;
+                isUpdateAfter = isUpdatePrevious;
+                ImGui::Checkbox("Set physics", &isUpdateAfter);
+                if (isUpdatePrevious != isUpdateAfter)
+                {
+                    jiggleBonePtr->SetIsUpdateJigglePhysics(isUpdateAfter);
+                }
             }
         }
     }

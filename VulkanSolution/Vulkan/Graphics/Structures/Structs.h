@@ -200,6 +200,33 @@ public:
 	glm::mat4 toModelFromBone;
 };
 
+
+struct Physics
+{
+public:
+	Physics();
+	Physics(const Physics& p);
+	Physics(Physics&& p);
+	Physics& operator=(const Physics& p);
+	Physics& operator=(Physics&& p);
+
+	~Physics();
+
+	void Initialize();
+	void UpdateByForce(float dt, glm::vec3 force);
+
+	glm::vec3 GetCenterOfMass();
+private:
+	glm::vec3 centerOfMass;
+	glm::vec3 translation;
+	glm::vec3 linearMomentum;
+	glm::vec3 linearVelocity;
+
+	float totalMass;
+
+	glm::vec3 force;
+};
+
 struct JiggleBone : public Bone
 {
 public:
@@ -212,10 +239,16 @@ public:
 	JiggleBone& operator=(JiggleBone&& jb);
 	virtual ~JiggleBone();
 
+	void SetIsUpdateJigglePhysics(bool isUpdate);
+
 	bool isUpdateJigglePhysics;
 	// this is the translation that difference from the parent bone.
 	// In order to apply TRS appropriately, add and substitute the diff.
 	glm::vec3 modelUnitTranslation;
+
+	glm::mat4 customPhysicsMatrix;
+
+	Physics physics;
 };
 
 class Skeleton

@@ -52,9 +52,17 @@ void Skeleton::Update(float dt)
 	// Iterate bones but usually useful bones are at the tails.
 	// It might be bad.
 		// Probabily use reversed iterator for better performance.
-	for (Bone* bone : bones)
+	for (auto it = bones.rbegin(); it != bones.rend(); it++)
 	{
-		bone->Update(dt);
+		Bone* ptr = (*it);
+
+		if (JiggleBone* jbPtr = dynamic_cast<JiggleBone*>(ptr);
+			jbPtr == nullptr)
+		{
+			break;
+		}
+
+		ptr->Update(dt);
 	}
 }
 
@@ -411,22 +419,22 @@ bool vec2Compare::operator()(const glm::vec2& lhs, const glm::vec2& rhs) const
 }
 
 JiggleBone::JiggleBone()
-	: Bone(), isUpdateJigglePhysics(false), modelUnitTranslation(glm::vec3(0.f)), customPhysicsMatrix(glm::mat4(0.f)), physics()
+	: Bone(), isUpdateJigglePhysics(false), modelUnitTranslation(glm::vec3(0.f)), customPhysicsMatrix(glm::mat4(0.f)), physics(), parentBonePtr(nullptr)
 {
 }
 
-JiggleBone::JiggleBone(std::string name, int parentID, int id, glm::mat4 toBoneFromModel, glm::mat4 toModelFromBone, glm::vec3 modelUnitTranslation)
-	: Bone(name, parentID, id, toBoneFromModel, toModelFromBone), isUpdateJigglePhysics(false), modelUnitTranslation(modelUnitTranslation), customPhysicsMatrix(glm::identity<glm::mat4>()), physics()
+JiggleBone::JiggleBone(std::string name, int parentID, int id, glm::mat4 toBoneFromModel, glm::mat4 toModelFromBone, glm::vec3 modelUnitTranslation, const Bone* parentBonePtr)
+	: Bone(name, parentID, id, toBoneFromModel, toModelFromBone), isUpdateJigglePhysics(false), modelUnitTranslation(modelUnitTranslation), customPhysicsMatrix(glm::identity<glm::mat4>()), physics(), parentBonePtr(parentBonePtr)
 {
 }
 
 JiggleBone::JiggleBone(const JiggleBone& jb)
-	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), modelUnitTranslation(jb.modelUnitTranslation), customPhysicsMatrix(jb.customPhysicsMatrix), physics(jb.physics)
+	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), modelUnitTranslation(jb.modelUnitTranslation), customPhysicsMatrix(jb.customPhysicsMatrix), physics(jb.physics), parentBonePtr(jb.parentBonePtr)
 {
 }
 
 JiggleBone::JiggleBone(JiggleBone&& jb)
-	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), modelUnitTranslation(jb.modelUnitTranslation), customPhysicsMatrix(jb.customPhysicsMatrix), physics(jb.physics)
+	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), modelUnitTranslation(jb.modelUnitTranslation), customPhysicsMatrix(jb.customPhysicsMatrix), physics(jb.physics), parentBonePtr(jb.parentBonePtr)
 {
 	
 }
@@ -438,9 +446,37 @@ void JiggleBone::Update(float dt)
 		return;
 	}
 
-	constexpr glm::vec3 force = glm::vec3(0.f, -4.9f, 0.f);
+	// @@ Begin of Physics calculation
+	constexpr glm::vec3 gravityForce= glm::vec3(0.f, -4.9f, 0.f);
+	glm::vec3 force = glm::vec3(0.f);
+	
+	glm::vec4 bindPoseDifference = (parentBonePtr->toBoneFromUnit* glm::vec4(0.f, 0.f, 0.f, 1.f)) - (toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
 
-	physics.UpdateByForce(dt, force);
+	glm::vec3 diffVector = glm::vec3(bindPoseDifference.x, bindPoseDifference.y, bindPoseDifference.z);
+	const float initialSpringLength = glm::length(diffVector);
+
+	diffVector -= physics.centerOfMass;
+
+	glm::vec3 parentVelocity = glm::vec3(0.f);
+	if (const JiggleBone* parentJb = dynamic_cast<const JiggleBone*>(parentBonePtr);
+		parentJb != nullptr)
+	{
+		diffVector += parentJb->physics.centerOfMass;
+		parentVelocity = parentJb->physics.linearVelocity;
+	}
+	const float diffLength = glm::length(diffVector);
+	diffVector = glm::normalize(diffVector);
+
+	// spring force
+	glm::vec3 springForce = Physics::SpringConstant * diffVector * (initialSpringLength - diffLength);
+	glm::vec3 dampingForce = Physics::DampingConstant * (parentVelocity - physics.linearVelocity);
+
+
+	physics.UpdateByForce(dt, springForce + dampingForce + gravityForce);
+	std::cout << "springForce: " << springForce << '\n';
+	std::cout << "dampingForce: " << dampingForce<< '\n';
+	std::cout << "gravity: " << gravityForce<< '\n';
+	// @@ End of physics calculation
 
 	//// @@ TODO: Implement jiggle physics here
 	//toModelFromBone = 
@@ -449,7 +485,7 @@ void JiggleBone::Update(float dt)
 	//	glm::translate(-modelUnitTranslation) * 
 	//	toModelFromBone;
 
-	customPhysicsMatrix = glm::translate(physics.GetCenterOfMass());
+	customPhysicsMatrix = glm::translate(physics.centerOfMass);
 }
 
 JiggleBone& JiggleBone::operator=(const JiggleBone& jb)
@@ -463,6 +499,7 @@ JiggleBone& JiggleBone::operator=(const JiggleBone& jb)
 	modelUnitTranslation = jb.modelUnitTranslation;
 	customPhysicsMatrix = jb.customPhysicsMatrix;
 	physics = jb.physics;
+	parentBonePtr = jb.parentBonePtr;
 	return *this;
 }
 
@@ -477,6 +514,7 @@ JiggleBone& JiggleBone::operator=(JiggleBone&& jb)
 	modelUnitTranslation = jb.modelUnitTranslation;
 	customPhysicsMatrix = jb.customPhysicsMatrix;
 	physics = jb.physics;
+	parentBonePtr = jb.parentBonePtr;
 	return *this;
 }
 
@@ -538,6 +576,10 @@ Physics::~Physics()
 void Physics::Initialize()
 {
 	centerOfMass = glm::vec3(0.f, 0.f, 0.f);
+	
+	translation = glm::vec3(0.f);
+	linearMomentum = glm::vec3(0.f);
+	linearVelocity = glm::vec3(0.f);
 
 	// @@ TODO: implement details of total mass later.
 	totalMass = 1.f;
@@ -550,9 +592,4 @@ void Physics::UpdateByForce(float dt, glm::vec3 _force)
 	linearVelocity = linearMomentum / totalMass;
 	translation += dt * linearVelocity;
 	centerOfMass = centerOfMass + translation;
-}
-
-glm::vec3 Physics::GetCenterOfMass()
-{
-	return centerOfMass;
 }

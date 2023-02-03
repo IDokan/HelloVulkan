@@ -757,7 +757,7 @@ void MyScene::ModifyBone()
 	}
 
 	JiggleBone* newBone = new JiggleBone(std::string(newBoneName) + std::to_string(newBoneIndex++), selectedBone, model->GetBoneCount(), 
-		glm::translate(glm::vec3(trans)) * parentBone->toBoneFromUnit, parentBone->toModelFromBone, parentTrans + trans);
+		glm::translate(glm::vec3(trans)) * parentBone->toBoneFromUnit, parentBone->toModelFromBone, parentTrans + trans, parentBone);
 	model->AddBone(newBone);
 
 	MyImGUI::UpdateBoneNameList();

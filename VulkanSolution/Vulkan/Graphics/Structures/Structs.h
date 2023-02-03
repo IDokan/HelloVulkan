@@ -204,6 +204,9 @@ public:
 struct Physics
 {
 public:
+	static constexpr float SpringConstant = 1.f;
+	static constexpr float DampingConstant = 100.f;
+public:
 	Physics();
 	Physics(const Physics& p);
 	Physics(Physics&& p);
@@ -215,8 +218,7 @@ public:
 	void Initialize();
 	void UpdateByForce(float dt, glm::vec3 force);
 
-	glm::vec3 GetCenterOfMass();
-private:
+public:
 	glm::vec3 centerOfMass;
 	glm::vec3 translation;
 	glm::vec3 linearMomentum;
@@ -231,7 +233,7 @@ struct JiggleBone : public Bone
 {
 public:
 	JiggleBone();
-	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4(), glm::vec3 modelUnitTranslation = glm::vec3());
+	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4(), glm::vec3 modelUnitTranslation = glm::vec3(), const Bone* parentBonePtr = nullptr);
 	JiggleBone(const JiggleBone& jb);
 	JiggleBone(JiggleBone&& jb);
 	virtual void Update(float dt);
@@ -249,6 +251,7 @@ public:
 	glm::mat4 customPhysicsMatrix;
 
 	Physics physics;
+	const Bone* parentBonePtr;
 };
 
 class Skeleton

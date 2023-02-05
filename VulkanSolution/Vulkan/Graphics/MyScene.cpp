@@ -35,7 +35,7 @@ Creation Date: 06.12.2021
 #include <Engines/Objects/HairBone.h>
 
 MyScene::MyScene(Window* window)
-	: windowHolder(window), model(nullptr), timer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f), applyingBone(false), flagChangeBoneIndexInSphere(false), boneIDIndex(0)
+	: windowHolder(window), model(nullptr), isUpdateAnimationTimer(true), animationTimer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f), applyingBone(false), flagChangeBoneIndexInSphere(false), boneIDIndex(0)
 {
 }
 
@@ -344,7 +344,7 @@ void MyScene::InitGUI()
 {
 	MyImGUI::SendModelInfo(model, &showModel, &vertexPointsMode, &pointSize, &selectedMesh);
 	MyImGUI::SendSkeletonInfo(&showSkeletonFlag, &blendingWeightMode, &selectedBone);
-	MyImGUI::SendAnimationInfo(&timer, &bindPoseFlag);
+	MyImGUI::SendAnimationInfo(&animationTimer, &bindPoseFlag, &isUpdateAnimationTimer);
 	MyImGUI::SendConfigInfo(&mouseSensitivity);
 	glm::vec3 min;
 	glm::vec3 max;
@@ -362,11 +362,14 @@ void MyScene::InitGUI()
 
 void MyScene::UpdateTimer(float dt)
 {
-	timer += dt;
-
-	if (timer > model->GetAnimationDuration())
+	if (isUpdateAnimationTimer)
 	{
-		timer = 0.f;
+		animationTimer += dt;
+	}
+
+	if (animationTimer > model->GetAnimationDuration())
+	{
+		animationTimer = 0.f;
 	}
 }
 
@@ -634,7 +637,7 @@ void MyScene::UpdateAnimationUniformBuffer(uint32_t currentFrameID)
 	std::vector<glm::mat4> animationBufferData;
 
 	// Get animation key frame data
-	model->GetAnimationData(timer, animationBufferData, bindPoseFlag);
+	model->GetAnimationData(animationTimer, animationBufferData, bindPoseFlag);
 
 
 	UniformBuffer* animationUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));

@@ -204,8 +204,9 @@ public:
 struct Physics
 {
 public:
-	static constexpr float SpringConstant = 1.f;
-	static constexpr float DampingConstant = 100.f;
+	static float GravityScaler;
+	static float SpringScaler;
+	static float DampingScaler;
 public:
 	Physics();
 	Physics(const Physics& p);

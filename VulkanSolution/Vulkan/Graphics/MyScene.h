@@ -73,7 +73,8 @@ private:
 	
 	Model* model;
 
-	float timer;
+	bool isUpdateAnimationTimer;
+	float animationTimer;
 	glm::vec3 rightMouseCenter;
 	glm::vec3 cameraPoint;
 	glm::vec3 targetPoint;

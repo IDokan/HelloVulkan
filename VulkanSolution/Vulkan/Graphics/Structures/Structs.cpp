@@ -1,5 +1,9 @@
 #include "Structs.h"
 
+float Physics::GravityScaler = 1.f;
+float Physics::SpringScaler = 1.f;
+float Physics::DampingScaler = 10.f;
+
 Mesh::Mesh()
 	:meshName(), indices(), vertices(), uniqueVertices()
 {
@@ -447,7 +451,7 @@ void JiggleBone::Update(float dt)
 	}
 
 	// @@ Begin of Physics calculation
-	constexpr glm::vec3 gravityForce= glm::vec3(0.f, -4.9f, 0.f);
+	constexpr glm::vec3 gravityForce= glm::vec3(0.f, -0.98f, 0.f);
 	glm::vec3 force = glm::vec3(0.f);
 	
 	glm::vec4 bindPoseDifference = (parentBonePtr->toBoneFromUnit* glm::vec4(0.f, 0.f, 0.f, 1.f)) - (toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
@@ -464,18 +468,20 @@ void JiggleBone::Update(float dt)
 		diffVector += parentJb->physics.centerOfMass;
 		parentVelocity = parentJb->physics.linearVelocity;
 	}
-	const float diffLength = glm::length(diffVector);
+	float diffLength = glm::length(diffVector);
 	diffVector = glm::normalize(diffVector);
 
 	// spring force
-	glm::vec3 springForce = Physics::SpringConstant * diffVector * (initialSpringLength - diffLength);
-	glm::vec3 dampingForce = Physics::DampingConstant * (parentVelocity - physics.linearVelocity);
+	glm::vec3 springForce = Physics::SpringScaler * diffVector * (initialSpringLength - diffLength);
+	glm::vec3 dampingForce = Physics::DampingScaler * (parentVelocity - physics.linearVelocity);
 
 
 	physics.UpdateByForce(dt, springForce + dampingForce + gravityForce);
+	std::cout << "diffVector: " << diffVector << '\n';
 	std::cout << "springForce: " << springForce << '\n';
 	std::cout << "dampingForce: " << dampingForce<< '\n';
 	std::cout << "gravity: " << gravityForce<< '\n';
+	std::cout << "total Force: " << springForce + dampingForce + gravityForce << '\n';
 	// @@ End of physics calculation
 
 	//// @@ TODO: Implement jiggle physics here

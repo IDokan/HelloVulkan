@@ -35,6 +35,7 @@ namespace MyImGUI
         void BlendingWeightsSkeletonSelectionRecursively(int currentBoneIndex, int boneSize, ImGuiTreeNodeFlags baseFlags, bool nodeOpened = false);
         void Skeleton();
         void Animation();
+        void Physics();
         void Configuration();
     }
 }
@@ -52,6 +53,7 @@ namespace
     // pair<bone ID, parent ID>
     std::vector<std::pair<int, int>> boneIdPid;
     bool* bindPoseFlag;
+    bool* playAnimation;
 
     bool* showSkeletonFlag;
     unsigned int selected = 0;
@@ -252,6 +254,7 @@ void MyImGUI::DrawGUI()
     Helper::Skeleton();
     Helper::BoneEditor();
     Helper::Animation();
+    Helper::Physics();
     Helper::Configuration();
 
     ImGui::End();
@@ -502,10 +505,11 @@ void MyImGUI::SendSkeletonInfo(bool* _showSkeletonFlag, bool* _blendingWeightMod
     selectedBone = _selectedBone;
 }
 
-void MyImGUI::SendAnimationInfo(float* _worldTimer, bool* _bindPoseFlag)
+void MyImGUI::SendAnimationInfo(float* _worldTimer, bool* _bindPoseFlag, bool* _playAnimation)
 {
     worldTimer = _worldTimer;
     bindPoseFlag = _bindPoseFlag;
+    playAnimation = _playAnimation;
 }
 
 void MyImGUI::SendConfigInfo(float* _mouseSensitivity)
@@ -632,7 +636,18 @@ void MyImGUI::Helper::Animation()
             float duration = model->GetAnimationDuration();
             ImGui::TextWrapped(("\t" + std::to_string(duration)).c_str());
             ImGui::SliderFloat("Animation Time", worldTimer, 0.f, duration);
+            ImGui::Checkbox("play animation?", playAnimation);
         }
+    }
+}
+
+void MyImGUI::Helper::Physics()
+{
+    if (ImGui::CollapsingHeader("Physics"))
+    {
+        ImGui::SliderFloat("Gravity Scaler", &Physics::GravityScaler, 1.f, 10.f);
+        ImGui::SliderFloat("Spring Scaler", &Physics::SpringScaler, 1.f, 10.f);
+        ImGui::SliderFloat("Damping Scaler", &Physics::DampingScaler, 1.f, 10.f);
     }
 }
 

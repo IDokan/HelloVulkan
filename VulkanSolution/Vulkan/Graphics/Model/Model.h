@@ -72,7 +72,7 @@ public:
 	// [ ?, ?, ?, ? ] 
 	// If boneIDIndex == 1 -> [ ?, newBoneIndex, ?, ? ]
 	// glm::vec4 weight -> Set all weights altogether.
-	void ChangeBoneIndexInSphere(int meshIndex, glm::vec3 trans, float radius, int boneIDIndex, int newBoneIndex, glm::vec4 weight);
+	void ChangeBoneIndexInSphere(int meshIndex, glm::vec3 trans, float radius, int boneIDIndex, int newBoneIndex, glm::vec4 weight, std::vector<glm::vec3>& changedVertices);
 private:
 	// @@ Printing fbx data
 	void ExploreScene(FbxScene* scene);

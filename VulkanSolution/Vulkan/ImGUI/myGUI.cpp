@@ -645,9 +645,9 @@ void MyImGUI::Helper::Physics()
 {
     if (ImGui::CollapsingHeader("Physics"))
     {
-        ImGui::SliderFloat("Gravity Scaler", &Physics::GravityScaler, 1.f, 10.f);
-        ImGui::SliderFloat("Spring Scaler", &Physics::SpringScaler, 1.f, 10.f);
-        ImGui::SliderFloat("Damping Scaler", &Physics::DampingScaler, 1.f, 10.f);
+        ImGui::SliderFloat("Gravity Scaler", &Physics::GravityScaler, 1.f, 100.f);
+        ImGui::SliderFloat("Spring Scaler", &Physics::SpringScaler, 1.f, 100.f);
+        ImGui::SliderFloat("Damping Scaler", &Physics::DampingScaler, 1.f, 100.f);
     }
 }
 

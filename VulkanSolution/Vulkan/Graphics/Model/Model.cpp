@@ -176,10 +176,11 @@ const std::vector<std::string>& Model::GetNormalImagePaths()
 	return normalImagePaths;
 }
 
-void Model::ChangeBoneIndexInSphere(int meshIndex, glm::vec3 trans, float radius, int boneIDIndex, int newBoneIndex, glm::vec4 weight)
+void Model::ChangeBoneIndexInSphere(int meshIndex, glm::vec3 trans, float radius, int boneIDIndex, int newBoneIndex, glm::vec4 weight, std::vector<glm::vec3>& changedVertices)
 {
 	Mesh& mesh = meshes[meshIndex];
 	float radiusSquared = radius * radius;
+	changedVertices.clear();
 	for (Vertex& vertex : mesh.vertices)
 	{
 		glm::vec3 diff = vertex.position - trans;
@@ -188,6 +189,7 @@ void Model::ChangeBoneIndexInSphere(int meshIndex, glm::vec3 trans, float radius
 		{
 			vertex.boneIDs[boneIDIndex] = newBoneIndex;
 			vertex.boneWeights = weight;
+			changedVertices.push_back(vertex.position);
 		}
 	}
 	for (Vertex& vertex : mesh.uniqueVertices)

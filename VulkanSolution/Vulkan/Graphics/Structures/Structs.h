@@ -218,16 +218,29 @@ public:
 
 	void Initialize();
 	void UpdateByForce(float dt, glm::vec3 force);
-
+	void UpdateByTorque(float dt, glm::vec3 torque);
 public:
 	glm::vec3 centerOfMass;
+	// Linear forces
 	glm::vec3 translation;
 	glm::vec3 linearMomentum;
 	glm::vec3 linearVelocity;
+	glm::vec3 force;
+
+	// Angular forces
+	glm::mat3 rotation;
+	glm::vec3 angularMomentum;
+	glm::vec3 angularVelocity;
+	glm::mat3 inertiaTensorInverse;
+	glm::mat3 inertiaTensorObj;
+	glm::vec3 torque;
 
 	float totalMass;
 
-	glm::vec3 force;
+	std::vector<glm::vec3> vertices;
+
+private:
+	glm::mat3 Tilde(glm::vec3 v);
 };
 
 struct JiggleBone : public Bone
@@ -243,6 +256,8 @@ public:
 	virtual ~JiggleBone();
 
 	void SetIsUpdateJigglePhysics(bool isUpdate);
+
+	void AddVertices(const std::vector<glm::vec3>& vertices);
 
 	bool isUpdateJigglePhysics;
 	// this is the translation that difference from the parent bone.
@@ -331,6 +346,7 @@ std::ostream& operator<<(std::ostream& os, const glm::vec4& data);
 std::ostream& operator<<(std::ostream& os, const glm::vec3& data);
 std::ostream& operator<<(std::ostream& os, const glm::vec2& data);
 std::ostream& operator<<(std::ostream& os, const glm::ivec2& data);
+std::ostream& operator<<(std::ostream& os, const glm::mat3& data);
 
 bool operator<(const glm::vec3& lhs, const glm::vec3& rhs);
 bool operator>(const glm::vec3& lhs, const glm::vec3& rhs);

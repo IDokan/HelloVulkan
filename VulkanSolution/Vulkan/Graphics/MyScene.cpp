@@ -832,7 +832,16 @@ void MyScene::ChangeBoneIndexInSphere()
 	graphics->DeviceWaitIdle();
 
 	// Update model data
-	model->ChangeBoneIndexInSphere(selectedMesh, sphereTrans, sphereRadius, boneIDIndex, selectedBone, userInputBoneWeights);
+	std::vector<glm::vec3> changedVertices;
+	model->ChangeBoneIndexInSphere(selectedMesh, sphereTrans, sphereRadius, boneIDIndex, selectedBone, userInputBoneWeights, changedVertices);
+	const Bone* bone = model->GetBone(selectedBone);
+	if (const JiggleBone* cjb = dynamic_cast<const JiggleBone*>(bone);
+		cjb != nullptr)
+	{
+		JiggleBone* jb = const_cast<JiggleBone*>(cjb);
+		jb->AddVertices(changedVertices);
+		jb->physics.Initialize();
+	}
 
 	// Update buffer data
 	Buffer* vertex = dynamic_cast<Buffer*>(FindObjectByName(std::string("vertex") + std::to_string(selectedMesh)));

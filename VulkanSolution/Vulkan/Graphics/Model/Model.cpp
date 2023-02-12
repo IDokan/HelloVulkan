@@ -802,10 +802,12 @@ void Model::GetAnimationData(float t, std::vector<glm::mat4>& data, bool bindPos
 			data[i] = glm::identity<glm::mat4>();
 
 			// Apply physics matrix in here for bind pose.
-			const JiggleBone* jb = dynamic_cast<const JiggleBone*>(animationSystem->GetBone(i));
-			if (jb != nullptr)
+			if (const JiggleBone* jb = dynamic_cast<const JiggleBone*>(animationSystem->GetBone(i)); 
+				jb != nullptr)
 			{
-				data[i] = jb->customPhysicsMatrix * data[i];
+				glm::vec4 vertexPos4 = jb->parentBonePtr->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
+				glm::vec3 vertexPos = glm::vec3(vertexPos4.x, vertexPos4.y, vertexPos4.z);
+				data[i] = jb->customPhysicsTranslation * glm::translate(vertexPos) * jb->customPhysicsRotation * glm::translate(-vertexPos) * data[i];
 			}
 		}
 

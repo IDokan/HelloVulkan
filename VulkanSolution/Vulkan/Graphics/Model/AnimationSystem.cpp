@@ -170,7 +170,9 @@ void AnimationSystem::GetAnimationData(float t, std::vector<glm::mat4>& data)
 		const JiggleBone* jb = dynamic_cast<const JiggleBone*>(skeleton.GetBoneByBoneID(static_cast<int>(i)));
 		if (jb != nullptr)
 		{
-			data[i] = jb->customPhysicsMatrix * data[i];
+			glm::vec4 vertexPosition4 = data[i] * jb->parentBonePtr->toBoneFromUnit* glm::vec4(0.f, 0.f, 0.f, 1.f);
+			glm::vec3 vertexPosition = glm::vec3(vertexPosition4.x, vertexPosition4.y, vertexPosition4.z);
+			data[i] = jb->customPhysicsTranslation * glm::translate(vertexPosition) * jb->customPhysicsRotation * glm::translate(-vertexPosition) * data[i];
 		}
 	}
 }

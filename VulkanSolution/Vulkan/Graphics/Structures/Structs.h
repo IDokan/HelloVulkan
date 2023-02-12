@@ -218,7 +218,7 @@ public:
 
 	void Initialize();
 	void UpdateByForce(float dt, glm::vec3 force);
-	void UpdateByTorque(float dt, glm::vec3 torque);
+	void UpdateByForce(float dt, glm::vec3 force, glm::vec3 torque);
 public:
 	glm::vec3 centerOfMass;
 	// Linear forces
@@ -237,6 +237,7 @@ public:
 
 	float totalMass;
 
+	std::vector<glm::vec3> initVertices;
 	std::vector<glm::vec3> vertices;
 
 private:
@@ -264,7 +265,8 @@ public:
 	// In order to apply TRS appropriately, add and substitute the diff.
 	glm::vec3 modelUnitTranslation;
 
-	glm::mat4 customPhysicsMatrix;
+	glm::mat4 customPhysicsTranslation;
+	glm::mat4 customPhysicsRotation;
 
 	Physics physics;
 	const Bone* parentBonePtr;

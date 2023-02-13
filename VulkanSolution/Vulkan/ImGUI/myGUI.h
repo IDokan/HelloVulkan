@@ -29,6 +29,7 @@ namespace MyImGUI
     void SendAnimationInfo(float* worldTimer, bool* bindPoseFlag, bool* playAnimation);
     void SendConfigInfo(float* mouseSensitivity);
     void SendHairBoneInfo(HairBone* hairBone, char* newBoneName, size_t boneContainerNameSize, bool* applyingBone, float* sphereTrans, float min, float max, float* sphereRadius, int* boneIDIndex, float* boneWeight, bool* flagChange);
+    void SendPhysicsInfo(bool* runRealtime, bool* proceedFrame);
 
     void UpdateClickedVertexAddress(Vertex* vertex);
     void UpdateAnimationNameList();

@@ -483,11 +483,17 @@ void JiggleBone::Update(float dt)
 
 	glm::vec3 finalForce = gravityForce;
 
-
 	glm::vec4 tmp = parentBonePtr->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
-	physics.UpdateByForce(dt, glm::vec3(0.f), glm::cross(glm::vec3(tmp.x, tmp.y, tmp.z) - physics.centerOfMass, finalForce));
+	glm::vec3 anchorPoint = glm::vec3(tmp.x, tmp.y, tmp.z);
+	glm::vec4 exertedPoint4 = customPhysicsTranslation * glm::translate(anchorPoint) * customPhysicsRotation * glm::translate(-anchorPoint) * toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
+	glm::vec3 exertedPoint = glm::vec3(exertedPoint4.x, exertedPoint4.y, exertedPoint4.z);
+	// the reason why used (anchorPoint - anchorPoint), (x - y), x is the position where exerted on.
+	glm::vec3 torquePoint = (exertedPoint - anchorPoint) - physics.centerOfMass;
+	glm::vec3 torque = glm::cross(torquePoint, finalForce);
+	physics.UpdateByForce(dt, glm::vec3(0.f), torque);
 	// @@ End of physics calculation
 	std::cout << "Physics::CenterOfMass: " << physics.centerOfMass << std::endl;
+	std::cout << "Physics::Rotation: " << physics.rotation << std::endl;
 	//// @@ TODO: Implement jiggle physics here
 	//toModelFromBone = 
 	//	glm::translate(modelUnitTranslation) * 
@@ -541,7 +547,7 @@ void JiggleBone::SetIsUpdateJigglePhysics(bool isUpdate)
 
 	if (isUpdateJigglePhysics)
 	{
-		physics.Initialize();
+		physics.Initialize(parentBonePtr->toBoneFromUnit);
 	}
 }
 
@@ -612,12 +618,15 @@ Physics::~Physics()
 {
 }
 
-void Physics::Initialize()
+void Physics::Initialize(glm::mat4 parentToBoneFromUnitMatrix)
 {
 	centerOfMass = glm::vec3(0.f, 0.f, 0.f);
 	vertices = initVertices;
-	for (const glm::vec3& vertex : vertices)
+	glm::vec4 anchorPoint4 = parentToBoneFromUnitMatrix * glm::vec4(0.f, 0.f, 0.f, 1.f);
+	glm::vec3 anchorPoint = glm::vec3(anchorPoint4.x, anchorPoint4.y, anchorPoint4.z);
+	for (glm::vec3& vertex : vertices)
 	{
+		vertex = vertex - anchorPoint;
 		centerOfMass += vertex;
 	}
 
@@ -682,7 +691,7 @@ void Physics::UpdateByForce(float dt, glm::vec3 _force, glm::vec3 _torque)
 	linearMomentum += dt * force;
 	angularMomentum += dt * torque;
 	linearVelocity = linearMomentum / totalMass;
-	angularVelocity = inertiaTensorInverse * torque;
+	angularVelocity = inertiaTensorInverse * angularMomentum;
 	translation += dt * linearVelocity;
 	rotation += dt * (Tilde(angularVelocity) * rotation);
 

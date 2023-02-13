@@ -80,6 +80,9 @@ namespace
     int* boneIDIndex = nullptr;
     float* boneWeights = nullptr;
     bool* flagChangeBoneIndexInSphere = nullptr;
+
+    bool* runRealtime;
+    bool* proceedFrame;
 }
 
 namespace MyImGUI
@@ -531,6 +534,12 @@ void MyImGUI::SendHairBoneInfo(HairBone* _hairBone, char* _newBoneName, size_t _
     flagChangeBoneIndexInSphere = _flagChange;
 }
 
+void MyImGUI::SendPhysicsInfo(bool* _runRealtime, bool* _proceedFrame)
+{
+    runRealtime = _runRealtime;
+    proceedFrame = _proceedFrame;
+}
+
 void MyImGUI::UpdateClickedVertexAddress(Vertex* _vertex)
 {
     clickedVertex = _vertex;
@@ -648,6 +657,13 @@ void MyImGUI::Helper::Physics()
         ImGui::SliderFloat("Gravity Scaler", &Physics::GravityScaler, 1.f, 100.f);
         ImGui::SliderFloat("Spring Scaler", &Physics::SpringScaler, 1.f, 100.f);
         ImGui::SliderFloat("Damping Scaler", &Physics::DampingScaler, 1.f, 100.f);
+
+        ImGui::Separator();
+        ImGui::Checkbox("Run realtime", runRealtime);
+        if (ImGui::Button("Proceed A Frame"))
+        {
+            *proceedFrame = true;
+        }
     }
 }
 

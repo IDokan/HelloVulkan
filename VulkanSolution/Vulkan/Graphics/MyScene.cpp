@@ -35,7 +35,7 @@ Creation Date: 06.12.2021
 #include <Engines/Objects/HairBone.h>
 
 MyScene::MyScene(Window* window)
-	: windowHolder(window), model(nullptr), isUpdateAnimationTimer(true), animationTimer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f), applyingBone(false), flagChangeBoneIndexInSphere(false), boneIDIndex(0)
+	: windowHolder(window), model(nullptr), isUpdateAnimationTimer(true), animationTimer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f), applyingBone(false), flagChangeBoneIndexInSphere(false), boneIDIndex(0), proceedFrame(false), runRealtime(false)
 {
 }
 
@@ -147,7 +147,18 @@ void MyScene::CleanScene()
 
 void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t currentFrameID)
 {
-	model->Update(dt);
+	if (runRealtime)
+	{
+		model->Update(dt);
+	}
+	else
+	{
+		if (proceedFrame)
+		{
+			model->Update(dt);
+			proceedFrame = false;
+		}
+	}
 
 	ModifyBone();
 
@@ -346,6 +357,7 @@ void MyScene::InitGUI()
 	MyImGUI::SendSkeletonInfo(&showSkeletonFlag, &blendingWeightMode, &selectedBone);
 	MyImGUI::SendAnimationInfo(&animationTimer, &bindPoseFlag, &isUpdateAnimationTimer);
 	MyImGUI::SendConfigInfo(&mouseSensitivity);
+	
 	glm::vec3 min;
 	glm::vec3 max;
 	model->GetBoundingBoxMinMax(min, max);
@@ -354,6 +366,7 @@ void MyScene::InitGUI()
 	float maxF = std::max(std::max(max.x, max.y), max.z);
 
 	MyImGUI::SendHairBoneInfo(hairBone0, newBoneName, boneNameContainerSize, &applyingBone, reinterpret_cast<float*>(&sphereTrans), minF, maxF, &sphereRadius, &boneIDIndex, reinterpret_cast<float*>(&userInputBoneWeights), &flagChangeBoneIndexInSphere);
+	MyImGUI::SendPhysicsInfo(&runRealtime, &proceedFrame);
 
 	MyImGUI::UpdateAnimationNameList();
 	MyImGUI::UpdateBoneNameList();
@@ -840,7 +853,7 @@ void MyScene::ChangeBoneIndexInSphere()
 	{
 		JiggleBone* jb = const_cast<JiggleBone*>(cjb);
 		jb->AddVertices(changedVertices);
-		jb->physics.Initialize();
+		jb->physics.Initialize(jb->parentBonePtr->toBoneFromUnit);
 	}
 
 	// Update buffer data

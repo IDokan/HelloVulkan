@@ -42,5 +42,12 @@ layout(push_constant) uniform constants
 void main()
 {
 	gl_PointSize = PushConstants.pointSize;
-	gl_Position = ubo.proj * ubo.view * ubo.model * unitData.item[PushConstants.selectedBone].model * vec4(data.offset[gl_InstanceIndex], 1.0);
+	// data.offset[gl_InstanceIndex]
+	mat4 translation = mat4(
+	1.f, 0.f, 0.f, 0.f, 
+	0.f, 1.f, 0.f, 0.f,
+	0.f, 0.f, 1.f, 0.f,
+	data.offset[gl_InstanceIndex].x, data.offset[gl_InstanceIndex].y, data.offset[gl_InstanceIndex].z, 1.f
+	);
+	gl_Position = ubo.proj * ubo.view * ubo.model * translation * unitData.item[PushConstants.selectedBone].model * vec4(0.f, 0.f, 0.f, 1.0);
 }

@@ -135,4 +135,7 @@ private:
 	void ChangeBoneIndexInSphere();
 	int boneIDIndex;
 	glm::vec4 userInputBoneWeights;
+
+	bool proceedFrame;
+	bool runRealtime;
 };

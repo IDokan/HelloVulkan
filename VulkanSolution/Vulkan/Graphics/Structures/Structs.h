@@ -216,7 +216,7 @@ public:
 
 	~Physics();
 
-	void Initialize();
+	void Initialize(glm::mat4 parentToBoneFromUnitMatrix);
 	void UpdateByForce(float dt, glm::vec3 force);
 	void UpdateByForce(float dt, glm::vec3 force, glm::vec3 torque);
 public:

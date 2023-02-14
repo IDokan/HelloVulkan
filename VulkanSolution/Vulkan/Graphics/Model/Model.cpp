@@ -809,6 +809,12 @@ void Model::GetAnimationData(float t, std::vector<glm::mat4>& data, bool bindPos
 				glm::vec3 vertexPos = glm::vec3(vertexPos4.x, vertexPos4.y, vertexPos4.z);
 				data[i] = jb->customPhysicsTranslation * glm::translate(vertexPos) * jb->customPhysicsRotation * glm::translate(-vertexPos) * data[i];
 			}
+
+			if (int pID = animationSystem->GetBone(i)->parentID;
+				pID >= 0)
+			{
+				data[i] = data[i] * data[pID];
+			}
 		}
 
 		return;

@@ -185,7 +185,7 @@ struct Bone
 {
 public:
 	Bone();
-	Bone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4());
+	Bone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(1.f), glm::mat4 toModelFromBone = glm::mat4(1.f));
 	Bone(const Bone& b);
 	Bone(Bone&& b);
 	virtual void Update(float dt);
@@ -207,6 +207,7 @@ public:
 	static float GravityScaler;
 	static float SpringScaler;
 	static float DampingScaler;
+	static bool forceApplyFlag;
 public:
 	Physics();
 	Physics(const Physics& p);

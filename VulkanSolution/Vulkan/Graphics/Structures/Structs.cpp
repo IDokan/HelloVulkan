@@ -3,6 +3,7 @@
 float Physics::GravityScaler = 1.f;
 float Physics::SpringScaler = 1.f;
 float Physics::DampingScaler = 10.f;
+bool Physics::forceApplyFlag = false;
 
 Mesh::Mesh()
 	:meshName(), indices(), vertices(), uniqueVertices()
@@ -199,7 +200,7 @@ Animation& Animation::operator=(Animation&& m)
 }
 
 Bone::Bone()
-	: name(), parentID(-1), id(-1), toBoneFromUnit(), toModelFromBone()
+	: name(), parentID(-1), id(-1), toBoneFromUnit(glm::mat4(1.f)), toModelFromBone(glm::mat4(1.f))
 {
 }
 
@@ -490,10 +491,18 @@ void JiggleBone::Update(float dt)
 	// the reason why used (anchorPoint - anchorPoint), (x - y), x is the position where exerted on.
 	glm::vec3 torquePoint = (exertedPoint - anchorPoint) - physics.centerOfMass;
 	glm::vec3 torque = glm::cross(torquePoint, finalForce);
-	physics.UpdateByForce(dt, glm::vec3(0.f), torque);
+	if (Physics::forceApplyFlag)
+	{
+		physics.UpdateByForce(dt, glm::vec3(0.f), torque);
+	}
+	else
+	{
+		physics.UpdateByForce(dt, glm::vec3(0.f), glm::vec3(0.f));
+	}
+	//physics.UpdateByForce(dt, finalForce, glm::vec3(0.f));
 	// @@ End of physics calculation
-	std::cout << "Physics::CenterOfMass: " << physics.centerOfMass << std::endl;
-	std::cout << "Physics::Rotation: " << physics.rotation << std::endl;
+	std::cout << "Physics::Torque: " << torque << "\n";
+	//std::cout << "Physics::torquePoint: " << torquePoint << std::endl;
 	//// @@ TODO: Implement jiggle physics here
 	//toModelFromBone = 
 	//	glm::translate(modelUnitTranslation) * 
@@ -501,8 +510,8 @@ void JiggleBone::Update(float dt)
 	//	glm::translate(-modelUnitTranslation) * 
 	//	toModelFromBone;
 
-	customPhysicsTranslation = glm::translate(physics.translation);
-	customPhysicsRotation = physics.rotation;
+	customPhysicsTranslation = glm::translate(physics.translation) * customPhysicsTranslation;
+	customPhysicsRotation = glm::mat4(physics.rotation) * customPhysicsRotation;
 }
 
 JiggleBone& JiggleBone::operator=(const JiggleBone& jb)
@@ -547,6 +556,8 @@ void JiggleBone::SetIsUpdateJigglePhysics(bool isUpdate)
 
 	if (isUpdateJigglePhysics)
 	{
+		customPhysicsTranslation = glm::mat4(1.f);
+		customPhysicsRotation = glm::mat4(1.f);
 		physics.Initialize(parentBonePtr->toBoneFromUnit);
 	}
 }

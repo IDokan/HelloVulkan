@@ -664,6 +664,8 @@ void MyImGUI::Helper::Physics()
         {
             *proceedFrame = true;
         }
+
+        ImGui::Checkbox("Apply force flag", &Physics::forceApplyFlag);
     }
 }
 

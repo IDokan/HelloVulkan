@@ -35,12 +35,13 @@ Creation Date: 06.12.2021
 #include <Engines/Objects/HairBone.h>
 
 MyScene::MyScene(Window* window)
-	: windowHolder(window), model(nullptr), isUpdateAnimationTimer(true), animationTimer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f), applyingBone(false), flagChangeBoneIndexInSphere(false), boneIDIndex(0), proceedFrame(false), runRealtime(false)
+	: windowHolder(window), model(nullptr), isUpdateAnimationTimer(true), animationTimer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, -2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f), applyingBone(false), flagChangeBoneIndexInSphere(false), boneIDIndex(0), proceedFrame(false), runRealtime(false)
 {
 }
 
 bool MyScene::InitScene(Graphics* _graphics)
 {
+	//model = new Model("../Vulkan/Graphics/Model/models/uploads_files_3028480_SM_BeatingStick.fbx");
 	model = new Model("../Vulkan/Graphics/Model/models/Dancing.fbx");
 	model->SetAnimationIndex(0);
 	selectedMesh = model->GetMeshSize();
@@ -64,7 +65,7 @@ bool MyScene::InitScene(Graphics* _graphics)
 		graphicResources.push_back(new Buffer(graphics, std::string("uniqueVertex") + std::to_string(i), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex), model->GetUniqueVertexCount(i), model->GetUniqueVertexData(i)));
 	}
 	graphicResources.push_back(new Buffer(graphics, std::string("sphereVertex"), VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, sizeof(Vertex), sphereMesh->GetVertexCount(0), sphereMesh->GetVertexData(0)));
-	graphicResources.push_back(new Buffer(graphics, std::string("sphereIndex"), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, sizeof(uint32_t), model->GetIndexCount(0), model->GetIndexData(0)));
+	graphicResources.push_back(new Buffer(graphics, std::string("sphereIndex"), VK_BUFFER_USAGE_INDEX_BUFFER_BIT, sizeof(uint32_t), sphereMesh->GetIndexCount(0), sphereMesh->GetIndexData(0)));
 
 	graphicResources.push_back(new UniformBuffer(graphics, std::string("uniformBuffer"), sizeof(UniformBufferObject), Graphics::MAX_FRAMES_IN_FLIGHT));
 	graphicResources.push_back(new UniformBuffer(graphics, std::string("animationUniformBuffer"), sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT));
@@ -476,9 +477,9 @@ void MyScene::InitUniformBufferData()
 	uniformData.model = model->CalculateAdjustBoundingBoxMatrix();
 	uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 1.f, 0.f));
 	VkExtent2D swapchainExtent = graphics->GetSwapchainExtent();
-	uniformData.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 10.f);
+	uniformData.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 1000.f);
 	// flip the sign of the element because GLM originally designed for OpenGL, where Y coordinate of the clip coorinates is inverted.
-	uniformData.proj[1][1] *= -1;
+	//uniformData.proj[1][1] *= -1;
 }
 
 void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
@@ -500,7 +501,7 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 			glm::vec3 newX = glm::normalize(glm::cross(globalUp, view));
 			glm::vec3 newY = glm::cross(newX, view);
 
-			const glm::vec3 delta = (newX * mouseDelta.x + newY * mouseDelta.y) * 0.01f;
+			const glm::vec3 delta = (newX * mouseDelta.x + newY * mouseDelta.y) * 0.01f * mouseSensitivity;
 			targetPoint += delta;
 			cameraPoint += delta;
 
@@ -510,7 +511,7 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 		else if (input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_MIDDLE))
 		{
 			targetPoint = glm::vec3(0.f, 0.f, 0.f);
-			cameraPoint = glm::vec3(0.f, 0.f, 2.f);
+			cameraPoint = glm::vec3(0.f, 0.f, -2.f);
 		}
 
 		// Move mouse, rotate a model
@@ -543,12 +544,13 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 
 		// Zoom in & out
 		cameraPoint = cameraPoint + (static_cast<float>(input.MouseWheelScroll()) * (targetPoint - cameraPoint) * 0.1f);
+		// @@ TODO: Implement hand made matrices.
 		uniformData.view = glm::lookAt(cameraPoint, targetPoint, glm::vec3(0.f, 1.f, 0.f));
 
 		VkExtent2D swapchainExtent = graphics->GetSwapchainExtent();
-		uniformData.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 10.f);
+		uniformData.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 1000.f);
 		// flip the sign of the element because GLM originally designed for OpenGL, where Y coordinate of the clip coorinates is inverted.
-		uniformData.proj[1][1] *= -1;
+		//uniformData.proj[1][1] *= -1;
 	}
 
 	UniformBuffer* uniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("uniformBuffer"));
@@ -577,14 +579,14 @@ glm::vec3 MyScene::GetProjectionVectorFromCamera()
 	glm::vec4 mousePosition{ static_cast<float>(rawPosition.x) / (windowSize.x / 2.f), static_cast<float>(rawPosition.y) / (windowSize.y / 2.f), 0.f, 1.f };
 
 	// Flip temporarily to get top == positive y coordinate value
-	uniformData.proj[1][1] *= -1;
+	//uniformData.proj[1][1] *= -1;
 
 	glm::vec4 projectedPosition = glm::inverse(uniformData.view) * glm::inverse(uniformData.proj) * mousePosition;
 	projectedPosition /= projectedPosition.w;
 	glm::vec3 projectionVector{ projectedPosition.x - cameraPoint.x, projectedPosition.y - cameraPoint.y, projectedPosition.z - cameraPoint.z };
 
 	// Restore projection matrix
-	uniformData.proj[1][1] *= -1;
+	//uniformData.proj[1][1] *= -1;
 
 	return projectionVector;
 }

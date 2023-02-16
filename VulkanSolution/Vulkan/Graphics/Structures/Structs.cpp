@@ -1,8 +1,8 @@
 #include "Structs.h"
 
 float Physics::GravityScaler = 1.f;
-float Physics::SpringScaler = 1.f;
-float Physics::DampingScaler = 10.f;
+float Physics::SpringScaler = 5.f;
+float Physics::DampingScaler = 100.f;
 bool Physics::forceApplyFlag = false;
 
 Mesh::Mesh()
@@ -430,22 +430,22 @@ bool vec2Compare::operator()(const glm::vec2& lhs, const glm::vec2& rhs) const
 }
 
 JiggleBone::JiggleBone()
-	: Bone(), isUpdateJigglePhysics(false), modelUnitTranslation(glm::vec3(0.f)), customPhysicsTranslation(glm::mat4(0.f)), customPhysicsRotation(glm::mat4(0.f)), physics(), parentBonePtr(nullptr)
+	: Bone(), isUpdateJigglePhysics(false), customPhysicsTranslation(glm::mat4(0.f)), customPhysicsRotation(glm::mat4(0.f)), physics(), parentBonePtr(nullptr)
 {
 }
 
-JiggleBone::JiggleBone(std::string name, int parentID, int id, glm::mat4 toBoneFromModel, glm::mat4 toModelFromBone, glm::vec3 modelUnitTranslation, const Bone* parentBonePtr)
-	: Bone(name, parentID, id, toBoneFromModel, toModelFromBone), isUpdateJigglePhysics(false), modelUnitTranslation(modelUnitTranslation), customPhysicsTranslation(glm::identity<glm::mat4>()), customPhysicsRotation(glm::identity<glm::mat4>()), physics(), parentBonePtr(parentBonePtr)
+JiggleBone::JiggleBone(std::string name, int parentID, int id, glm::mat4 toBoneFromUnit, glm::mat4 toModelFromBone, const Bone* parentBonePtr)
+	: Bone(name, parentID, id, toBoneFromUnit, toModelFromBone), isUpdateJigglePhysics(false), customPhysicsTranslation(glm::identity<glm::mat4>()), customPhysicsRotation(glm::identity<glm::mat4>()), physics(), parentBonePtr(parentBonePtr)
 {
 }
 
 JiggleBone::JiggleBone(const JiggleBone& jb)
-	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), modelUnitTranslation(jb.modelUnitTranslation), customPhysicsTranslation(jb.customPhysicsTranslation), customPhysicsRotation(jb.customPhysicsRotation), physics(jb.physics), parentBonePtr(jb.parentBonePtr)
+	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), customPhysicsTranslation(jb.customPhysicsTranslation), customPhysicsRotation(jb.customPhysicsRotation), physics(jb.physics), parentBonePtr(jb.parentBonePtr)
 {
 }
 
 JiggleBone::JiggleBone(JiggleBone&& jb)
-	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), modelUnitTranslation(jb.modelUnitTranslation), customPhysicsTranslation(jb.customPhysicsTranslation), customPhysicsRotation(jb.customPhysicsRotation), physics(jb.physics), parentBonePtr(jb.parentBonePtr)
+	: Bone(jb), isUpdateJigglePhysics(jb.isUpdateJigglePhysics), customPhysicsTranslation(jb.customPhysicsTranslation), customPhysicsRotation(jb.customPhysicsRotation), physics(jb.physics), parentBonePtr(jb.parentBonePtr)
 {
 	
 }
@@ -461,57 +461,52 @@ void JiggleBone::Update(float dt)
 	glm::vec3 gravityForce= glm::vec3(0.f, -1.f, 0.f) * Physics::GravityScaler;
 	glm::vec3 force = glm::vec3(0.f);
 	
-	glm::vec4 bindPoseDifference = (parentBonePtr->toBoneFromUnit* glm::vec4(0.f, 0.f, 0.f, 1.f)) - (toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
+	glm::vec4 bindPoseDifference = (parentBonePtr->toBoneFromUnit* glm::vec4(0.f, 0.f, 0.f, 1.f));
 
-	glm::vec3 diffVector = glm::vec3(bindPoseDifference.x, bindPoseDifference.y, bindPoseDifference.z);
-	const float initialSpringLength = glm::length(diffVector);
+	glm::vec3 anchorPoint = glm::vec3(bindPoseDifference.x, bindPoseDifference.y, bindPoseDifference.z);
+	glm::vec4 exertedAnchorPoint4 = customPhysicsTranslation * glm::translate(anchorPoint) * customPhysicsRotation * glm::translate(-anchorPoint) * parentBonePtr->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
+	glm::vec3 exertedAnchorPoint = glm::vec3(exertedAnchorPoint4.x, exertedAnchorPoint4.y, exertedAnchorPoint4.z);
 
-	diffVector += physics.translation;
-
-	glm::vec3 parentVelocity = glm::vec3(0.f);
-	if (const JiggleBone* parentJb = dynamic_cast<const JiggleBone*>(parentBonePtr);
-		parentJb != nullptr)
-	{
-		diffVector -= parentJb->physics.translation;
-		parentVelocity = parentJb->physics.linearVelocity;
-	}
-	float diffLength = glm::length(diffVector);
-	diffVector = glm::normalize(diffVector);
+	// @@TODO: Implement If parent bone is not anchor?, (In other words, it is also a stick of spring-mass-damper system?)
+	// Skip for right now because we are doing making sure it works in simple situation
+	//glm::vec3 parentVelocity = glm::vec3(0.f);
+	//if (const JiggleBone* parentJb = dynamic_cast<const JiggleBone*>(parentBonePtr);
+	//	parentJb != nullptr)
+	//{
+	//	diffVector -= parentJb->physics.translation;
+	//	parentVelocity = parentJb->physics.linearVelocity;
+	//}
 
 	// spring force
-	glm::vec3 springForce = Physics::SpringScaler * diffVector * (initialSpringLength - diffLength);
-	glm::vec3 dampingForce = Physics::DampingScaler * (parentVelocity - physics.linearVelocity);
+	glm::vec3 springForce = Physics::SpringScaler * (anchorPoint - exertedAnchorPoint);
+	glm::vec3 dampingForce = Physics::DampingScaler * (glm::vec3(0.f) - physics.linearVelocity);
 
-	glm::vec3 finalForce = gravityForce;
+	glm::vec3 finalForce = gravityForce + springForce + dampingForce;
 
-	glm::vec4 tmp = parentBonePtr->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
-	glm::vec3 anchorPoint = glm::vec3(tmp.x, tmp.y, tmp.z);
 	glm::vec4 exertedPoint4 = customPhysicsTranslation * glm::translate(anchorPoint) * customPhysicsRotation * glm::translate(-anchorPoint) * toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
 	glm::vec3 exertedPoint = glm::vec3(exertedPoint4.x, exertedPoint4.y, exertedPoint4.z);
+	glm::vec4 bSideAnchor4 = toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
+	glm::vec3 bSideAnchor = glm::vec3(bSideAnchor4.x, bSideAnchor4.y, bSideAnchor4.z);
+	glm::vec3 bSideSpring = bSideAnchor + (glm::vec3(0.f, 0.f, 0.f));
+	glm::vec3 bSpringForce = Physics::SpringScaler * (bSideSpring- exertedPoint);
+	//finalForce += bSpringForce + dampingForce;
+
 	// the reason why used (anchorPoint - anchorPoint), (x - y), x is the position where exerted on.
-	glm::vec3 torquePoint = (exertedPoint - anchorPoint) - physics.centerOfMass;
-	glm::vec3 torque = glm::cross(torquePoint, finalForce);
+	glm::vec3 torquePoint = (exertedPoint - anchorPoint) - physics.centerOfMass;	// bSide
+	glm::vec3 torquePoint2 = (exertedAnchorPoint - anchorPoint) - physics.centerOfMass;	// aSide
+	glm::vec3 torque = glm::cross(torquePoint, (0.5f * gravityForce) /* + bSpringForce + dampingForce*/);
+	glm::vec3 torque2 = glm::cross(torquePoint2, (0.5f * gravityForce) + springForce + dampingForce);
 	if (Physics::forceApplyFlag)
 	{
-		physics.UpdateByForce(dt, glm::vec3(0.f), torque);
+		physics.UpdateByForce(dt, finalForce, torque + torque2);
 	}
 	else
 	{
 		physics.UpdateByForce(dt, glm::vec3(0.f), glm::vec3(0.f));
 	}
-	//physics.UpdateByForce(dt, finalForce, glm::vec3(0.f));
-	// @@ End of physics calculation
-	std::cout << "Physics::Torque: " << torque << "\n";
-	//std::cout << "Physics::torquePoint: " << torquePoint << std::endl;
-	//// @@ TODO: Implement jiggle physics here
-	//toModelFromBone = 
-	//	glm::translate(modelUnitTranslation) * 
-	//	glm::rotate(glm::half_pi<float>() / 3.f * dt, glm::vec3(1.f, 0.f, 0.f)) * 
-	//	glm::translate(-modelUnitTranslation) * 
-	//	toModelFromBone;
 
-	customPhysicsTranslation = glm::translate(physics.translation) * customPhysicsTranslation;
-	customPhysicsRotation = glm::mat4(physics.rotation) * customPhysicsRotation;
+	customPhysicsTranslation = glm::translate(physics.translation);
+	customPhysicsRotation = glm::mat4(physics.rotation);
 }
 
 JiggleBone& JiggleBone::operator=(const JiggleBone& jb)
@@ -522,7 +517,6 @@ JiggleBone& JiggleBone::operator=(const JiggleBone& jb)
 	toBoneFromUnit = jb.toBoneFromUnit;
 	toModelFromBone = jb.toModelFromBone;
 	isUpdateJigglePhysics = jb.isUpdateJigglePhysics;
-	modelUnitTranslation = jb.modelUnitTranslation;
 	customPhysicsTranslation = jb.customPhysicsTranslation;
 	customPhysicsRotation = jb.customPhysicsRotation;
 	physics = jb.physics;
@@ -538,7 +532,6 @@ JiggleBone& JiggleBone::operator=(JiggleBone&& jb)
 	toBoneFromUnit = jb.toBoneFromUnit;
 	toModelFromBone = jb.toModelFromBone;
 	isUpdateJigglePhysics = jb.isUpdateJigglePhysics;
-	modelUnitTranslation = jb.modelUnitTranslation;
 	customPhysicsTranslation = jb.customPhysicsTranslation;
 	customPhysicsRotation = jb.customPhysicsRotation;
 	physics = jb.physics;
@@ -569,23 +562,24 @@ void JiggleBone::AddVertices(const std::vector<glm::vec3>& _vertices)
 }
 
 Physics::Physics()
-	:centerOfMass(), translation(), linearMomentum(), linearVelocity(), force(), rotation(), angularMomentum(), inertiaTensorInverse(), inertiaTensorObj(), torque(), totalMass(), vertices()
+	:centerOfMass(), initCenterOfMass(), translation(), linearMomentum(), linearVelocity(), force(), rotation(), angularMomentum(), inertiaTensorInverse(), inertiaTensorObj(), torque(), totalMass(), vertices()
 {
 }
 
 Physics::Physics(const Physics& p)
-	:centerOfMass(p.centerOfMass), translation(p.translation), linearMomentum(p.linearMomentum), linearVelocity(p.linearVelocity), force(p.force), rotation(p.rotation), angularMomentum(p.angularMomentum), inertiaTensorInverse(p.inertiaTensorInverse), inertiaTensorObj(p.inertiaTensorObj), torque(p.torque), totalMass(p.totalMass), vertices(p.vertices)
+	:centerOfMass(p.centerOfMass), initCenterOfMass(p.initCenterOfMass), translation(p.translation), linearMomentum(p.linearMomentum), linearVelocity(p.linearVelocity), force(p.force), rotation(p.rotation), angularMomentum(p.angularMomentum), inertiaTensorInverse(p.inertiaTensorInverse), inertiaTensorObj(p.inertiaTensorObj), torque(p.torque), totalMass(p.totalMass), vertices(p.vertices)
 {
 }
 
 Physics::Physics(Physics&& p)
-	: centerOfMass(p.centerOfMass), translation(p.translation), linearMomentum(p.linearMomentum), linearVelocity(p.linearVelocity), force(p.force), rotation(p.rotation), angularMomentum(p.angularMomentum), inertiaTensorInverse(p.inertiaTensorInverse), inertiaTensorObj(p.inertiaTensorObj), torque(p.torque), totalMass(p.totalMass), vertices(p.vertices)
+	: centerOfMass(p.centerOfMass), initCenterOfMass(p.initCenterOfMass), translation(p.translation), linearMomentum(p.linearMomentum), linearVelocity(p.linearVelocity), force(p.force), rotation(p.rotation), angularMomentum(p.angularMomentum), inertiaTensorInverse(p.inertiaTensorInverse), inertiaTensorObj(p.inertiaTensorObj), torque(p.torque), totalMass(p.totalMass), vertices(p.vertices)
 {
 }
 
 Physics& Physics::operator=(const Physics& p)
 {
 	centerOfMass = p.centerOfMass;
+	initCenterOfMass = p.initCenterOfMass;
 	translation = p.translation;
 	linearMomentum = p.linearMomentum;
 	linearVelocity = p.linearVelocity;
@@ -607,6 +601,7 @@ Physics& Physics::operator=(const Physics& p)
 Physics& Physics::operator=(Physics&& p)
 {
 	centerOfMass = p.centerOfMass;
+	initCenterOfMass = p.initCenterOfMass;
 	translation = p.translation;
 	linearMomentum = p.linearMomentum;
 	linearVelocity = p.linearVelocity;
@@ -646,6 +641,7 @@ void Physics::Initialize(glm::mat4 parentToBoneFromUnitMatrix)
 	{
 		centerOfMass /= vertices.size();
 	}
+	initCenterOfMass = centerOfMass;
 
 	// Calculate inertiaTensor
 	rotation = glm::mat4(1.f);
@@ -692,7 +688,7 @@ void Physics::UpdateByForce(float dt, glm::vec3 _force)
 	linearMomentum += dt * force;
 	linearVelocity = linearMomentum / totalMass;
 	translation += dt * linearVelocity;
-	centerOfMass = centerOfMass + translation;
+	centerOfMass = initCenterOfMass + translation;
 }
 
 void Physics::UpdateByForce(float dt, glm::vec3 _force, glm::vec3 _torque)
@@ -706,31 +702,7 @@ void Physics::UpdateByForce(float dt, glm::vec3 _force, glm::vec3 _torque)
 	translation += dt * linearVelocity;
 	rotation += dt * (Tilde(angularVelocity) * rotation);
 
-	// Update inertia tensor
-	glm::mat3 newInertiaTensorObj(0.f);
-	centerOfMass = rotation * centerOfMass + translation;
-	const size_t vertexSize = vertices.size();
-	for (size_t i = 0; i < vertexSize; ++i)
-	{
-		glm::vec3& vertex = vertices[i];
-
-		vertex = rotation * vertex + translation;
-
-		glm::vec3 ri = vertex - centerOfMass;
-
-		inertiaTensorObj[0][0] += (ri.y * ri.y + ri.z * ri.z) / vertices.size();
-		inertiaTensorObj[1][1] += (ri.x * ri.x + ri.z * ri.z) / vertices.size();
-		inertiaTensorObj[2][2] += (ri.x * ri.x + ri.y * ri.y) / vertices.size();
-
-		inertiaTensorObj[0][1] -= (ri.x * ri.y) / vertices.size();
-
-		inertiaTensorObj[0][2] -= (ri.x * ri.z) / vertices.size();
-
-		inertiaTensorObj[1][2] -= (ri.y * ri.z) / vertices.size();
-	}
-	inertiaTensorObj[1][0] = inertiaTensorObj[0][1];
-	inertiaTensorObj[2][0] = inertiaTensorObj[0][2];
-	inertiaTensorObj[2][1] = inertiaTensorObj[1][2];
+	centerOfMass = rotation * initCenterOfMass + translation;
 
 	if (!vertices.empty())
 	{
@@ -742,12 +714,12 @@ glm::mat3 Physics::Tilde(glm::vec3 v)
 {
 	glm::mat3 result(0.f);
 
-	result[0][1] = -v.z;
-	result[0][2] = v.y;
-	result[1][0] = v.z;
-	result[1][2] = -v.x;
-	result[2][0] = -v.y;
-	result[2][1] = v.x;
+	result[1][0] = -v.z;
+	result[2][0] = v.y;
+	result[0][1] = v.z;
+	result[2][1] = -v.x;
+	result[0][2] = -v.y;
+	result[1][2] = v.x;
 
 	return result;
 }

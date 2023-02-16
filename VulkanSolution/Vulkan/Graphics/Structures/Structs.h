@@ -222,6 +222,7 @@ public:
 	void UpdateByForce(float dt, glm::vec3 force, glm::vec3 torque);
 public:
 	glm::vec3 centerOfMass;
+	glm::vec3 initCenterOfMass;
 	// Linear forces
 	glm::vec3 translation;
 	glm::vec3 linearMomentum;
@@ -249,7 +250,7 @@ struct JiggleBone : public Bone
 {
 public:
 	JiggleBone();
-	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4(), glm::vec3 modelUnitTranslation = glm::vec3(), const Bone* parentBonePtr = nullptr);
+	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromUnit = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4(), const Bone* parentBonePtr = nullptr);
 	JiggleBone(const JiggleBone& jb);
 	JiggleBone(JiggleBone&& jb);
 	virtual void Update(float dt);
@@ -262,9 +263,6 @@ public:
 	void AddVertices(const std::vector<glm::vec3>& vertices);
 
 	bool isUpdateJigglePhysics;
-	// this is the translation that difference from the parent bone.
-	// In order to apply TRS appropriately, add and substitute the diff.
-	glm::vec3 modelUnitTranslation;
 
 	glm::mat4 customPhysicsTranslation;
 	glm::mat4 customPhysicsRotation;

@@ -656,7 +656,7 @@ void MyImGUI::Helper::Physics()
     {
         ImGui::SliderFloat("Gravity Scaler", &Physics::GravityScaler, 1.f, 100.f);
         ImGui::SliderFloat("Spring Scaler", &Physics::SpringScaler, 1.f, 100.f);
-        ImGui::SliderFloat("Damping Scaler", &Physics::DampingScaler, 1.f, 100.f);
+        ImGui::SliderFloat("Damping Scaler", &Physics::DampingScaler, 1.f, 500.f);
 
         ImGui::Separator();
         ImGui::Checkbox("Run realtime", runRealtime);

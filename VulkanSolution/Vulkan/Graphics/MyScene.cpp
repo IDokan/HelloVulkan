@@ -35,7 +35,7 @@ Creation Date: 06.12.2021
 #include <Engines/Objects/HairBone.h>
 
 MyScene::MyScene(Window* window)
-	: windowHolder(window), model(nullptr), isUpdateAnimationTimer(true), animationTimer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, -2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f), applyingBone(false), flagChangeBoneIndexInSphere(false), boneIDIndex(0), proceedFrame(false), runRealtime(false)
+	: windowHolder(window), model(nullptr), isUpdateAnimationTimer(true), animationTimer(0.f), rightMouseCenter(glm::vec3(0.f, 0.f, 0.f)), cameraPoint(glm::vec3(0.f, 0.f, 2.f)), targetPoint(glm::vec3(0.f)), bindPoseFlag(false), showSkeletonFlag(true), blendingWeightMode(false), showModel(true), vertexPointsMode(false), pointSize(5.f), selectedMesh(0), mouseSensitivity(1.f), applyingBone(false), flagChangeBoneIndexInSphere(false), boneIDIndex(0), proceedFrame(false), runRealtime(false)
 {
 }
 
@@ -479,7 +479,7 @@ void MyScene::InitUniformBufferData()
 	VkExtent2D swapchainExtent = graphics->GetSwapchainExtent();
 	uniformData.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 1000.f);
 	// flip the sign of the element because GLM originally designed for OpenGL, where Y coordinate of the clip coorinates is inverted.
-	//uniformData.proj[1][1] *= -1;
+	uniformData.proj[1][1] *= -1;
 }
 
 void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
@@ -550,7 +550,7 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 		VkExtent2D swapchainExtent = graphics->GetSwapchainExtent();
 		uniformData.proj = glm::perspective(glm::radians(45.f), swapchainExtent.width / static_cast<float>(swapchainExtent.height), 0.1f, 1000.f);
 		// flip the sign of the element because GLM originally designed for OpenGL, where Y coordinate of the clip coorinates is inverted.
-		//uniformData.proj[1][1] *= -1;
+		uniformData.proj[1][1] *= -1;
 	}
 
 	UniformBuffer* uniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("uniformBuffer"));
@@ -579,14 +579,14 @@ glm::vec3 MyScene::GetProjectionVectorFromCamera()
 	glm::vec4 mousePosition{ static_cast<float>(rawPosition.x) / (windowSize.x / 2.f), static_cast<float>(rawPosition.y) / (windowSize.y / 2.f), 0.f, 1.f };
 
 	// Flip temporarily to get top == positive y coordinate value
-	//uniformData.proj[1][1] *= -1;
+	uniformData.proj[1][1] *= -1;
 
 	glm::vec4 projectedPosition = glm::inverse(uniformData.view) * glm::inverse(uniformData.proj) * mousePosition;
 	projectedPosition /= projectedPosition.w;
 	glm::vec3 projectionVector{ projectedPosition.x - cameraPoint.x, projectedPosition.y - cameraPoint.y, projectedPosition.z - cameraPoint.z };
 
 	// Restore projection matrix
-	//uniformData.proj[1][1] *= -1;
+	uniformData.proj[1][1] *= -1;
 
 	return projectionVector;
 }
@@ -767,15 +767,9 @@ void MyScene::ModifyBone()
 	
 	glm::vec4 trans4 = hairBone0->GetBoneData(0);
 	glm::vec3 trans = glm::vec3(trans4.x, trans4.y, trans4.z);
-	glm::vec3 parentTrans = glm::vec3(0.f);
-	if (const JiggleBone* jbPtr = dynamic_cast<const JiggleBone*>(parentBone);
-		jbPtr != nullptr)
-	{
-		parentTrans = jbPtr->modelUnitTranslation;
-	}
 
 	JiggleBone* newBone = new JiggleBone(std::string(newBoneName) + std::to_string(newBoneIndex++), selectedBone, model->GetBoneCount(), 
-		glm::translate(glm::vec3(trans)) * parentBone->toBoneFromUnit, parentBone->toModelFromBone, parentTrans + trans, parentBone);
+		glm::translate(glm::vec3(trans)) * parentBone->toBoneFromUnit, parentBone->toModelFromBone, parentBone);
 	model->AddBone(newBone);
 
 	MyImGUI::UpdateBoneNameList();

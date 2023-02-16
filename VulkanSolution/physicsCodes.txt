@@ -1,0 +1,29 @@
+- Stick between two springs
+```
+	glm::vec3 springForce = Physics::SpringScaler * (anchorPoint - exertedAnchorPoint);
+	glm::vec3 dampingForce = Physics::DampingScaler * (glm::vec3(0.f) - physics.linearVelocity);
+
+	glm::vec3 finalForce = gravityForce + springForce + dampingForce;
+
+	glm::vec4 exertedPoint4 = customPhysicsTranslation * glm::translate(anchorPoint) * customPhysicsRotation * glm::translate(-anchorPoint) * toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
+	glm::vec3 exertedPoint = glm::vec3(exertedPoint4.x, exertedPoint4.y, exertedPoint4.z);
+	glm::vec4 bSideAnchor4 = toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
+	glm::vec3 bSideAnchor = glm::vec3(bSideAnchor4.x, bSideAnchor4.y, bSideAnchor4.z);
+	glm::vec3 bSideSpring = bSideAnchor + (glm::vec3(0.f, 0.f, 0.f));
+	glm::vec3 bSpringForce = Physics::SpringScaler * (bSideSpring- exertedPoint);
+	finalForce += bSpringForce + dampingForce;
+
+	// the reason why used (anchorPoint - anchorPoint), (x - y), x is the position where exerted on.
+	glm::vec3 torquePoint = (exertedPoint - anchorPoint) - physics.centerOfMass;	// bSide
+	glm::vec3 torquePoint2 = (exertedAnchorPoint - anchorPoint) - physics.centerOfMass;	// aSide
+	glm::vec3 torque = glm::cross(torquePoint, (0.5f * gravityForce) + bSpringForce + dampingForce);
+	glm::vec3 torque2 = glm::cross(torquePoint2, (0.5f * gravityForce) + springForce + dampingForce);
+	if (Physics::forceApplyFlag)
+	{
+		physics.UpdateByForce(dt, finalForce, torque + torque2);
+	}
+	else
+	{
+		physics.UpdateByForce(dt, glm::vec3(0.f), glm::vec3(0.f));
+	}
+```

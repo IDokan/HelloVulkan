@@ -772,6 +772,13 @@ void MyScene::ModifyBone()
 		glm::translate(glm::vec3(trans)) * parentBone->toBoneFromUnit, parentBone->toModelFromBone, parentBone);
 	model->AddBone(newBone);
 
+	if (const JiggleBone* parentJB = dynamic_cast<const JiggleBone*>(parentBone);
+		parentJB != nullptr)
+	{
+		JiggleBone* jb = const_cast<JiggleBone*>(parentJB);
+		jb->SetChildBonePtr(newBone);
+	}
+
 	MyImGUI::UpdateBoneNameList();
 
 	graphics->DeviceWaitIdle();

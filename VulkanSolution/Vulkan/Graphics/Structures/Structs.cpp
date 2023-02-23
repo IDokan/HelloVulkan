@@ -57,17 +57,25 @@ void Skeleton::Update(float dt)
 	// Iterate bones but usually useful bones are at the tails.
 	// It might be bad.
 		// Probabily use reversed iterator for better performance.
-	for (auto it = bones.rbegin(); it != bones.rend(); it++)
+
+	std::vector<JiggleBone*> jiggleBones;
+	jiggleBones.reserve(boneSize);
+
+	for (auto it = bones.begin(); it != bones.end(); it++)
 	{
 		Bone* ptr = (*it);
 
 		if (JiggleBone* jbPtr = dynamic_cast<JiggleBone*>(ptr);
-			jbPtr == nullptr)
+			jbPtr != nullptr)
 		{
-			break;
+			ptr->Update(dt);
+			jiggleBones.push_back(jbPtr);
 		}
+	}
 
-		ptr->Update(dt);
+	for (auto it = jiggleBones.begin(); it != jiggleBones.end(); it++)
+	{
+		(*it)->UpdatePhysicsTransformations();
 	}
 }
 
@@ -434,8 +442,8 @@ JiggleBone::JiggleBone()
 {
 }
 
-JiggleBone::JiggleBone(std::string name, int parentID, int id, glm::mat4 toBoneFromUnit, glm::mat4 toModelFromBone, const Bone* parentBonePtr)
-	: Bone(name, parentID, id, toBoneFromUnit, toModelFromBone), isUpdateJigglePhysics(false), customPhysicsTranslation(glm::identity<glm::mat4>()), customPhysicsRotation(glm::identity<glm::mat4>()), physics(), parentBonePtr(parentBonePtr)
+JiggleBone::JiggleBone(std::string name, int parentID, int id, glm::mat4 toBoneFromUnit, glm::mat4 toModelFromBone, const Bone* parentBonePtr, const JiggleBone* childBonePtr)
+	: Bone(name, parentID, id, toBoneFromUnit, toModelFromBone), isUpdateJigglePhysics(false), customPhysicsTranslation(glm::identity<glm::mat4>()), customPhysicsRotation(glm::identity<glm::mat4>()), physics(), parentBonePtr(parentBonePtr), childBonePtr(childBonePtr)
 {
 }
 
@@ -459,43 +467,44 @@ void JiggleBone::Update(float dt)
 
 	// @@ Begin of Physics calculation
 	glm::vec3 gravityForce= glm::vec3(0.f, -1.f, 0.f) * Physics::GravityScaler;
-	glm::vec3 force = glm::vec3(0.f);
-	
-	glm::vec4 bindPoseDifference = (parentBonePtr->toBoneFromUnit* glm::vec4(0.f, 0.f, 0.f, 1.f));
-
-	glm::vec3 anchorPoint = glm::vec3(bindPoseDifference.x, bindPoseDifference.y, bindPoseDifference.z);
-	glm::vec4 exertedAnchorPoint4 = customPhysicsTranslation * glm::translate(anchorPoint) * customPhysicsRotation * glm::translate(-anchorPoint) * parentBonePtr->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
-	glm::vec3 exertedAnchorPoint = glm::vec3(exertedAnchorPoint4.x, exertedAnchorPoint4.y, exertedAnchorPoint4.z);
 
 	// @@TODO: Implement If parent bone is not anchor?, (In other words, it is also a stick of spring-mass-damper system?)
-	// Skip for right now because we are doing making sure it works in simple situation
-	//glm::vec3 parentVelocity = glm::vec3(0.f);
-	//if (const JiggleBone* parentJb = dynamic_cast<const JiggleBone*>(parentBonePtr);
-	//	parentJb != nullptr)
-	//{
-	//	diffVector -= parentJb->physics.translation;
-	//	parentVelocity = parentJb->physics.linearVelocity;
-	//}
+			// @@ TODO: Final bug to accomplish the above goal, Adjust physics.centerOfMass!!!!!,,, current system does not modify centerofmass of multiple links
 
+	glm::vec3 anchorPoint = GetInitialPointA();
+	glm::vec3 exertedAnchorPoint = GetDynamicPointA();
+	glm::vec3 exertedPoint = GetDynamicPointB();
+
+	glm::vec3 parentEndStickPoint(anchorPoint);
+	glm::vec3 parentPhysicsLinearVelocity = glm::vec3(0.f);
+	if (const JiggleBone* parentJiggleBone = dynamic_cast<const JiggleBone*>(parentBonePtr);
+		parentJiggleBone != nullptr)
+	{
+		parentEndStickPoint = parentJiggleBone->GetDynamicPointB();
+		parentPhysicsLinearVelocity = parentJiggleBone->physics.linearVelocity;
+	}
+	
 	// spring force
-	glm::vec3 springForce = Physics::SpringScaler * (anchorPoint - exertedAnchorPoint);
-	glm::vec3 dampingForce = Physics::DampingScaler * (glm::vec3(0.f) - physics.linearVelocity);
+	glm::vec3 springForce = Physics::SpringScaler * (parentEndStickPoint - exertedAnchorPoint);
+	glm::vec3 dampingForce = Physics::DampingScaler * (parentPhysicsLinearVelocity - physics.linearVelocity);
 
-	glm::vec3 finalForce = gravityForce + springForce + dampingForce;
+	glm::vec3 forceA = springForce + dampingForce + (0.5f * gravityForce);
+	glm::vec3 forceB = (0.5f * gravityForce);
 
-	glm::vec4 exertedPoint4 = customPhysicsTranslation * glm::translate(anchorPoint) * customPhysicsRotation * glm::translate(-anchorPoint) * toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
-	glm::vec3 exertedPoint = glm::vec3(exertedPoint4.x, exertedPoint4.y, exertedPoint4.z);
-	glm::vec4 bSideAnchor4 = toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
-	glm::vec3 bSideAnchor = glm::vec3(bSideAnchor4.x, bSideAnchor4.y, bSideAnchor4.z);
-	glm::vec3 bSideSpring = bSideAnchor + (glm::vec3(0.f, 0.f, 0.f));
-	glm::vec3 bSpringForce = Physics::SpringScaler * (bSideSpring- exertedPoint);
-	//finalForce += bSpringForce + dampingForce;
+	if (childBonePtr != nullptr)
+	{
+		glm::vec3 springForceB = Physics::SpringScaler * (childBonePtr->GetDynamicPointA() - exertedPoint);
+		glm::vec3 dampingForceB = Physics::DampingScaler * (childBonePtr->physics.linearVelocity - physics.linearVelocity);
+		forceB += dampingForceB;
+	}
+
+	glm::vec3 finalForce = forceA + forceB;
 
 	// the reason why used (anchorPoint - anchorPoint), (x - y), x is the position where exerted on.
-	glm::vec3 torquePoint = (exertedPoint - anchorPoint) - physics.centerOfMass;	// bSide
-	glm::vec3 torquePoint2 = (exertedAnchorPoint - anchorPoint) - physics.centerOfMass;	// aSide
-	glm::vec3 torque = glm::cross(torquePoint, (0.5f * gravityForce) /* + bSpringForce + dampingForce*/);
-	glm::vec3 torque2 = glm::cross(torquePoint2, (0.5f * gravityForce) + springForce + dampingForce);
+	glm::vec3 torquePoint = (exertedPoint) - physics.centerOfMass;	// bSide
+	glm::vec3 torquePoint2 = (exertedAnchorPoint) - physics.centerOfMass;	// aSide
+	glm::vec3 torque = glm::cross(torquePoint, forceB);
+	glm::vec3 torque2 = glm::cross(torquePoint2, forceA);
 	if (Physics::forceApplyFlag)
 	{
 		physics.UpdateByForce(dt, finalForce, torque + torque2);
@@ -504,9 +513,6 @@ void JiggleBone::Update(float dt)
 	{
 		physics.UpdateByForce(dt, glm::vec3(0.f), glm::vec3(0.f));
 	}
-
-	customPhysicsTranslation = glm::translate(physics.translation);
-	customPhysicsRotation = glm::mat4(physics.rotation);
 }
 
 JiggleBone& JiggleBone::operator=(const JiggleBone& jb)
@@ -551,7 +557,7 @@ void JiggleBone::SetIsUpdateJigglePhysics(bool isUpdate)
 	{
 		customPhysicsTranslation = glm::mat4(1.f);
 		customPhysicsRotation = glm::mat4(1.f);
-		physics.Initialize(parentBonePtr->toBoneFromUnit);
+		physics.Initialize();
 	}
 }
 
@@ -559,6 +565,60 @@ void JiggleBone::AddVertices(const std::vector<glm::vec3>& _vertices)
 {
 	physics.initVertices = _vertices;
 	physics.vertices = _vertices;
+}
+
+void JiggleBone::UpdatePhysicsTransformations()
+{
+	customPhysicsTranslation = glm::translate(physics.translation);
+	customPhysicsRotation = glm::mat4(physics.rotation);
+}
+
+void JiggleBone::SetChildBonePtr(const JiggleBone* _childBonePtr)
+{
+	childBonePtr = _childBonePtr;
+}
+
+glm::vec3 JiggleBone::GetInitialPointA() const
+{
+	glm::vec4 bindPoseDifference = (parentBonePtr->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
+	glm::vec3 anchorPoint = glm::vec3(bindPoseDifference.x, bindPoseDifference.y, bindPoseDifference.z);
+
+	return anchorPoint;
+}
+
+glm::vec3 JiggleBone::GetDynamicPointA() const
+{
+	glm::vec4 initPointA = (parentBonePtr->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
+	
+	glm::vec4 result4 = CalculateParentTransformationRecursively(this, initPointA);
+
+	return glm::vec3(result4.x, result4.y, result4.z);
+}
+
+glm::vec3 JiggleBone::GetDynamicPointB() const
+{
+	glm::vec4 initPointA = (toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
+
+	glm::vec4 result4 = CalculateParentTransformationRecursively(this, initPointA);
+
+	return glm::vec3(result4.x, result4.y, result4.z);
+}
+
+glm::vec4 JiggleBone::CalculateParentTransformationRecursively(const JiggleBone* jb, glm::vec4 firstGlobalPosition) const
+{
+	if (jb == nullptr)
+	{
+		return firstGlobalPosition;
+	}
+
+	const JiggleBone* parentJiggleBonePtr = dynamic_cast<const JiggleBone*>(jb->parentBonePtr);
+	glm::vec4 result = CalculateParentTransformationRecursively(parentJiggleBonePtr, firstGlobalPosition);
+
+	glm::vec4 bindPoseDifference = (jb->parentBonePtr->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
+	glm::vec3 anchorPoint = glm::vec3(bindPoseDifference.x, bindPoseDifference.y, bindPoseDifference.z);
+	glm::vec4 dynamicEndResult = jb->customPhysicsTranslation * glm::translate(anchorPoint) * jb->customPhysicsRotation * glm::translate(-anchorPoint) * result;
+
+	return dynamicEndResult;
 }
 
 Physics::Physics()
@@ -624,15 +684,12 @@ Physics::~Physics()
 {
 }
 
-void Physics::Initialize(glm::mat4 parentToBoneFromUnitMatrix)
+void Physics::Initialize()
 {
 	centerOfMass = glm::vec3(0.f, 0.f, 0.f);
 	vertices = initVertices;
-	glm::vec4 anchorPoint4 = parentToBoneFromUnitMatrix * glm::vec4(0.f, 0.f, 0.f, 1.f);
-	glm::vec3 anchorPoint = glm::vec3(anchorPoint4.x, anchorPoint4.y, anchorPoint4.z);
 	for (glm::vec3& vertex : vertices)
 	{
-		vertex = vertex - anchorPoint;
 		centerOfMass += vertex;
 	}
 

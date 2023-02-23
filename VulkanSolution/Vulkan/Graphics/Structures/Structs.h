@@ -217,7 +217,7 @@ public:
 
 	~Physics();
 
-	void Initialize(glm::mat4 parentToBoneFromUnitMatrix);
+	void Initialize();
 	void UpdateByForce(float dt, glm::vec3 force);
 	void UpdateByForce(float dt, glm::vec3 force, glm::vec3 torque);
 public:
@@ -250,13 +250,24 @@ struct JiggleBone : public Bone
 {
 public:
 	JiggleBone();
-	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromUnit = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4(), const Bone* parentBonePtr = nullptr);
+	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromUnit = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4(), const Bone* parentBonePtr = nullptr, const JiggleBone* childBonePtr = nullptr);
 	JiggleBone(const JiggleBone& jb);
 	JiggleBone(JiggleBone&& jb);
 	virtual void Update(float dt);
+
+	void UpdatePhysicsTransformations();
+
 	JiggleBone& operator=(const JiggleBone& jb);
 	JiggleBone& operator=(JiggleBone&& jb);
 	virtual ~JiggleBone();
+
+	glm::vec3 GetInitialPointA() const;
+	glm::vec3 GetDynamicPointA() const;
+	glm::vec3 GetDynamicPointB() const;
+
+	glm::vec4 CalculateParentTransformationRecursively(const JiggleBone* jb, glm::vec4 firstGlobalPosition) const;
+
+	void SetChildBonePtr(const JiggleBone* childBonePtr);
 
 	void SetIsUpdateJigglePhysics(bool isUpdate);
 
@@ -269,6 +280,7 @@ public:
 
 	Physics physics;
 	const Bone* parentBonePtr;
+	const JiggleBone* childBonePtr;
 };
 
 class Skeleton

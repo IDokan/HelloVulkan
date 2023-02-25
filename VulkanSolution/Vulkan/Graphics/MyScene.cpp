@@ -856,7 +856,7 @@ void MyScene::ChangeBoneIndexInSphere()
 	{
 		JiggleBone* jb = const_cast<JiggleBone*>(cjb);
 		jb->AddVertices(changedVertices);
-		jb->physics.Initialize(jb->parentBonePtr->toBoneFromUnit);
+		jb->physics.Initialize();
 	}
 
 	// Update buffer data

@@ -222,11 +222,13 @@ public:
 	void UpdateByForce(float dt, glm::vec3 force, glm::vec3 torque);
 public:
 	glm::vec3 centerOfMass;
+	glm::vec3 pastCOM;
 	glm::vec3 initCenterOfMass;
 	// Linear forces
 	glm::vec3 translation;
 	glm::vec3 linearMomentum;
 	glm::vec3 linearVelocity;
+	glm::vec3 pastVelocity;
 	glm::vec3 force;
 
 	// Angular forces

@@ -35,9 +35,9 @@ void AnimationSystem::ImportSkeleton(FbxNode* node, FbxNode* parentNode)
 	}
 }
 
-void AnimationSystem::Update(float dt)
+void AnimationSystem::Update(float dt, glm::mat4 modelMatrix)
 {
-	skeleton.Update(dt);
+	skeleton.Update(dt, modelMatrix);
 }
 
 void AnimationSystem::Clear()
@@ -49,6 +49,11 @@ void AnimationSystem::Clear()
 
 	boneVertexID.clear();
 	boneVertexWeights.clear();
+}
+
+void AnimationSystem::CleanBones()
+{
+	skeleton.CleanBones();
 }
 
 void AnimationSystem::SetAnimationCount(unsigned int _animationCount)

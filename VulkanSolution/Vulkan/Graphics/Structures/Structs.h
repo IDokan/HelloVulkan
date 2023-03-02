@@ -188,7 +188,7 @@ public:
 	Bone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(1.f), glm::mat4 toModelFromBone = glm::mat4(1.f));
 	Bone(const Bone& b);
 	Bone(Bone&& b);
-	virtual void Update(float dt);
+	virtual void Update(float dt, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f));
 	Bone& operator=(const Bone& b);
 	Bone& operator=(Bone&& b);
 	virtual ~Bone();
@@ -205,7 +205,6 @@ struct Physics
 {
 public:
 	static bool forceApplyFlag;
-	static glm::vec3 GravityVector;
 	static float GravityScaler;
 public:
 	Physics();
@@ -257,7 +256,7 @@ public:
 	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromUnit = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4(), const Bone* parentBonePtr = nullptr, const JiggleBone* childBonePtr = nullptr);
 	JiggleBone(const JiggleBone& jb);
 	JiggleBone(JiggleBone&& jb);
-	virtual void Update(float dt);
+	virtual void Update(float dt, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f));
 
 	void UpdatePhysicsTransformations();
 
@@ -293,7 +292,7 @@ public:
 	Skeleton();
 	~Skeleton();
 
-	void Update(float dt);
+	void Update(float dt, glm::mat4 modelMatrix = glm::mat4(1.f));
 
 	void AddBone(std::string name, int parentID);
 	void AddBone(Bone* newBone);
@@ -308,6 +307,8 @@ public:
 
 	void GetToBoneFromUnit(std::vector<glm::mat4>& data);
 	void GetToModelFromBone(std::vector<glm::mat4>& data);
+
+	void CleanBones();
 private:
 	std::vector<Bone*> bones;
 	int boneSize;

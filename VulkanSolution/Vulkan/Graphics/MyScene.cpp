@@ -41,8 +41,8 @@ MyScene::MyScene(Window* window)
 
 bool MyScene::InitScene(Graphics* _graphics)
 {
-	model = new Model("../Vulkan/Graphics/Model/models/Onpupu/Onpu.fbx");
-	//model = new Model("../Vulkan/Graphics/Model/models/Dancing.fbx");
+	//model = new Model("../Vulkan/Graphics/Model/models/Onpupu/Onpu.fbx");
+	model = new Model("../Vulkan/Graphics/Model/models/Dancing.fbx");
 	model->SetAnimationIndex(0);
 	selectedMesh = model->GetMeshSize();
 
@@ -150,18 +150,19 @@ void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t curren
 {
 	if (runRealtime)
 	{
-		model->Update(dt);
+		model->Update(dt, uniformData.model);
 	}
 	else
 	{
 		if (proceedFrame)
 		{
-			model->Update(dt);
+			model->Update(dt, uniformData.model);
 			proceedFrame = false;
 		}
 	}
 
 	ModifyBone();
+	CleanBones();
 
 	ChangeBoneIndexInSphere();
 
@@ -355,7 +356,7 @@ void MyScene::LoadNewModel()
 void MyScene::InitGUI()
 {
 	MyImGUI::SendModelInfo(model, &showModel, &vertexPointsMode, &pointSize, &selectedMesh);
-	MyImGUI::SendSkeletonInfo(&showSkeletonFlag, &blendingWeightMode, &selectedBone);
+	MyImGUI::SendSkeletonInfo(&showSkeletonFlag, &blendingWeightMode, &selectedBone, &cleanBoneFlag);
 	MyImGUI::SendAnimationInfo(&animationTimer, &bindPoseFlag, &isUpdateAnimationTimer);
 	MyImGUI::SendConfigInfo(&mouseSensitivity);
 	
@@ -864,6 +865,33 @@ void MyScene::ChangeBoneIndexInSphere()
 	vertex->ChangeBufferData(sizeof(Vertex), model->GetVertexCount(selectedMesh), model->GetVertexData(selectedMesh));
 	Buffer* uniqueVertex = dynamic_cast<Buffer*>(FindObjectByName(std::string("uniqueVertex") + std::to_string(selectedMesh)));
 	uniqueVertex->ChangeBufferData(sizeof(Vertex), model->GetUniqueVertexCount(selectedMesh), model->GetUniqueVertexData(selectedMesh));
+}
+
+void MyScene::CleanBones()
+{
+	if (cleanBoneFlag == false)
+	{
+		return;
+	}
+	cleanBoneFlag = false;
+
+	model->CleanBones();
+	MyImGUI::UpdateBoneNameList();
+
+	graphics->DeviceWaitIdle();
+
+	Buffer* skeleton = dynamic_cast<Buffer*>(FindObjectByName("skeletonBuffer"));
+	skeleton->ChangeBufferData(sizeof(LineVertex), 2 * model->GetBoneCount(), model->GetBoneDataForDrawing());
+
+	UniformBuffer* animation = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));
+	animation->ChangeBufferData(sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT);
+
+	UniformBuffer* unitBoneUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("unitBoneUniformBuffer"));
+	unitBoneUniformBuffer->ChangeBufferData(sizeof(glm::mat4) * model->GetBoneCount(), Graphics::MAX_FRAMES_IN_FLIGHT);
+	WriteDescriptorSet();
+	WriteWaxDescriptorSet();
+	WriteBlendingWeightDescriptorSet();
+	WriteHairBoneDescriptorSet();
 }
 
 bool MyScene::HasStencilComponent(VkFormat format)

@@ -25,7 +25,7 @@ namespace MyImGUI
 		VkCommandBuffer commandBuffer);
 
     void SendModelInfo(Model* model, bool* showModel, bool* vertexPointsMode, float* pointSize, int* selectedMesh);
-    void SendSkeletonInfo(bool* showSkeletonFlag, bool* blendingWeightMode, int* selectedBone);
+    void SendSkeletonInfo(bool* showSkeletonFlag, bool* blendingWeightMode, int* selectedBone, bool* cleanBoneFlag);
     void SendAnimationInfo(float* worldTimer, bool* bindPoseFlag, bool* playAnimation);
     void SendConfigInfo(float* mouseSensitivity);
     void SendHairBoneInfo(HairBone* hairBone, char* newBoneName, size_t boneContainerNameSize, bool* applyingBone, float* sphereTrans, float min, float max, float* sphereRadius, int* boneIDIndex, float* boneWeight, bool* flagChange);

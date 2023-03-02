@@ -1,7 +1,6 @@
 #include "Structs.h"
 
 bool Physics::forceApplyFlag = false;
-glm::vec3 Physics::GravityVector = glm::vec3(0.f, 1.f, 0.f);
 float Physics::GravityScaler = 1.f;
 
 Mesh::Mesh()
@@ -51,11 +50,16 @@ Skeleton::~Skeleton()
 {
 }
 
-void Skeleton::Update(float dt)
+void Skeleton::Update(float dt, glm::mat4 modelMatrix)
 {
 	// Iterate bones but usually useful bones are at the tails.
 	// It might be bad.
 		// Probabily use reversed iterator for better performance.
+
+
+
+	glm::vec4 result = normalize(glm::inverse(modelMatrix) * glm::vec4(0.f, -1.f, 0.f, 0.f));
+	glm::vec3 gravityVector(result.x, result.y, result.z);
 
 	std::vector<JiggleBone*> jiggleBones;
 	jiggleBones.reserve(boneSize);
@@ -67,7 +71,7 @@ void Skeleton::Update(float dt)
 		if (JiggleBone* jbPtr = dynamic_cast<JiggleBone*>(ptr);
 			jbPtr != nullptr)
 		{
-			ptr->Update(dt);
+			ptr->Update(dt, gravityVector);
 			jiggleBones.push_back(jbPtr);
 		}
 	}
@@ -167,6 +171,34 @@ void Skeleton::GetToModelFromBone(std::vector<glm::mat4>& data)
 	}
 }
 
+void Skeleton::CleanBones()
+{
+	std::vector<JiggleBone*> jiggleBones;
+	jiggleBones.reserve(boneSize);
+	int numJiggleBone = 0;
+
+	for (auto it = bones.begin(); it != bones.end(); it++)
+	{
+		Bone* ptr = (*it);
+
+		if (JiggleBone* jbPtr = dynamic_cast<JiggleBone*>(ptr);
+			jbPtr != nullptr)
+		{
+			jiggleBones.push_back(jbPtr);
+			numJiggleBone++;
+		}
+	}
+
+	for (JiggleBone* jb : jiggleBones)
+	{
+		delete jb;
+	}
+
+	boneSize -= numJiggleBone;
+
+	bones.resize(boneSize);
+}
+
 Animation::Animation()
 	:animationName(), duration(-1.f), tracks()
 {
@@ -227,7 +259,7 @@ Bone::Bone(Bone&& b)
 {
 }
 
-void Bone::Update(float dt)
+void Bone::Update(float dt, glm::vec3 gravityVector)
 {
 	return;
 }
@@ -437,7 +469,7 @@ bool vec2Compare::operator()(const glm::vec2& lhs, const glm::vec2& rhs) const
 }
 
 JiggleBone::JiggleBone()
-	: Bone(), isUpdateJigglePhysics(false), customPhysicsTranslation(glm::mat4(0.f)), customPhysicsRotation(glm::mat4(0.f)), physics(), parentBonePtr(nullptr), childBonePtr(nullptr)
+	: Bone(), isUpdateJigglePhysics(false), customPhysicsTranslation(glm::mat4(0.f)), customPhysicsRotation(glm::mat4(1.f)), physics(), parentBonePtr(nullptr), childBonePtr(nullptr)
 {
 }
 
@@ -457,7 +489,7 @@ JiggleBone::JiggleBone(JiggleBone&& jb)
 	
 }
 
-void JiggleBone::Update(float dt)
+void JiggleBone::Update(float dt, glm::vec3 gravityVector)
 {
 	if (isUpdateJigglePhysics == false)
 	{
@@ -465,7 +497,7 @@ void JiggleBone::Update(float dt)
 	}
 
 	// @@ Begin of Physics calculation
-	glm::vec3 gravityForce= Physics::GravityVector * Physics::GravityScaler;
+	glm::vec3 gravityForce= gravityVector * Physics::GravityScaler;
 
 	// @@TODO: Implement If parent bone is not anchor?, (In other words, it is also a stick of spring-mass-damper system?)
 			// @@ TODO: Final bug to accomplish the above goal, Adjust physics.centerOfMass!!!!!,,, current system does not modify centerofmass of multiple links
@@ -492,8 +524,8 @@ void JiggleBone::Update(float dt)
 
 	if (childBonePtr != nullptr)
 	{
-		glm::vec3 springForceB = physics.springScaler * (childBonePtr->GetDynamicPointA() - exertedPoint);
-		glm::vec3 dampingForceB = physics.dampingScaler * (childBonePtr->physics.linearVelocity - physics.linearVelocity);
+		glm::vec3 springForceB = childBonePtr->physics.springScaler * (childBonePtr->GetDynamicPointA() - exertedPoint);
+		glm::vec3 dampingForceB = childBonePtr->physics.dampingScaler * (childBonePtr->physics.linearVelocity - physics.linearVelocity);
 		forceB += springForceB + dampingForceB;
 	}
 
@@ -502,7 +534,7 @@ void JiggleBone::Update(float dt)
 	// the reason why used (anchorPoint - anchorPoint), (x - y), x is the position where exerted on.
 	glm::vec3 torquePoint = (exertedPoint) - physics.centerOfMass;	// bSide
 	glm::vec3 torquePoint2 = (exertedAnchorPoint) - physics.centerOfMass;	// aSide
-	glm::vec3 torque = glm::cross(torquePoint, forceB);
+	glm::vec3 torque = glm::cross(torquePoint, forceB );
 	glm::vec3 torque2 = glm::cross(torquePoint2, forceA);
 	if (Physics::forceApplyFlag)
 	{
@@ -621,7 +653,7 @@ glm::vec4 JiggleBone::CalculateParentTransformationRecursively(const JiggleBone*
 }
 
 Physics::Physics()
-	:centerOfMass(), initCenterOfMass(), translation(), linearMomentum(), linearVelocity(), pastVelocity(), force(), rotation(), angularMomentum(), inertiaTensorInverse(), inertiaTensorObj(), torque(), totalMass(), vertices(),
+	:centerOfMass(), initCenterOfMass(), translation(), linearMomentum(), linearVelocity(), pastVelocity(), force(), rotation(glm::mat3(1.f)), angularMomentum(), inertiaTensorInverse(), inertiaTensorObj(), torque(), totalMass(), vertices(),
 	dampingScaler(), springScaler()
 {
 }

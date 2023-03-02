@@ -83,6 +83,8 @@ namespace
 
     bool* runRealtime;
     bool* proceedFrame;
+
+    bool* cleanBones;
 }
 
 namespace MyImGUI
@@ -345,6 +347,14 @@ void MyImGUI::Helper::BoneEditor()
         Helper::HairBoneInspector();
         ImGui::Separator();
         Helper::VertexSelectionSphereManipulator();
+
+        ImGui::Separator();
+
+        if (ImGui::Button("Clean bones"))
+        {
+            *cleanBones = true;
+        }
+
     }
 }
 
@@ -509,11 +519,12 @@ void MyImGUI::SendModelInfo(Model* _model, bool* _showModel, bool* _vertexPoints
     selectedMesh = _selectedMesh;
 }
 
-void MyImGUI::SendSkeletonInfo(bool* _showSkeletonFlag, bool* _blendingWeightMode, int* _selectedBone)
+void MyImGUI::SendSkeletonInfo(bool* _showSkeletonFlag, bool* _blendingWeightMode, int* _selectedBone, bool* cleanBoneFlag)
 {
     showSkeletonFlag = _showSkeletonFlag;
     blendingWeightMode = _blendingWeightMode;
     selectedBone = _selectedBone;
+    cleanBones = cleanBoneFlag;
 }
 
 void MyImGUI::SendAnimationInfo(float* _worldTimer, bool* _bindPoseFlag, bool* _playAnimation)
@@ -662,8 +673,7 @@ void MyImGUI::Helper::Physics()
 {
     if (ImGui::CollapsingHeader("Physics"))
     {
-        ImGui::SliderFloat3("Gravity Vector", &Physics::GravityVector.x, -1.f, 1.f);
-        ImGui::SliderFloat3("Gravity Scaler", &Physics::GravityScaler, 1.f, 10.f);
+        ImGui::SliderFloat("Gravity Scaler", &Physics::GravityScaler, 1.f, 10.f);
 
         
         if (const JiggleBone* jb = dynamic_cast<const JiggleBone*>(model->GetBone(*selectedBone));

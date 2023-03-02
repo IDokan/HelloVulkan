@@ -25,7 +25,8 @@ public:
 	~Model();
 	bool LoadModel(const std::string& path);
 
-	void Update(float dt);
+	void Update(float dt, glm::mat4 modelMatrix = glm::mat4(1.f));
+	void CleanBones();
 
 	int GetMeshSize();
 

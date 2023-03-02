@@ -138,4 +138,7 @@ private:
 
 	bool proceedFrame;
 	bool runRealtime;
+
+	bool cleanBoneFlag;
+	void CleanBones();
 };

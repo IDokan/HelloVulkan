@@ -88,9 +88,14 @@ bool Model::LoadModel(const std::string& path)
 	return isModelValid;
 }
 
-void Model::Update(float dt)
+void Model::Update(float dt, glm::mat4 modelMatrix)
 {
-	animationSystem->Update(dt);
+	animationSystem->Update(dt, modelMatrix);
+}
+
+void Model::CleanBones()
+{
+	animationSystem->CleanBones();
 }
 
 int Model::GetMeshSize()

@@ -73,6 +73,8 @@ public:
 	// If boneIDIndex == 1 -> [ ?, newBoneIndex, ?, ? ]
 	// glm::vec4 weight -> Set all weights altogether.
 	void ChangeBoneIndexInSphere(int meshIndex, glm::vec3 trans, float radius, int boneIDIndex, int newBoneIndex, glm::vec4 weight, std::vector<glm::vec3>& changedVertices);
+
+	glm::vec3 GetModelScale();
 private:
 	// @@ Printing fbx data
 	void ExploreScene(FbxScene* scene);
@@ -105,7 +107,6 @@ private:
 	void ReadMaterial(const aiScene* scene, const std::string& path);
 
 	void UpdateBoundingBox(glm::vec3 vertex);
-	glm::vec3 GetModelScale();
 	glm::vec3 GetModelCentroid();
 
 	bool isModelValid;

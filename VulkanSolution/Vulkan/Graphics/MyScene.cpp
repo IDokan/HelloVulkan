@@ -41,8 +41,8 @@ MyScene::MyScene(Window* window)
 
 bool MyScene::InitScene(Graphics* _graphics)
 {
-	//model = new Model("../Vulkan/Graphics/Model/models/uploads_files_3028480_SM_BeatingStick.fbx");
-	model = new Model("../Vulkan/Graphics/Model/models/Dancing.fbx");
+	model = new Model("../Vulkan/Graphics/Model/models/Onpupu/Onpu.fbx");
+	//model = new Model("../Vulkan/Graphics/Model/models/Dancing.fbx");
 	model->SetAnimationIndex(0);
 	selectedMesh = model->GetMeshSize();
 

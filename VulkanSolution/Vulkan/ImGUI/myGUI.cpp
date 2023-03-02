@@ -374,7 +374,13 @@ void MyImGUI::Helper::HairBoneInspector()
     ImGui::InputText("Bone Name", newBoneName, boneNameContainerSize);
 
     glm::vec4* data = reinterpret_cast<glm::vec4*>(hairBone->GetBoneData());
-    ImGui::SliderFloat3("Bone Position", reinterpret_cast<float*>(&data[selectedHairBone]), -20.f, 20.f);
+    glm::vec3 min;
+    glm::vec3 max;
+    model->GetBoundingBoxMinMax(min, max);
+
+    ImGui::SliderFloat("Bone Position X", &data[selectedHairBone].x, -max.x, max.x);
+    ImGui::SliderFloat("Bone Position Y", &data[selectedHairBone].y, -max.y, max.y);
+    ImGui::SliderFloat("Bone Position Z", &data[selectedHairBone].z, -max.z, max.z);
 
     if (ImGui::Button("Apply Bone"))
     {
@@ -388,7 +394,9 @@ void MyImGUI::Helper::VertexSelectionSphereManipulator()
     ImGui::InputInt("Bone ID index", boneIDIndex);
     std::clamp(*boneIDIndex, 0, 3);
 
-    ImGui::SliderFloat("Sphere Radius", sphereRadius, 1.f, 50.f);
+    glm::vec3 scale = model->GetModelScale();
+
+    ImGui::SliderFloat("Sphere Radius", sphereRadius, 0.f, std::max(std::max(scale.x, scale.y), scale.z));
     ImGui::InputFloat3("Sphere Position", sphereTrans);
 
     ImGui::SliderFloat4("Bone Weights", boneWeights, 0.f, 1.f);
@@ -654,9 +662,17 @@ void MyImGUI::Helper::Physics()
 {
     if (ImGui::CollapsingHeader("Physics"))
     {
-        ImGui::SliderFloat("Gravity Scaler", &Physics::GravityScaler, 1.f, 100.f);
-        ImGui::SliderFloat("Spring Scaler", &Physics::SpringScaler, 1.f, 100.f);
-        ImGui::SliderFloat("Damping Scaler", &Physics::DampingScaler, 1.f, 500.f);
+        ImGui::SliderFloat3("Gravity Vector", &Physics::GravityVector.x, -1.f, 1.f);
+        ImGui::SliderFloat3("Gravity Scaler", &Physics::GravityScaler, 1.f, 10.f);
+
+        
+        if (const JiggleBone* jb = dynamic_cast<const JiggleBone*>(model->GetBone(*selectedBone));
+            jb != nullptr)
+        {
+            JiggleBone* jiggleBone = const_cast<JiggleBone*>(jb);
+            ImGui::SliderFloat("Spring Scaler", &jiggleBone->physics.springScaler, 1.f, 100.f);
+            ImGui::SliderFloat("Damping Scaler", &jiggleBone->physics.dampingScaler, 1.f, 500.f);
+        }
 
         ImGui::Separator();
         ImGui::Checkbox("Run realtime", runRealtime);

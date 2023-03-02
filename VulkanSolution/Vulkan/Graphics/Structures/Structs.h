@@ -204,10 +204,9 @@ public:
 struct Physics
 {
 public:
-	static float GravityScaler;
-	static float SpringScaler;
-	static float DampingScaler;
 	static bool forceApplyFlag;
+	static glm::vec3 GravityVector;
+	static float GravityScaler;
 public:
 	Physics();
 	Physics(const Physics& p);
@@ -243,6 +242,9 @@ public:
 
 	std::vector<glm::vec3> initVertices;
 	std::vector<glm::vec3> vertices;
+
+	float dampingScaler;
+	float springScaler;
 
 private:
 	glm::mat3 Tilde(glm::vec3 v);

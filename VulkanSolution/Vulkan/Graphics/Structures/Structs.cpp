@@ -1,9 +1,8 @@
 #include "Structs.h"
 
-float Physics::GravityScaler = 1.f;
-float Physics::SpringScaler = 5.f;
-float Physics::DampingScaler = 100.f;
 bool Physics::forceApplyFlag = false;
+glm::vec3 Physics::GravityVector = glm::vec3(0.f, 1.f, 0.f);
+float Physics::GravityScaler = 1.f;
 
 Mesh::Mesh()
 	:meshName(), indices(), vertices(), uniqueVertices()
@@ -466,7 +465,7 @@ void JiggleBone::Update(float dt)
 	}
 
 	// @@ Begin of Physics calculation
-	glm::vec3 gravityForce= glm::vec3(0.f, -1.f, 0.f) * Physics::GravityScaler;
+	glm::vec3 gravityForce= Physics::GravityVector * Physics::GravityScaler;
 
 	// @@TODO: Implement If parent bone is not anchor?, (In other words, it is also a stick of spring-mass-damper system?)
 			// @@ TODO: Final bug to accomplish the above goal, Adjust physics.centerOfMass!!!!!,,, current system does not modify centerofmass of multiple links
@@ -485,23 +484,18 @@ void JiggleBone::Update(float dt)
 	}
 	
 	// spring force
-	glm::vec3 springForce = Physics::SpringScaler * (parentEndStickPoint - exertedAnchorPoint);
-	glm::vec3 dampingForce = Physics::DampingScaler * (parentPhysicsLinearVelocity - physics.linearVelocity);
+	glm::vec3 springForce = physics.springScaler * (parentEndStickPoint - exertedAnchorPoint);
+	glm::vec3 dampingForce = physics.dampingScaler * (parentPhysicsLinearVelocity - physics.linearVelocity);
 
 	glm::vec3 forceA = springForce + dampingForce + (0.5f * gravityForce);
 	glm::vec3 forceB = (0.5f * gravityForce);
 
 	if (childBonePtr != nullptr)
 	{
-		glm::vec3 springForceB = Physics::SpringScaler * (childBonePtr->GetDynamicPointA() - exertedPoint);
-		glm::vec3 dampingForceB = Physics::DampingScaler * (childBonePtr->physics.linearVelocity - physics.linearVelocity);
+		glm::vec3 springForceB = physics.springScaler * (childBonePtr->GetDynamicPointA() - exertedPoint);
+		glm::vec3 dampingForceB = physics.dampingScaler * (childBonePtr->physics.linearVelocity - physics.linearVelocity);
 		forceB += springForceB + dampingForceB;
 	}
-	//else
-	//{
-	//	glm::vec3 dampingForceB = Physics::DampingScaler * ( - physics.linearVelocity);
-	//	forceB += dampingForceB;
-	//}
 
 	glm::vec3 finalForce = forceA + forceB;
 
@@ -509,7 +503,7 @@ void JiggleBone::Update(float dt)
 	glm::vec3 torquePoint = (exertedPoint) - physics.centerOfMass;	// bSide
 	glm::vec3 torquePoint2 = (exertedAnchorPoint) - physics.centerOfMass;	// aSide
 	glm::vec3 torque = glm::cross(torquePoint, forceB);
-	glm::vec3 torque2 = glm::cross(torquePoint2, springForce + dampingForce + (0.5f * gravityForce));
+	glm::vec3 torque2 = glm::cross(torquePoint2, forceA);
 	if (Physics::forceApplyFlag)
 	{
 		physics.UpdateByForce(dt, finalForce, torque + torque2);
@@ -627,17 +621,20 @@ glm::vec4 JiggleBone::CalculateParentTransformationRecursively(const JiggleBone*
 }
 
 Physics::Physics()
-	:centerOfMass(), initCenterOfMass(), translation(), linearMomentum(), linearVelocity(), pastVelocity(), force(), rotation(), angularMomentum(), inertiaTensorInverse(), inertiaTensorObj(), torque(), totalMass(), vertices()
+	:centerOfMass(), initCenterOfMass(), translation(), linearMomentum(), linearVelocity(), pastVelocity(), force(), rotation(), angularMomentum(), inertiaTensorInverse(), inertiaTensorObj(), torque(), totalMass(), vertices(),
+	dampingScaler(), springScaler()
 {
 }
 
 Physics::Physics(const Physics& p)
-	:centerOfMass(p.centerOfMass), initCenterOfMass(p.initCenterOfMass), translation(p.translation), linearMomentum(p.linearMomentum), linearVelocity(p.linearVelocity), pastVelocity(p.pastVelocity), force(p.force), rotation(p.rotation), angularMomentum(p.angularMomentum), inertiaTensorInverse(p.inertiaTensorInverse), inertiaTensorObj(p.inertiaTensorObj), torque(p.torque), totalMass(p.totalMass), vertices(p.vertices)
+	:centerOfMass(p.centerOfMass), initCenterOfMass(p.initCenterOfMass), translation(p.translation), linearMomentum(p.linearMomentum), linearVelocity(p.linearVelocity), pastVelocity(p.pastVelocity), force(p.force), rotation(p.rotation), angularMomentum(p.angularMomentum), inertiaTensorInverse(p.inertiaTensorInverse), inertiaTensorObj(p.inertiaTensorObj), torque(p.torque), totalMass(p.totalMass), vertices(p.vertices),
+	dampingScaler(p.dampingScaler), springScaler(p.springScaler)
 {
 }
 
 Physics::Physics(Physics&& p)
-	: centerOfMass(p.centerOfMass), initCenterOfMass(p.initCenterOfMass), translation(p.translation), linearMomentum(p.linearMomentum), linearVelocity(p.linearVelocity), pastVelocity(p.pastVelocity), force(p.force), rotation(p.rotation), angularMomentum(p.angularMomentum), inertiaTensorInverse(p.inertiaTensorInverse), inertiaTensorObj(p.inertiaTensorObj), torque(p.torque), totalMass(p.totalMass), vertices(p.vertices)
+	: centerOfMass(p.centerOfMass), initCenterOfMass(p.initCenterOfMass), translation(p.translation), linearMomentum(p.linearMomentum), linearVelocity(p.linearVelocity), pastVelocity(p.pastVelocity), force(p.force), rotation(p.rotation), angularMomentum(p.angularMomentum), inertiaTensorInverse(p.inertiaTensorInverse), inertiaTensorObj(p.inertiaTensorObj), torque(p.torque), totalMass(p.totalMass), vertices(p.vertices),
+	dampingScaler(p.dampingScaler), springScaler(p.springScaler)
 {
 }
 
@@ -661,6 +658,10 @@ Physics& Physics::operator=(const Physics& p)
 
 	initVertices = p.initVertices;
 	vertices = p.vertices;
+
+	dampingScaler = p.dampingScaler;
+	springScaler = p.springScaler;
+
 	return *this;
 }
 
@@ -684,6 +685,10 @@ Physics& Physics::operator=(Physics&& p)
 
 	initVertices = p.initVertices;
 	vertices = p.vertices;
+
+	dampingScaler = p.dampingScaler;
+	springScaler = p.springScaler;
+
 	return *this;
 }
 
@@ -694,6 +699,7 @@ Physics::~Physics()
 void Physics::Initialize()
 {
 	centerOfMass = glm::vec3(0.f, 0.f, 0.f);
+	pastCOM = glm::vec3(0.f);
 	vertices = initVertices;
 	for (glm::vec3& vertex : vertices)
 	{
@@ -742,9 +748,13 @@ void Physics::Initialize()
 	linearVelocity = glm::vec3(0.f);
 	pastVelocity = glm::vec3(0.f);
 	force = glm::vec3(0.f);
+	torque = glm::vec3(0.f);
 
 	angularMomentum = glm::vec3(0.f);
 	angularVelocity = glm::vec3(0.f);
+
+	springScaler = 5.f;
+	dampingScaler = 50.f;
 }
 
 void Physics::UpdateByForce(float dt, glm::vec3 _force)

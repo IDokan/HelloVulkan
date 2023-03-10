@@ -41,8 +41,9 @@ MyScene::MyScene(Window* window)
 
 bool MyScene::InitScene(Graphics* _graphics)
 {
-	//model = new Model("../Vulkan/Graphics/Model/models/Onpupu/Onpu.fbx");
 	model = new Model("../Vulkan/Graphics/Model/models/Dancing.fbx");
+	//model = new Model("../Vulkan/Graphics/Model/models/Onpupu/Onpu.fbx");
+	//model = new Model("../Vulkan/Graphics/Model/models/Sitting Clap.fbx");
 	model->SetAnimationIndex(0);
 	selectedMesh = model->GetMeshSize();
 
@@ -148,15 +149,20 @@ void MyScene::CleanScene()
 
 void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t currentFrameID)
 {
+
+	UpdateTimer(dt);
+	model->CalculateAnimation(animationTimer, bindPoseFlag);
+
 	if (runRealtime)
 	{
-		model->Update(dt, uniformData.model);
+
+		model->Update(dt, uniformData.model, bindPoseFlag);
 	}
 	else
 	{
 		if (proceedFrame)
 		{
-			model->Update(dt, uniformData.model);
+			model->Update(dt, uniformData.model, bindPoseFlag);
 			proceedFrame = false;
 		}
 	}
@@ -165,8 +171,6 @@ void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t curren
 	CleanBones();
 
 	ChangeBoneIndexInSphere();
-
-	UpdateTimer(dt);
 
 	UpdateUniformBuffer(currentFrameID);
 
@@ -359,7 +363,7 @@ void MyScene::InitGUI()
 	MyImGUI::SendSkeletonInfo(&showSkeletonFlag, &blendingWeightMode, &selectedBone, &cleanBoneFlag);
 	MyImGUI::SendAnimationInfo(&animationTimer, &bindPoseFlag, &isUpdateAnimationTimer);
 	MyImGUI::SendConfigInfo(&mouseSensitivity);
-	
+
 	glm::vec3 min;
 	glm::vec3 max;
 	model->GetBoundingBoxMinMax(min, max);
@@ -512,7 +516,7 @@ void MyScene::UpdateUniformBuffer(uint32_t currentFrameID)
 		else if (input.IsMouseButtonTriggered(GLFW_MOUSE_BUTTON_MIDDLE))
 		{
 			targetPoint = glm::vec3(0.f, 0.f, 0.f);
-			cameraPoint = glm::vec3(0.f, 0.f, -2.f);
+			cameraPoint = glm::vec3(0.f, 0.f, 2.f);
 		}
 
 		// Move mouse, rotate a model
@@ -650,10 +654,7 @@ void MyScene::UpdateAnimationUniformBuffer(uint32_t currentFrameID)
 		return;
 	}
 
-	std::vector<glm::mat4> animationBufferData;
-
-	// Get animation key frame data
-	model->GetAnimationData(animationTimer, animationBufferData, bindPoseFlag);
+	std::vector<glm::mat4> animationBufferData = model->GetAnimationData();
 
 
 	UniformBuffer* animationUniformBuffer = dynamic_cast<UniformBuffer*>(FindObjectByName("animationUniformBuffer"));
@@ -765,11 +766,11 @@ void MyScene::ModifyBone()
 	static int newBoneIndex = 0;
 	// Modify Bone at here.
 	const Bone* parentBone = model->GetBone(selectedBone);
-	
+
 	glm::vec4 trans4 = hairBone0->GetBoneData(0);
 	glm::vec3 trans = glm::vec3(trans4.x, trans4.y, trans4.z);
 
-	JiggleBone* newBone = new JiggleBone(std::string(newBoneName) + std::to_string(newBoneIndex++), selectedBone, model->GetBoneCount(), 
+	JiggleBone* newBone = new JiggleBone(std::string(newBoneName) + std::to_string(newBoneIndex++), selectedBone, model->GetBoneCount(),
 		glm::translate(glm::vec3(trans)) * parentBone->toBoneFromUnit, parentBone->toModelFromBone, parentBone);
 	model->AddBone(newBone);
 
@@ -828,7 +829,30 @@ void MyScene::RecordDrawSphereCall(VkCommandBuffer commandBuffer)
 
 	SpherePushConstants pc;
 	pc.sphereBoundingMatrix = sphereMesh->CalculateAdjustBoundingBoxMatrix();
-	pc.translation = glm::translate(sphereTrans);
+	
+	//if (selectedBone >= 10)
+	//{
+	//	const auto* tmp = model->GetBone(selectedBone);
+	//	const JiggleBone* jb = dynamic_cast<const JiggleBone*>(tmp);
+	//	if (jb != nullptr)
+	//	{
+	//		// @@ TODO: It does work without modification without animation data, but it is broken when the animation data came up.
+	//		// @@ TODO: Find an appropriate calculation that compatible with animation
+	//		glm::vec4 bindPoseDifference = (jb->customPhysicsTranslation * glm::translate(jb->physics.centerOfMass) * jb->customPhysicsRotation * glm::translate(-jb->physics.centerOfMass) * /*model->GetAnimationData().at(selectedBone) * */model->GetBone(tmp->parentID)->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
+	//		pc.translation = glm::translate(glm::vec3(bindPoseDifference.x, bindPoseDifference.y, bindPoseDifference.z));
+	//		// @@ TODO: Solve the bug, it doesn't work right now.
+	//		// glm::vec4 dynamicEndResult = jb->customPhysicsTranslation * glm::translate(jb->physics.centerOfMass) * jb->customPhysicsRotation * glm::translate(-jb->physics.centerOfMass) * result;
+	//	}
+	//	else
+	//	{
+	//		glm::vec4 bindPoseDifference = (model->GetAnimationData().at(selectedBone) * model->GetBone(tmp->parentID)->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
+	//		pc.translation = glm::translate(glm::vec3(bindPoseDifference.x, bindPoseDifference.y, bindPoseDifference.z));
+	//	}
+	//}
+	//else
+	{
+		pc.translation = glm::translate(sphereTrans);
+	}
 	pc.radius = sphereRadius;
 	RecordPushConstants(commandBuffer, pipeline->GetPipelineLayout(), VK_SHADER_STAGE_VERTEX_BIT, &pc, sizeof(SpherePushConstants));
 	vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline->GetPipeline());

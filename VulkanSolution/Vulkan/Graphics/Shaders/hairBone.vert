@@ -50,5 +50,4 @@ void main()
 	data.offset[gl_InstanceIndex].x, data.offset[gl_InstanceIndex].y, data.offset[gl_InstanceIndex].z, 1.f
 	);
 	gl_Position = ubo.proj * ubo.view * ubo.model * translation * unitData.item[PushConstants.selectedBone].model * vec4(0.f, 0.f, 0.f, 1.0);
-	//gl_Position = ubo.proj * ubo.view * vec4(0.f, -1.f, 0.f, 1.f);
 }

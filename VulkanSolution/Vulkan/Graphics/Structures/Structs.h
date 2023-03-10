@@ -188,7 +188,7 @@ public:
 	Bone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(1.f), glm::mat4 toModelFromBone = glm::mat4(1.f));
 	Bone(const Bone& b);
 	Bone(Bone&& b);
-	virtual void Update(float dt, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f));
+	virtual void Update(float dt, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f), bool bindPoseFlag = false, std::vector<glm::mat4>* animationMatrix = nullptr);
 	Bone& operator=(const Bone& b);
 	Bone& operator=(Bone&& b);
 	virtual ~Bone();
@@ -256,7 +256,7 @@ public:
 	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromUnit = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4(), const Bone* parentBonePtr = nullptr, const JiggleBone* childBonePtr = nullptr);
 	JiggleBone(const JiggleBone& jb);
 	JiggleBone(JiggleBone&& jb);
-	virtual void Update(float dt, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f));
+	virtual void Update(float dt, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f), bool bindPoseFlag = false, std::vector<glm::mat4>* animationMatrix = nullptr);
 
 	void UpdatePhysicsTransformations();
 
@@ -264,9 +264,9 @@ public:
 	JiggleBone& operator=(JiggleBone&& jb);
 	virtual ~JiggleBone();
 
-	glm::vec3 GetInitialPointA() const;
-	glm::vec3 GetDynamicPointA() const;
-	glm::vec3 GetDynamicPointB() const;
+	glm::vec3 GetInitialPointA(bool bindPoseFlag, std::vector<glm::mat4>* animationMatrix) const;
+	glm::vec3 GetDynamicPointA(bool bindPoseFlag, std::vector<glm::mat4>* animationMatrix) const;
+	glm::vec3 GetDynamicPointB(bool bindPoseFlag, std::vector<glm::mat4>* animationMatrix) const;
 
 	glm::vec4 CalculateParentTransformationRecursively(const JiggleBone* jb, glm::vec4 firstGlobalPosition) const;
 
@@ -292,7 +292,7 @@ public:
 	Skeleton();
 	~Skeleton();
 
-	void Update(float dt, glm::mat4 modelMatrix = glm::mat4(1.f));
+	void Update(float dt, glm::mat4 modelMatrix = glm::mat4(1.f), bool bindPoseFlag = false, std::vector<glm::mat4>* animationMatrix = nullptr);
 
 	void AddBone(std::string name, int parentID);
 	void AddBone(Bone* newBone);

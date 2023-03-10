@@ -25,7 +25,7 @@ public:
 	~Model();
 	bool LoadModel(const std::string& path);
 
-	void Update(float dt, glm::mat4 modelMatrix = glm::mat4(1.f));
+	void Update(float dt, glm::mat4 modelMatrix = glm::mat4(1.f), bool bindPoseFlag = false);
 	void CleanBones();
 
 	int GetMeshSize();
@@ -54,7 +54,8 @@ public:
 	unsigned int GetAnimationCount();
 	unsigned int GetSelectedAnimationIndex();
 	void SetAnimationIndex(unsigned int i);
-	void GetAnimationData(float t, std::vector<glm::mat4>& data, bool bindPoseFlag = false);
+	void CalculateAnimation(float t, bool bindPoseFlag = false);
+	std::vector<glm::mat4> GetAnimationData();
 	void GetUnitBoneData(std::vector<glm::mat4>& data);
 	std::string GetAnimationName();
 	float GetAnimationDuration();
@@ -132,4 +133,5 @@ private:
 	AnimationSystem* animationSystem;
 	
 	Assimp::Importer importer;
+	std::vector<glm::mat4> animationMatrix;
 };

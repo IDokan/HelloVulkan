@@ -26,7 +26,7 @@ public:
 	void ImportSkeleton(FbxNode* node, FbxNode* parentNode = nullptr);
 
 	// Currently, it is only for updating jiggle bones right now..
-	void Update(float dt, glm::mat4 modelMatrix = glm::mat4(1.f));
+	void Update(float dt, glm::mat4 modelMatrix = glm::mat4(1.f), bool bindPoseFlag = false, std::vector<glm::mat4>* animationMatrix = nullptr);
 
 	void Clear();
 

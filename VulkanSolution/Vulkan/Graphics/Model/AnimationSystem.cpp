@@ -35,9 +35,9 @@ void AnimationSystem::ImportSkeleton(FbxNode* node, FbxNode* parentNode)
 	}
 }
 
-void AnimationSystem::Update(float dt, glm::mat4 modelMatrix)
+void AnimationSystem::Update(float dt, glm::mat4 modelMatrix, bool bindPoseFlag, std::vector<glm::mat4>* animationMatrix)
 {
-	skeleton.Update(dt, modelMatrix);
+	skeleton.Update(dt, modelMatrix, bindPoseFlag, animationMatrix);
 }
 
 void AnimationSystem::Clear()
@@ -171,6 +171,8 @@ void AnimationSystem::GetAnimationData(float t, std::vector<glm::mat4>& data)
 	{
 		data[i] = data[i] * skeleton.GetBoneByBoneID(static_cast<int>(i))->toModelFromBone;
 
+
+		// @@ TODO: Make sure the below line works correctly.
 		// Apply physics matrix in here for animation.
 		const JiggleBone* jb = dynamic_cast<const JiggleBone*>(skeleton.GetBoneByBoneID(static_cast<int>(i)));
 		if (jb != nullptr)

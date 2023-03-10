@@ -88,9 +88,9 @@ bool Model::LoadModel(const std::string& path)
 	return isModelValid;
 }
 
-void Model::Update(float dt, glm::mat4 modelMatrix)
+void Model::Update(float dt, glm::mat4 modelMatrix, bool bindPoseFlag)
 {
-	animationSystem->Update(dt, modelMatrix);
+	animationSystem->Update(dt, modelMatrix, bindPoseFlag, &animationMatrix);
 }
 
 void Model::CleanBones()
@@ -795,21 +795,23 @@ void Model::SetAnimationIndex(unsigned int i)
 	animationSystem->SetAnimationIndex(i);
 }
 
-void Model::GetAnimationData(float t, std::vector<glm::mat4>& data, bool bindPoseFlag)
+void Model::CalculateAnimation(float t, bool bindPoseFlag)
 {
+	animationMatrix.clear();
+
 	if (bindPoseFlag || animationSystem->GetAnimationCount() <= 0)
 	{
 		size_t boneCount = GetBoneCount();
-		data.resize(boneCount);
+		animationMatrix.resize(boneCount);
 
 		for (int i = 0; i < boneCount; i++)
 		{
-			data[i] = glm::identity<glm::mat4>();
+			animationMatrix[i] = glm::identity<glm::mat4>();
 
 			if (int pID = animationSystem->GetBone(i)->parentID;
 				pID >= 0)
 			{
-				data[i] = data[i] * data[pID];
+				animationMatrix[i] = animationMatrix[i] * animationMatrix[pID];
 			}
 		}
 
@@ -821,14 +823,19 @@ void Model::GetAnimationData(float t, std::vector<glm::mat4>& data, bool bindPos
 				jb != nullptr)
 			{
 				glm::vec3 vertexPos = jb->physics.pastCOM;
-				data[i] = jb->customPhysicsTranslation * glm::translate(vertexPos) * jb->customPhysicsRotation * glm::translate(-vertexPos) * data[i];
+				animationMatrix[i] = jb->customPhysicsTranslation * glm::translate(vertexPos) * jb->customPhysicsRotation * glm::translate(-vertexPos) * animationMatrix[i];
 			}
 		}
 
 		return;
 	}
 
-	animationSystem->GetAnimationData(t, data);
+	animationSystem->GetAnimationData(t, animationMatrix);
+}
+
+std::vector<glm::mat4> Model::GetAnimationData()
+{
+	return animationMatrix;
 }
 
 void Model::GetUnitBoneData(std::vector<glm::mat4>& data)

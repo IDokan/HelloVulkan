@@ -151,8 +151,6 @@ void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t curren
 {
 
 	UpdateTimer(dt);
-	model->CalculateAnimation(animationTimer, bindPoseFlag);
-
 	if (runRealtime)
 	{
 
@@ -166,6 +164,8 @@ void MyScene::DrawFrame(float dt, VkCommandBuffer commandBuffer, uint32_t curren
 			proceedFrame = false;
 		}
 	}
+	model->CalculateAnimation(animationTimer, bindPoseFlag);
+
 
 	ModifyBone();
 	CleanBones();
@@ -838,7 +838,7 @@ void MyScene::RecordDrawSphereCall(VkCommandBuffer commandBuffer)
 	//	{
 	//		// @@ TODO: It does work without modification without animation data, but it is broken when the animation data came up.
 	//		// @@ TODO: Find an appropriate calculation that compatible with animation
-	//		glm::vec4 bindPoseDifference = (jb->customPhysicsTranslation * glm::translate(jb->physics.centerOfMass) * jb->customPhysicsRotation * glm::translate(-jb->physics.centerOfMass) * /*model->GetAnimationData().at(selectedBone) * */model->GetBone(tmp->parentID)->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
+	//		glm::vec4 bindPoseDifference = (/*jb->customPhysicsTranslation * glm::translate(jb->physics.centerOfMass) * jb->customPhysicsRotation * glm::translate(-jb->physics.centerOfMass) * */model->GetAnimationData().at(selectedBone) * glm::vec4(jb->physics.initCenterOfMass.x, jb->physics.initCenterOfMass.y, jb->physics.initCenterOfMass.z, 1.f));
 	//		pc.translation = glm::translate(glm::vec3(bindPoseDifference.x, bindPoseDifference.y, bindPoseDifference.z));
 	//		// @@ TODO: Solve the bug, it doesn't work right now.
 	//		// glm::vec4 dynamicEndResult = jb->customPhysicsTranslation * glm::translate(jb->physics.centerOfMass) * jb->customPhysicsRotation * glm::translate(-jb->physics.centerOfMass) * result;

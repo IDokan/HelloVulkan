@@ -822,7 +822,7 @@ void Model::CalculateAnimation(float t, bool bindPoseFlag)
 			if (const JiggleBone* jb = dynamic_cast<const JiggleBone*>(animationSystem->GetBone(i));
 				jb != nullptr)
 			{
-				glm::vec3 vertexPos = jb->physics.pastCOM;
+				glm::vec3 vertexPos = jb->physics.centerOfMass;
 				animationMatrix[i] = jb->customPhysicsTranslation * glm::translate(vertexPos) * jb->customPhysicsRotation * glm::translate(-vertexPos) * animationMatrix[i];
 			}
 		}

@@ -188,7 +188,7 @@ public:
 	Bone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromModel = glm::mat4(1.f), glm::mat4 toModelFromBone = glm::mat4(1.f));
 	Bone(const Bone& b);
 	Bone(Bone&& b);
-	virtual void Update(float dt, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f), bool bindPoseFlag = false, std::vector<glm::mat4>* animationMatrix = nullptr);
+	virtual bool Update(float dt);
 	Bone& operator=(const Bone& b);
 	Bone& operator=(Bone&& b);
 	virtual ~Bone();
@@ -220,13 +220,11 @@ public:
 	void UpdateByForce(float dt, glm::vec3 force, glm::vec3 torque);
 public:
 	glm::vec3 centerOfMass;
-	glm::vec3 pastCOM;
 	glm::vec3 initCenterOfMass;
 	// Linear forces
 	glm::vec3 translation;
 	glm::vec3 linearMomentum;
 	glm::vec3 linearVelocity;
-	glm::vec3 pastVelocity;
 	glm::vec3 force;
 
 	// Angular forces
@@ -256,14 +254,15 @@ public:
 	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromUnit = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4(), const Bone* parentBonePtr = nullptr, const JiggleBone* childBonePtr = nullptr);
 	JiggleBone(const JiggleBone& jb);
 	JiggleBone(JiggleBone&& jb);
-	virtual void Update(float dt, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f), bool bindPoseFlag = false, std::vector<glm::mat4>* animationMatrix = nullptr);
-
-	void UpdatePhysicsTransformations();
+	virtual bool Update(float dt);
+	void CalculateForces(glm::vec3& linearForce, glm::vec3& torqueForce, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f), bool bindPoseFlag = false, std::vector<glm::mat4>* animationMatrix = nullptr);
+	void UpdatePhysics(float dt, glm::vec3 linearForce, glm::vec3 torqueForce);
 
 	JiggleBone& operator=(const JiggleBone& jb);
 	JiggleBone& operator=(JiggleBone&& jb);
 	virtual ~JiggleBone();
 
+	// given bindPoseFlag = 
 	glm::vec3 GetInitialPointA(bool bindPoseFlag, std::vector<glm::mat4>* animationMatrix) const;
 	glm::vec3 GetDynamicPointA(bool bindPoseFlag, std::vector<glm::mat4>* animationMatrix) const;
 	glm::vec3 GetDynamicPointB(bool bindPoseFlag, std::vector<glm::mat4>* animationMatrix) const;
@@ -309,6 +308,10 @@ public:
 	void GetToModelFromBone(std::vector<glm::mat4>& data);
 
 	void CleanBones();
+private:
+	// Helper functions that are not called outside of the struct.
+	void CopyJiggleBoneVectors(std::vector<JiggleBone>& src, std::vector<JiggleBone>& dst);
+	void CopyJiggleBoneVectors(std::vector<JiggleBone*>& src, std::vector<JiggleBone>& dst);
 private:
 	std::vector<Bone*> bones;
 	int boneSize;

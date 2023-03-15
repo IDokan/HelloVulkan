@@ -830,26 +830,25 @@ void MyScene::RecordDrawSphereCall(VkCommandBuffer commandBuffer)
 	SpherePushConstants pc;
 	pc.sphereBoundingMatrix = sphereMesh->CalculateAdjustBoundingBoxMatrix();
 	
-	//if (selectedBone >= 10)
-	//{
-	//	const auto* tmp = model->GetBone(selectedBone);
-	//	const JiggleBone* jb = dynamic_cast<const JiggleBone*>(tmp);
-	//	if (jb != nullptr)
-	//	{
-	//		// @@ TODO: It does work without modification without animation data, but it is broken when the animation data came up.
-	//		// @@ TODO: Find an appropriate calculation that compatible with animation
-	//		glm::vec4 bindPoseDifference = (/*jb->customPhysicsTranslation * glm::translate(jb->physics.centerOfMass) * jb->customPhysicsRotation * glm::translate(-jb->physics.centerOfMass) * */model->GetAnimationData().at(selectedBone) * glm::vec4(jb->physics.initCenterOfMass.x, jb->physics.initCenterOfMass.y, jb->physics.initCenterOfMass.z, 1.f));
-	//		pc.translation = glm::translate(glm::vec3(bindPoseDifference.x, bindPoseDifference.y, bindPoseDifference.z));
-	//		// @@ TODO: Solve the bug, it doesn't work right now.
-	//		// glm::vec4 dynamicEndResult = jb->customPhysicsTranslation * glm::translate(jb->physics.centerOfMass) * jb->customPhysicsRotation * glm::translate(-jb->physics.centerOfMass) * result;
-	//	}
-	//	else
-	//	{
-	//		glm::vec4 bindPoseDifference = (model->GetAnimationData().at(selectedBone) * model->GetBone(tmp->parentID)->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f));
-	//		pc.translation = glm::translate(glm::vec3(bindPoseDifference.x, bindPoseDifference.y, bindPoseDifference.z));
-	//	}
-	//}
-	//else
+	if (selectedBone >= 10 && runRealtime)
+	{
+		const auto* tmp = model->GetBone(selectedBone);
+		const JiggleBone* jb = dynamic_cast<const JiggleBone*>(tmp);
+		if (jb != nullptr)
+		{
+
+			if (jb->childBonePtr != nullptr)
+			{
+				pc.translation = glm::translate(jb->childBonePtr->GetDynamicPointA(true, nullptr));
+			}
+		}
+		else
+		{
+			glm::vec4 bindPoseDifference = model->GetBone(tmp->parentID)->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
+			pc.translation = glm::translate(glm::vec3(bindPoseDifference.x, bindPoseDifference.y, bindPoseDifference.z));
+		}
+	}
+	else
 	{
 		pc.translation = glm::translate(sphereTrans);
 	}

@@ -680,7 +680,7 @@ void MyImGUI::Helper::Physics()
             jb != nullptr)
         {
             JiggleBone* jiggleBone = const_cast<JiggleBone*>(jb);
-            ImGui::SliderFloat("Spring Scaler", &jiggleBone->physics.springScaler, 1.f, 100.f);
+            ImGui::SliderFloat("Spring Scaler", &jiggleBone->physics.springScaler, 1.f, 500.f);
             ImGui::SliderFloat("Damping Scaler", &jiggleBone->physics.dampingScaler, 1.f, 500.f);
         }
 

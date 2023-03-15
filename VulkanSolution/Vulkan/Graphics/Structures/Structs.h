@@ -206,6 +206,7 @@ struct Physics
 public:
 	static bool forceApplyFlag;
 	static float GravityScaler;
+	const size_t springSize = 2;
 public:
 	Physics();
 	Physics(const Physics& p);
@@ -217,14 +218,14 @@ public:
 
 	void Initialize();
 	void UpdateByForce(float dt, glm::vec3 force);
-	void UpdateByForce(float dt, glm::vec3 force, glm::vec3 torque);
+	void UpdateByForce(float dt, std::vector<glm::vec3> _forces, glm::vec3 _torque);
 public:
 	glm::vec3 centerOfMass;
 	glm::vec3 initCenterOfMass;
 	// Linear forces
 	glm::vec3 translation;
-	glm::vec3 linearMomentum;
-	glm::vec3 linearVelocity;
+	std::vector<glm::vec3> linearMomentums;
+	std::vector<glm::vec3> linearVelocities;
 	glm::vec3 force;
 
 	// Angular forces
@@ -255,8 +256,8 @@ public:
 	JiggleBone(const JiggleBone& jb);
 	JiggleBone(JiggleBone&& jb);
 	virtual bool Update(float dt);
-	void CalculateForces(glm::vec3& linearForce, glm::vec3& torqueForce, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f), bool bindPoseFlag = false, std::vector<glm::mat4>* animationMatrix = nullptr);
-	void UpdatePhysics(float dt, glm::vec3 linearForce, glm::vec3 torqueForce);
+	void CalculateForces(glm::vec3& linearForceA, glm::vec3& linearForceB, glm::vec3& torqueForce, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f), bool bindPoseFlag = false, std::vector<glm::mat4>* animationMatrix = nullptr);
+	void UpdatePhysics(float dt, const std::vector<glm::vec3>& linearForces, glm::vec3 torqueForce);
 
 	JiggleBone& operator=(const JiggleBone& jb);
 	JiggleBone& operator=(JiggleBone&& jb);

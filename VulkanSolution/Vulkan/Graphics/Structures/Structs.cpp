@@ -89,50 +89,51 @@ void Skeleton::Update(float dt, glm::mat4 modelMatrix, bool bindPoseFlag, std::v
 	CopyJiggleBoneVectors(k1, k3);
 	
 
-	std::vector<glm::vec3> linearForces1(jiggleBoneSize), torqueForces1(jiggleBoneSize);
+	std::vector<glm::vec3> linearForcesA1(jiggleBoneSize), linearForcesB1(jiggleBoneSize), torqueForces1(jiggleBoneSize);
 	for (size_t i = 0; i < jiggleBoneSize; i++)
 	{
 		// 			ptr->Update(dt, gravityVector, bindPoseFlag, animationMatrix);
-		k1[i].CalculateForces(linearForces1[i], torqueForces1[i]);
+		k1[i].CalculateForces(linearForcesA1[i], linearForcesB1[i], torqueForces1[i]);
 	}
 
 	for (size_t i = 0; i < jiggleBoneSize; i++)
 	{
-		k1[i].UpdatePhysics(dt * 0.5f, linearForces1[i] * 0.5f, torqueForces1[i] * 0.5f);
+		k1[i].UpdatePhysics(dt * 0.5f, { linearForcesA1[i] * 0.5f, linearForcesB1[i] * 0.5f }, torqueForces1[i] * 0.5f);
 	}
 
-	std::vector<glm::vec3> linearForces2(jiggleBoneSize), torqueForces2(jiggleBoneSize);
+	std::vector<glm::vec3> linearForcesA2(jiggleBoneSize), linearForcesB2(jiggleBoneSize), torqueForces2(jiggleBoneSize);
 	for (size_t i = 0; i < jiggleBoneSize; i++)
 	{
-		k1[i].CalculateForces(linearForces2[i], torqueForces2[i]);
-	}
-
-	for (size_t i = 0; i < jiggleBoneSize; i++)
-	{
-		k2[i].UpdatePhysics(dt * 0.5f, linearForces2[i] * 0.5f, torqueForces2[i] * 0.5f);
-	}
-
-	std::vector<glm::vec3> linearForces3(jiggleBoneSize), torqueForces3(jiggleBoneSize);
-	for (size_t i = 0; i < jiggleBoneSize; i++)
-	{
-		k2[i].CalculateForces(linearForces3[i], torqueForces3[i]);
+		k1[i].CalculateForces(linearForcesA2[i], linearForcesB2[i], torqueForces2[i]);
 	}
 
 	for (size_t i = 0; i < jiggleBoneSize; i++)
 	{
-		k3[i].UpdatePhysics(dt, linearForces3[i] * 0.5f, torqueForces3[i] * 0.5f);
+		k2[i].UpdatePhysics(dt * 0.5f, { linearForcesA2[i] * 0.5f, linearForcesB2[i] * 0.5f }, torqueForces2[i] * 0.5f);
 	}
 
-	std::vector<glm::vec3> linearForces4(jiggleBoneSize), torqueForces4(jiggleBoneSize);
+	std::vector<glm::vec3> linearForcesA3(jiggleBoneSize), linearForcesB3(jiggleBoneSize), torqueForces3(jiggleBoneSize);
 	for (size_t i = 0; i < jiggleBoneSize; i++)
 	{
-		k3[i].CalculateForces(linearForces4[i], torqueForces4[i]);
+		k2[i].CalculateForces(linearForcesA3[i], linearForcesB3[i], torqueForces3[i]);
 	}
 
 	for (size_t i = 0; i < jiggleBoneSize; i++)
 	{
-		jiggleBones[i]->UpdatePhysics(dt, 
-			(linearForces1[i] + (2.f * linearForces2[i]) + (2.f * linearForces3[i]) + linearForces4[i]) / 6.f, 
+		k3[i].UpdatePhysics(dt, { linearForcesA3[i],linearForcesB3[i] }, torqueForces3[i]);
+	}
+
+	std::vector<glm::vec3> linearForcesA4(jiggleBoneSize), linearForcesB4(jiggleBoneSize), torqueForces4(jiggleBoneSize);
+	for (size_t i = 0; i < jiggleBoneSize; i++)
+	{
+		k3[i].CalculateForces(linearForcesA4[i], linearForcesB4[i], torqueForces4[i]);
+	}
+
+	for (size_t i = 0; i < jiggleBoneSize; i++)
+	{
+		jiggleBones[i]->UpdatePhysics(dt,
+			{ (linearForcesA1[i] + (2.f * linearForcesA2[i]) + (2.f * linearForcesA3[i]) + linearForcesA4[i]) / 6.f,
+			(linearForcesB1[i] + (2.f * linearForcesB2[i]) + (2.f * linearForcesB3[i]) + linearForcesB4[i]) / 6.f },
 			(torqueForces1[i] + (2.f * torqueForces2[i]) + (2.f * torqueForces3[i]) + torqueForces4[i]) / 6.f);
 	}
 }
@@ -580,11 +581,12 @@ bool JiggleBone::Update(float dt)
 	return true;
 }
 
-void JiggleBone::CalculateForces(glm::vec3& linearForce, glm::vec3& torqueForce, glm::vec3 gravityVector, bool bindPoseFlag, std::vector<glm::mat4>* animationMatrix)
+void JiggleBone::CalculateForces(glm::vec3& linearForceA, glm::vec3& linearForceB, glm::vec3& torqueForce, glm::vec3 gravityVector, bool bindPoseFlag, std::vector<glm::mat4>* animationMatrix)
 {
 	if (isUpdateJigglePhysics == false)
 	{
-		linearForce = glm::vec3(0.f);
+		linearForceA = glm::vec3(0.f);
+		linearForceB = glm::vec3(0.f);
 		torqueForce = glm::vec3(0.f);
 		return;
 	}
@@ -605,12 +607,12 @@ void JiggleBone::CalculateForces(glm::vec3& linearForce, glm::vec3& torqueForce,
 		parentJiggleBone != nullptr)
 	{
 		parentEndStickPoint = parentJiggleBone->GetDynamicPointB(true, animationMatrix);
-		parentPhysicsLinearVelocity = parentJiggleBone->physics.linearVelocity;
+		parentPhysicsLinearVelocity = parentJiggleBone->physics.linearVelocities[1];
 	}
 
 	// spring force
 	glm::vec3 springForce = physics.springScaler * (parentEndStickPoint - exertedAnchorPoint);
-	glm::vec3 dampingForce = physics.dampingScaler * (parentPhysicsLinearVelocity - physics.linearVelocity);
+	glm::vec3 dampingForce = physics.dampingScaler * (parentPhysicsLinearVelocity - physics.linearVelocities[0]);
 
 	glm::vec3 forceA = springForce + dampingForce + (0.5f * gravityForce);
 	glm::vec3 forceB = (0.5f * gravityForce);
@@ -618,11 +620,12 @@ void JiggleBone::CalculateForces(glm::vec3& linearForce, glm::vec3& torqueForce,
 	if (childBonePtr != nullptr)
 	{
 		glm::vec3 springForceB = childBonePtr->physics.springScaler * (childBonePtr->GetDynamicPointA(true, animationMatrix) - exertedPoint);
-		glm::vec3 dampingForceB = childBonePtr->physics.dampingScaler * (childBonePtr->physics.linearVelocity - physics.linearVelocity);
+		glm::vec3 dampingForceB = childBonePtr->physics.dampingScaler * (childBonePtr->physics.linearVelocities[0] - physics.linearVelocities[1]);
 		forceB += springForceB + dampingForceB;
 	}
 
-	linearForce = forceA + forceB;
+	linearForceA = forceA;
+	linearForceB = forceB;
 
 	// the reason why used (anchorPoint - anchorPoint), (x - y), x is the position where exerted on.
 	glm::vec3 torquePoint = (exertedPoint)-physics.centerOfMass;	// bSide
@@ -632,17 +635,18 @@ void JiggleBone::CalculateForces(glm::vec3& linearForce, glm::vec3& torqueForce,
 	torqueForce = torque + torque2;
 }
 
-void JiggleBone::UpdatePhysics(float dt, glm::vec3 linearForce, glm::vec3 torqueForce)
+void JiggleBone::UpdatePhysics(float dt, const std::vector<glm::vec3>& linearForces, glm::vec3 torqueForce)
 {
 	if (Physics::forceApplyFlag)
 	{
-		physics.UpdateByForce(dt, linearForce, torqueForce);
+		physics.UpdateByForce(dt, linearForces, torqueForce);
 		customPhysicsTranslation = glm::translate(physics.translation);
 		customPhysicsRotation = glm::mat4(physics.rotation);
 	}
 	else
 	{
-		physics.UpdateByForce(dt, glm::vec3(0.f), glm::vec3(0.f));
+		std::vector<glm::vec3> tmp(0);
+		physics.UpdateByForce(dt, tmp, glm::vec3(0.f));
 		customPhysicsTranslation = glm::translate(physics.translation);
 		customPhysicsRotation = glm::mat4(physics.rotation);
 	}
@@ -772,19 +776,19 @@ glm::vec4 JiggleBone::CalculateParentTransformationRecursively(const JiggleBone*
 }
 
 Physics::Physics()
-	:centerOfMass(), initCenterOfMass(), translation(), linearMomentum(), linearVelocity(), force(), rotation(glm::mat3(1.f)), angularMomentum(), inertiaTensorInverse(), inertiaTensorObj(), torque(), totalMass(), vertices(),
+	:centerOfMass(), initCenterOfMass(), translation(), linearMomentums(springSize, glm::vec3(0.f)), linearVelocities(springSize, glm::vec3(0.f)), force(), rotation(glm::mat3(1.f)), angularMomentum(), inertiaTensorInverse(), inertiaTensorObj(), torque(), totalMass(), vertices(),
 	dampingScaler(5.f), springScaler(50.f)
 {
 }
 
 Physics::Physics(const Physics& p)
-	:centerOfMass(p.centerOfMass), initCenterOfMass(p.initCenterOfMass), translation(p.translation), linearMomentum(p.linearMomentum), linearVelocity(p.linearVelocity), force(p.force), rotation(p.rotation), angularMomentum(p.angularMomentum), inertiaTensorInverse(p.inertiaTensorInverse), inertiaTensorObj(p.inertiaTensorObj), torque(p.torque), totalMass(p.totalMass), vertices(p.vertices),
+	:centerOfMass(p.centerOfMass), initCenterOfMass(p.initCenterOfMass), translation(p.translation), linearMomentums(p.linearMomentums), linearVelocities(p.linearVelocities), force(p.force), rotation(p.rotation), angularMomentum(p.angularMomentum), inertiaTensorInverse(p.inertiaTensorInverse), inertiaTensorObj(p.inertiaTensorObj), torque(p.torque), totalMass(p.totalMass), vertices(p.vertices),
 	dampingScaler(p.dampingScaler), springScaler(p.springScaler)
 {
 }
 
 Physics::Physics(Physics&& p)
-	: centerOfMass(p.centerOfMass), initCenterOfMass(p.initCenterOfMass), translation(p.translation), linearMomentum(p.linearMomentum), linearVelocity(p.linearVelocity), force(p.force), rotation(p.rotation), angularMomentum(p.angularMomentum), inertiaTensorInverse(p.inertiaTensorInverse), inertiaTensorObj(p.inertiaTensorObj), torque(p.torque), totalMass(p.totalMass), vertices(p.vertices),
+	: centerOfMass(p.centerOfMass), initCenterOfMass(p.initCenterOfMass), translation(p.translation), linearMomentums(p.linearMomentums), linearVelocities(p.linearVelocities), force(p.force), rotation(p.rotation), angularMomentum(p.angularMomentum), inertiaTensorInverse(p.inertiaTensorInverse), inertiaTensorObj(p.inertiaTensorObj), torque(p.torque), totalMass(p.totalMass), vertices(p.vertices),
 	dampingScaler(p.dampingScaler), springScaler(p.springScaler)
 {
 }
@@ -794,8 +798,11 @@ Physics& Physics::operator=(const Physics& p)
 	centerOfMass = p.centerOfMass;
 	initCenterOfMass = p.initCenterOfMass;
 	translation = p.translation;
-	linearMomentum = p.linearMomentum;
-	linearVelocity = p.linearVelocity;
+	for (size_t i = 0; i < springSize; i++)
+	{
+		linearMomentums[i] = p.linearMomentums[i];
+		linearVelocities[i] = p.linearVelocities[i];
+	}
 	force = p.force;
 
 	rotation = p.rotation;
@@ -820,8 +827,11 @@ Physics& Physics::operator=(Physics&& p)
 	centerOfMass = p.centerOfMass;
 	initCenterOfMass = p.initCenterOfMass;
 	translation = p.translation;
-	linearMomentum = p.linearMomentum;
-	linearVelocity = p.linearVelocity;
+	for (size_t i = 0; i < springSize; i++)
+	{
+		linearMomentums[i] = p.linearMomentums[i];
+		linearVelocities[i] = p.linearVelocities[i];
+	}
 	force = p.force;
 
 	rotation = p.rotation;
@@ -892,8 +902,13 @@ void Physics::Initialize()
 	}
 
 	translation = glm::vec3(0.f);
-	linearMomentum = glm::vec3(0.f);
-	linearVelocity = glm::vec3(0.f);
+	linearMomentums.resize(springSize);
+	linearVelocities.resize(springSize);
+	for (size_t i = 0; i < springSize; i++)
+	{
+		linearMomentums[i] = glm::vec3(0.f);
+		linearVelocities[i] = glm::vec3(0.f);
+	}
 	force = glm::vec3(0.f);
 	torque = glm::vec3(0.f);
 
@@ -903,22 +918,37 @@ void Physics::Initialize()
 
 void Physics::UpdateByForce(float dt, glm::vec3 _force)
 {
+	abort();
+	// deprecated function. abort when it called.
 	force = _force;
-	linearMomentum += dt * force;
-	linearVelocity = linearMomentum / totalMass;
-	translation += dt * linearVelocity;
+	linearMomentums[0] += dt * force;
+	linearVelocities[0] = linearMomentums[0] / totalMass;
+	translation += dt * linearVelocities[0];
 	centerOfMass = initCenterOfMass + translation;
 }
 
-void Physics::UpdateByForce(float dt, glm::vec3 _force, glm::vec3 _torque)
+void Physics::UpdateByForce(float dt, std::vector<glm::vec3> _forces, glm::vec3 _torque)
 {
-	force = _force;
+	const size_t forceSize = _forces.size();
+	force = glm::vec3(0.f);
+	for (size_t i = 0; i < forceSize; i++)
+	{
+		force += _forces[i];
+	}
 	torque = _torque;
-	linearMomentum += dt * force;
+	for (size_t i = 0; i < forceSize; i++)
+	{
+		linearMomentums[i] += dt * _forces[i];
+	}
 	angularMomentum += dt * torque;
-	linearVelocity = linearMomentum / totalMass;
+	glm::vec3 velocitySum = glm::vec3(0.f);
+	for (size_t i = 0; i < forceSize; i++)
+	{
+		linearVelocities[i] = linearMomentums[i] / totalMass;
+		velocitySum += linearVelocities[i];
+	}
 	angularVelocity = inertiaTensorInverse * angularMomentum;
-	translation += dt * linearVelocity;
+	translation += dt * (velocitySum);
 	rotation += dt * (Tilde(angularVelocity) * rotation);
 
 	centerOfMass = initCenterOfMass + translation;

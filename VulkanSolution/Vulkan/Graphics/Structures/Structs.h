@@ -205,8 +205,9 @@ struct Physics
 {
 public:
 	static bool forceApplyFlag;
+	static glm::vec3 GravityVector;
 	static float GravityScaler;
-	const size_t springSize = 2;
+	const size_t springSize = 4;
 public:
 	Physics();
 	Physics(const Physics& p);
@@ -244,6 +245,9 @@ public:
 	float dampingScaler;
 	float springScaler;
 
+	float bendDampingScaler;
+	float bendSpringScaler;
+
 private:
 	glm::mat3 Tilde(glm::vec3 v);
 };
@@ -252,11 +256,11 @@ struct JiggleBone : public Bone
 {
 public:
 	JiggleBone();
-	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromUnit = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4(), const Bone* parentBonePtr = nullptr, const JiggleBone* childBonePtr = nullptr);
+	JiggleBone(std::string name, int parentID = -1, int id = -1, glm::mat4 toBoneFromUnit = glm::mat4(), glm::mat4 toModelFromBone = glm::mat4(), const Bone* parentBonePtr = nullptr, const JiggleBone* childBonePtr = nullptr, const Bone* grandParentBonePtr = nullptr);
 	JiggleBone(const JiggleBone& jb);
 	JiggleBone(JiggleBone&& jb);
 	virtual bool Update(float dt);
-	void CalculateForces(glm::vec3& linearForceA, glm::vec3& linearForceB, glm::vec3& torqueForce, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f), bool bindPoseFlag = false, std::vector<glm::mat4>* animationMatrix = nullptr);
+	void CalculateForces(glm::vec3& linearForceA, glm::vec3& linearForceB, glm::vec3& bendForceA, glm::vec3& bendForceB, glm::vec3& torqueForce, glm::vec3 gravityVector = glm::vec3(0.f, -1.f, 0.f), bool bindPoseFlag = false, std::vector<glm::mat4>* animationMatrix = nullptr);
 	void UpdatePhysics(float dt, const std::vector<glm::vec3>& linearForces, glm::vec3 torqueForce);
 
 	JiggleBone& operator=(const JiggleBone& jb);
@@ -284,6 +288,10 @@ public:
 	Physics physics;
 	const Bone* parentBonePtr;
 	const JiggleBone* childBonePtr;
+	const Bone* grandParentBonePtr;
+
+	float bendingSpringInitLengthA;
+	float bendingSpringInitLengthB;
 };
 
 class Skeleton

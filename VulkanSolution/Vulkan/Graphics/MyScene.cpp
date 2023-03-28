@@ -771,7 +771,7 @@ void MyScene::ModifyBone()
 	glm::vec3 trans = glm::vec3(trans4.x, trans4.y, trans4.z);
 
 	JiggleBone* newBone = new JiggleBone(std::string(newBoneName) + std::to_string(newBoneIndex++), selectedBone, model->GetBoneCount(),
-		glm::translate(glm::vec3(trans)) * parentBone->toBoneFromUnit, parentBone->toModelFromBone, parentBone);
+		glm::translate(glm::vec3(trans)) * parentBone->toBoneFromUnit, parentBone->toModelFromBone, parentBone, nullptr, model->GetBone(parentBone->parentID));
 	model->AddBone(newBone);
 
 	if (const JiggleBone* parentJB = dynamic_cast<const JiggleBone*>(parentBone);
@@ -830,16 +830,15 @@ void MyScene::RecordDrawSphereCall(VkCommandBuffer commandBuffer)
 	SpherePushConstants pc;
 	pc.sphereBoundingMatrix = sphereMesh->CalculateAdjustBoundingBoxMatrix();
 	
-	if (selectedBone >= 10 && runRealtime)
+	if (runRealtime)
 	{
 		const auto* tmp = model->GetBone(selectedBone);
 		const JiggleBone* jb = dynamic_cast<const JiggleBone*>(tmp);
 		if (jb != nullptr)
 		{
-
-			if (jb->childBonePtr != nullptr)
 			{
-				pc.translation = glm::translate(jb->childBonePtr->GetDynamicPointA(true, nullptr));
+				glm::vec4 test4 = jb->parentBonePtr->toBoneFromUnit * glm::vec4(0.f, 0.f, 0.f, 1.f);
+				pc.translation = glm::translate(glm::vec3(test4.x, test4.y, test4.z));
 			}
 		}
 		else
@@ -896,6 +895,7 @@ void MyScene::CleanBones()
 	{
 		return;
 	}
+	selectedBone = 0;
 	cleanBoneFlag = false;
 
 	model->CleanBones();

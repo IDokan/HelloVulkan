@@ -674,6 +674,7 @@ void MyImGUI::Helper::Physics()
     if (ImGui::CollapsingHeader("Physics"))
     {
         ImGui::SliderFloat("Gravity Scaler", &Physics::GravityScaler, 1.f, 10.f);
+        ImGui::SliderFloat3("Gravity Vector", &Physics::GravityVector.x, -1.f, 1.f);
 
         
         if (const JiggleBone* jb = dynamic_cast<const JiggleBone*>(model->GetBone(*selectedBone));
@@ -682,6 +683,8 @@ void MyImGUI::Helper::Physics()
             JiggleBone* jiggleBone = const_cast<JiggleBone*>(jb);
             ImGui::SliderFloat("Spring Scaler", &jiggleBone->physics.springScaler, 1.f, 500.f);
             ImGui::SliderFloat("Damping Scaler", &jiggleBone->physics.dampingScaler, 1.f, 500.f);
+            ImGui::SliderFloat("Bending Spring Scaler", &jiggleBone->physics.bendSpringScaler, 1.f, 500.f);
+            ImGui::SliderFloat("Bending Damping Scaler", &jiggleBone->physics.bendDampingScaler, 1.f, 500.f);
         }
 
         ImGui::Separator();
